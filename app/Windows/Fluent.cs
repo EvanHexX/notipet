@@ -57,6 +57,8 @@ internal static class Glyphs
     public const string ChevronDown = "\uE70D";
     public const string ChevronRight = "\uE76C";
     public const string Thread = "\uE8BD";
+    public const string Pin = "\uE718";
+    public const string FullScreen = "\uE740";
 
     public static string ForLevel(NotificationLevel level) => level switch
     {

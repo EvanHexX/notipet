@@ -208,6 +208,21 @@ internal sealed class SettingsWindow
                 Changed();
             })));
 
+        // Either one switches from the Windows notification to notipet's own
+        // pop-up: the shell decides how long a balloon stays and holds it back
+        // over full-screen apps, so neither is possible with it.
+        page.Children.Add(Fluent.SettingCard(Glyphs.Pin,
+            Loc.T("Keep notifications until clicked", "클릭할 때까지 알림 유지"),
+            Loc.T("The pop-up stays on screen until you click or close it. Clicking it stops the alarm.",
+                  "알림 창이 클릭하거나 닫을 때까지 화면에 남습니다. 클릭하면 알람도 멈춥니다."),
+            Fluent.Toggle(Settings.Popup.StayUntilClicked, on => { Settings.Popup.StayUntilClicked = on; Changed(); })));
+
+        page.Children.Add(Fluent.SettingCard(Glyphs.FullScreen,
+            Loc.T("Show over full-screen apps", "전체화면 앱 위에도 표시"),
+            Loc.T("Games in borderless or windowed mode, full-screen video, presentations. An exclusive full-screen game cannot be drawn over.",
+                  "창 모드·테두리 없는 전체화면 게임, 전체화면 영상, 프레젠테이션 위에도 뜹니다. 독점 전체화면 게임 위에는 어떤 앱도 그릴 수 없습니다."),
+            Fluent.Toggle(Settings.Popup.ShowOverFullscreen, on => { Settings.Popup.ShowOverFullscreen = on; Changed(); })));
+
         page.Children.Add(Fluent.SettingCard(Glyphs.BellOff,
             Loc.T("Click the tray icon to stop an alarm", "트레이 아이콘 클릭으로 알람 정지"),
             Loc.T("Otherwise a click opens Recent notifications", "꺼 두면 클릭은 최근 알림만 엽니다"),

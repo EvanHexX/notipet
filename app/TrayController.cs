@@ -46,6 +46,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
     private NotipetHttpServer? _server;
     private SettingsWindow? _settingsWindow;
     private HistoryWindow? _historyWindow;
+    private readonly PopupHost _popups;
     private TrayIconState _iconState = TrayIconState.Idle;
     private bool _disposed;
 
@@ -67,7 +68,10 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _presence = new PresenceMonitor(() => _settings.Presence.IdleThresholdSec);
 
         _channels.Add(new WindowsSoundChannel(_sound, () => _settings, () => _settings.Presence.AtDesk));
-        _channels.Add(new TrayBalloonChannel(() => _trayIcon, () => _settings, OnUiThread));
+        // notipet's own pop-ups (PopupSettings); the visual channel uses them
+        // instead of the shell balloon when either pop-up option is on.
+        _popups = new PopupHost(() => _settings, ThreadLinkFor, StopAlarms, OpenThreadFor);
+        _channels.Add(new TrayBalloonChannel(() => _trayIcon, () => _settings, OnUiThread, () => _popups));
 
         _dispatcher = new Dispatcher(
             () => _settings,
@@ -243,9 +247,10 @@ internal sealed class TrayController : IDisposable, INotipetHost
         }
     }
 
-    public Uri? ThreadLink(HistoryEntry entry)
+    public Uri? ThreadLink(HistoryEntry entry) => ThreadLinkFor(entry.Envelope);
+
+    private Uri? ThreadLinkFor(NotificationEnvelope envelope)
     {
-        var envelope = entry.Envelope;
         var link = ThreadLinks.For(envelope.SourceId, envelope.SourceSession, envelope.HostSession);
         if (link is null) return null;
         if (!_schemes.TryGetValue(link.Scheme, out var registered))
@@ -260,9 +265,11 @@ internal sealed class TrayController : IDisposable, INotipetHost
     // foreground process for a moment - the only time Windows lets it hand the
     // foreground on. Without the grant the agent app often just flashes in the
     // taskbar instead of coming up.
-    public void OpenThread(HistoryEntry entry)
+    public void OpenThread(HistoryEntry entry) => OpenThreadFor(entry.Envelope);
+
+    private void OpenThreadFor(NotificationEnvelope envelope)
     {
-        var link = ThreadLink(entry);
+        var link = ThreadLinkFor(envelope);
         if (link is null) return;
         try
         {
@@ -611,6 +618,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         try { RuntimeFile.Delete(Process.GetCurrentProcess().SessionId); } catch { }
         _settingsWindow?.Close();
         _historyWindow?.Close();
+        try { _popups.CloseAll(); } catch { }
         _server?.Dispose();
         _sound.Dispose();
         _trayIcon?.Dispose();

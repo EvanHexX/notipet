@@ -147,6 +147,27 @@ internal sealed class HistorySettings
 // defaults on any read failure, lazily materialised sections, indented output.
 // One deliberate difference - JsonExtensionData on the root - so an older build
 // does not silently erase a newer build's keys on save.
+// notipet's own pop-up, used instead of the Windows notification when either
+// option is on. The shell's tray balloon can do neither: Windows decides how
+// long it stays (a few seconds), and it holds notifications back while a
+// full-screen app is in front.
+internal sealed class PopupSettings
+{
+    // Stays on screen until clicked (or closed), however long that takes.
+    public bool StayUntilClicked { get; set; }
+
+    // Shown above full-screen apps too (games in borderless/windowed mode,
+    // full-screen video, presentations). An exclusive-mode full-screen game
+    // owns the display and cannot be drawn over by anyone.
+    public bool ShowOverFullscreen { get; set; }
+
+    // How long a pop-up that does not stay waits before it closes itself.
+    public int TimeoutSec { get; set; } = 8;
+
+    [JsonIgnore]
+    public bool UseOwnPopup => StayUntilClicked || ShowOverFullscreen;
+}
+
 internal sealed class AppSettings
 {
     public int SchemaVersion { get; set; } = 1;
@@ -162,6 +183,7 @@ internal sealed class AppSettings
     public Dictionary<string, ChannelSettings> Channels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, SourceSettings> Sources { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public HistorySettings History { get; set; } = new();
+    public PopupSettings Popup { get; set; } = new();
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -235,6 +257,8 @@ internal sealed class AppSettings
         Dedupe ??= new DedupeSettings();
         Presence ??= new PresenceSettings();
         History ??= new HistorySettings();
+        Popup ??= new PopupSettings();
+        Popup.TimeoutSec = Math.Clamp(Popup.TimeoutSec, 3, 120);
         Channels ??= new Dictionary<string, ChannelSettings>(StringComparer.OrdinalIgnoreCase);
         Sources ??= new Dictionary<string, SourceSettings>(StringComparer.OrdinalIgnoreCase);
 

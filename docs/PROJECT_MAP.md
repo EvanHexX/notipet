@@ -40,6 +40,8 @@
 | 기능 | 경로 |
 |---|---|
 | 최근 알림 카드 목록, 프로젝트 그룹, 필터, 비우기, 트레이 토글 | [app/Windows/HistoryWindow.cs](../app/Windows/HistoryWindow.cs) |
+| notipet 자체 알림 창 (클릭할 때까지 유지, 전체화면 위) | [app/Windows/NotificationPopup.cs](../app/Windows/NotificationPopup.cs) |
+| 알림 창 쌓기·배치·맨 위 유지 | [app/Windows/PopupHost.cs](../app/Windows/PopupHost.cs) |
 | 카드를 프로젝트별로 나누기 (순수 함수) | [core/Core/HistoryGrouping.cs](../core/Core/HistoryGrouping.cs) |
 | 옵션 창 (NavigationView: 일반/사운드/PC 앞/방해금지/기록/정보) | [app/Windows/SettingsWindow.cs](../app/Windows/SettingsWindow.cs) |
 | Fluent 공용 부품 (카드, 토글, 아이콘 버튼, 제목 표시줄, Mica) + 글리프 표 | [app/Windows/Fluent.cs](../app/Windows/Fluent.cs) |

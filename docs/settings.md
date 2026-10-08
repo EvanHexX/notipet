@@ -105,6 +105,12 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
     "manual":      { "enabled": true }
   },
 
+  "popup": {                         // notipet 자체 알림 창 (둘 중 하나라도 켜면 트레이 알림 대신)
+    "stayUntilClicked": false,       // 클릭·닫기 전까지 유지
+    "showOverFullscreen": false,     // 전체화면 앱 위에도 표시
+    "timeoutSec": 8                  // 유지하지 않을 때 스스로 닫히기까지 (3~120)
+  },
+
   "history": {
     "keepInMemory": 200,             // 옵션 창: 20 50 100 200 500 1000. 줄이면 즉시 잘린다
     "lookupThreadTitles": true       // 카드에 에이전트 앱의 스레드 이름 표시 (Codex/Claude 로컬 파일 읽기 전용)

@@ -74,6 +74,16 @@ internal sealed class PresenceMonitor
     // full-screen terminal is sitting right there and available - suppressing
     // then is precisely backwards. Use PresenceState.FullScreen if a caller
     // genuinely wants to know about full-screen; it is a different question.
+    // Something full-screen is in front (a game, a video, a full-screen
+    // terminal, a presentation). Unlike IsFocusAssistActive this is not about
+    // whether to alert at all - only about whether notipet's pop-up may draw
+    // over it (PopupSettings.ShowOverFullscreen).
+    public static bool IsFullScreenForeground()
+    {
+        var state = NotificationState();
+        return state is QUNS_BUSY or QUNS_RUNNING_D3D_FULL_SCREEN or QUNS_PRESENTATION_MODE;
+    }
+
     public static bool IsFocusAssistActive()
     {
         var state = NotificationState();

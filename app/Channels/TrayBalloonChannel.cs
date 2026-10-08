@@ -6,6 +6,7 @@ using Notipet.Core;
 using Notipet.Settings;
 using Notipet.Shared;
 using Notipet.Tray;
+using Notipet.Windows;
 
 namespace Notipet.Channels;
 
@@ -17,18 +18,20 @@ namespace Notipet.Channels;
 // needs an AUMID and a Start-menu shortcut and can fail silently. That trade is
 // why the MVP ships the proven path and leaves the rich toast to its own
 // channel, off by default.
-[SupportedOSPlatform("windows")]
+[SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class TrayBalloonChannel : INotificationChannel
 {
     private readonly Func<ITrayIcon?> _tray;
     private readonly Func<AppSettings> _settings;
     private readonly Action<Action> _onUiThread;
+    private readonly Func<PopupHost?> _popups;
 
-    public TrayBalloonChannel(Func<ITrayIcon?> tray, Func<AppSettings> settings, Action<Action> onUiThread)
+    public TrayBalloonChannel(Func<ITrayIcon?> tray, Func<AppSettings> settings, Action<Action> onUiThread, Func<PopupHost?> popups)
     {
         _tray = tray;
         _settings = settings;
         _onUiThread = onUiThread;
+        _popups = popups;
     }
 
     public string Id => AppSettings.Channels_TrayBalloon;
@@ -41,6 +44,20 @@ internal sealed class TrayBalloonChannel : INotificationChannel
 
     public Task<ChannelResult> SendAsync(NotificationEnvelope envelope, CancellationToken ct)
     {
+        // notipet's own pop-up when the user asked for one that stays until
+        // clicked or that shows over full-screen apps - the balloon can do
+        // neither (PopupSettings). Same channel, so the on/off switch, the
+        // history chip and the rules all stay the same.
+        if (_settings().Popup.UseOwnPopup && _popups() is { } popups)
+        {
+            _onUiThread(() =>
+            {
+                try { popups.Show(envelope); }
+                catch (Exception ex) { CrashLog.Write("PopupHost.Show", ex); }
+            });
+            return Task.FromResult(new ChannelResult(Id, DeliveryStatus.Delivered));
+        }
+
         var tray = _tray();
         if (tray is null) return Task.FromResult(new ChannelResult(Id, DeliveryStatus.Failed, null, LastError));
 
