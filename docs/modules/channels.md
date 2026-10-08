@@ -6,10 +6,10 @@
 
 ## Related Files
 
-- [app/Channels/INotificationChannel.cs](../../app/Channels/INotificationChannel.cs)
+- [core/Channels/INotificationChannel.cs](../../core/Channels/INotificationChannel.cs)
 - [app/Channels/WindowsSoundChannel.cs](../../app/Channels/WindowsSoundChannel.cs)
 - [app/Channels/TrayBalloonChannel.cs](../../app/Channels/TrayBalloonChannel.cs)
-- [app/Core/Dispatcher.cs](../../app/Core/Dispatcher.cs) — 선택과 실행
+- [core/Core/Dispatcher.cs](../../core/Core/Dispatcher.cs) — 선택과 실행
 
 ## Public APIs
 

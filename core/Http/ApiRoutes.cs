@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
-using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using Notipet.Channels;
 using Notipet.Core;
-using Notipet.Presence;
 using Notipet.Rules;
 using Notipet.Settings;
 using Notipet.Shared;
@@ -22,9 +20,15 @@ internal sealed class ApiContext
     public required Func<AppSettings> Settings { get; init; }
     public required Dispatcher Dispatcher { get; init; }
     public required HistoryStore History { get; init; }
-    public required SoundService Sound { get; init; }
+    // Platform parts, as narrow seams: the routes only count and stop alarms,
+    // describe the sound engine, and report presence. The Windows daemon
+    // passes its SoundService / PresenceMonitor here; another front end
+    // passes its own.
+    public required AlarmRegistry Alarms { get; init; }
+    public required Func<SoundEngineInfo> SoundEngine { get; init; }
     public required Func<IReadOnlyList<INotificationChannel>> Channels { get; init; }
-    public required PresenceMonitor Presence { get; init; }
+    public required Func<string> Presence { get; init; }
+    public required Func<bool> FocusAssistActive { get; init; }
     public required AuthGuard Guard { get; init; }
     public required string InstanceId { get; init; }
     public required string Version { get; init; }
@@ -42,7 +46,6 @@ internal sealed class ApiContext
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.Now;
 }
 
-[SupportedOSPlatform("windows10.0.19041.0")]
 internal static class ApiRoutes
 {
     public static RouteTable Build(ApiContext api)
@@ -99,10 +102,10 @@ internal static class ApiRoutes
             response.AtDesk = settings.Presence.AtDesk;
             response.Language = settings.Language;
             response.HistoryCount = api.History.Count;
-            response.QuietHoursActive = IsQuietNow(settings);
-            response.Presence = api.Presence.Current.ToString();
-            response.ActiveAlarms = api.Sound.Alarms.Count;
-            response.SoundEngine = api.Sound.Describe();
+            response.QuietHoursActive = IsQuietNow(settings, api.FocusAssistActive);
+            response.Presence = api.Presence();
+            response.ActiveAlarms = api.Alarms.Count;
+            response.SoundEngine = api.SoundEngine();
             var warnings = api.Warnings();
             response.Warnings = warnings.Count > 0 ? warnings.ToList() : null;
         }
@@ -160,7 +163,7 @@ internal static class ApiRoutes
         // No selector at all means "make it stop", which is what someone
         // reaching for this endpoint in a hurry means.
         var all = request.All ?? (request.Id is null && request.Tag is null);
-        var stopped = api.Sound.Alarms.Stop(request.Id, request.Tag, all);
+        var stopped = api.Alarms.Stop(request.Id, request.Tag, all);
 
         await HttpJson.WriteAsync(ctx, 200, new AckResponse { Ok = true, Stopped = stopped },
             NotipetJson.Compact.AckResponse).ConfigureAwait(false);
@@ -308,7 +311,7 @@ internal static class ApiRoutes
         return null;
     }
 
-    public static bool IsQuietNow(AppSettings settings)
+    public static bool IsQuietNow(AppSettings settings, Func<bool> focusAssistActive)
     {
         var rule = new QuietHoursRule();
         var probe = new NotificationEnvelope { Level = NotificationLevel.Info };
@@ -317,7 +320,7 @@ internal static class ApiRoutes
             Settings = settings,
             History = new HistoryStore(() => 1),
             Now = DateTimeOffset.Now,
-            FocusAssistActive = PresenceMonitor.IsFocusAssistActive
+            FocusAssistActive = focusAssistActive
         });
         return decision.Outcome == RuleOutcome.Suppress;
     }

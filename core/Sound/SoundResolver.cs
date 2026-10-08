@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.Versioning;
 using Notipet.Settings;
 using Notipet.Shared;
 
@@ -34,9 +33,12 @@ internal sealed record ResolvedSound(
     public static ResolvedSound SilentSound => new(null, null, 0, RepeatMode.Once, 1, 0, 1, true);
 }
 
-[SupportedOSPlatform("windows")]
 internal static class SoundResolver
 {
+    // The platform's sound names. Installed by the host at startup (the Windows
+    // daemon sets the registry-backed catalog in Program.Main).
+    public static ISoundCatalog Catalog { get; set; } = NoSoundCatalog.Instance;
+
     public static RepeatMode ParseRepeat(string? value, RepeatMode fallback = RepeatMode.Once) =>
         value?.Trim().ToLowerInvariant().Replace("-", "_") switch
         {
@@ -90,7 +92,7 @@ internal static class SoundResolver
         if (path is null)
         {
             alias = FirstNonEmpty(request?.Alias, levelDefault.Alias);
-            path = SystemSoundCatalog.ResolvePath(alias);
+            path = Catalog.ResolvePath(alias);
             if (path is null && !string.IsNullOrWhiteSpace(request?.Alias))
             {
                 // Keep the alias around: PlaySound can still play it by name
@@ -101,7 +103,7 @@ internal static class SoundResolver
 
         if (path is null && alias is null)
         {
-            path = SystemSoundCatalog.FallbackPath();
+            path = Catalog.FallbackPath();
         }
 
         var volume = Math.Clamp(
@@ -165,7 +167,7 @@ internal static class SoundResolver
             else if (replacement.Length > 0)
             {
                 replacedAlias = replacement;
-                replacedPath = SystemSoundCatalog.ResolvePath(replacement);
+                replacedPath = Catalog.ResolvePath(replacement);
             }
 
             // A replacement that does not resolve keeps the original sound

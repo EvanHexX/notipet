@@ -174,13 +174,15 @@ Check '8. an until_ack alarm starts, and ack by tag stops it' {
 Check '9. a repeating alarm plays each sound to completion' {
     if (AtDesk) { Write-Host "       (at desk is on: alarms are shortened to one play - turn it off to run this)" -ForegroundColor DarkYellow; return 'skip' }
     # The regression this guards: the loop used to restart a sound every
-    # intervalMs, so a 5-second alarm never finished. attention is two plays of
-    # a 5s file with a 0.7s gap, so anything under ~9s means it was cut short.
+    # intervalMs, so a 5-second alarm never finished. Two plays of the 5s alarm
+    # with a 0.7s gap, so anything under ~9s means it was cut short. The spec is
+    # pinned in the request: the user's own level settings (until_ack, no time
+    # limit) must not decide what this measures.
     PostBody '/v1/ack' '{"all":true}' | Out-Null
     Start-Sleep -Seconds 3
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $fired = PostBody '/v1/notify' "{`"title`":`"smoke`",`"body`":`"length`",`"level`":`"attention`",`"tag`":`"smoke:len:$PID`"}"
+    $fired = PostBody '/v1/notify' "{`"title`":`"smoke`",`"body`":`"length`",`"level`":`"attention`",`"tag`":`"smoke:len:$PID`",`"sound`":{`"alias`":`"Notification.Looping.Alarm`",`"repeat`":`"repeat`",`"repeatCount`":2,`"intervalMs`":700}}"
     if (-not $fired.accepted) {
         Write-Host "       (not accepted: $($fired.suppressedReason))" -ForegroundColor DarkYellow
         return $false
@@ -190,6 +192,9 @@ Check '9. a repeating alarm plays each sound to completion' {
         $n = (curl.exe -s -H "Authorization: Bearer $tok" "$base/v1/health" | ConvertFrom-Json).activeAlarms
     } while ($n -gt 0 -and $sw.Elapsed.TotalSeconds -lt 30)
     $sw.Stop()
+    # Never leave it ringing: with "no limit" in the user's settings nothing
+    # else would stop it, and the next script's first tray click would.
+    PostBody '/v1/ack' '{"all":true}' | Out-Null
 
     $seconds = $sw.Elapsed.TotalSeconds
     Write-Host ("       (played for {0:N1}s)" -f $seconds) -ForegroundColor DarkGray

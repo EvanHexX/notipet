@@ -250,7 +250,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         if (link is null) return null;
         if (!_schemes.TryGetValue(link.Scheme, out var registered))
         {
-            registered = ThreadLinks.IsSchemeRegistered(link.Scheme);
+            registered = UrlSchemes.IsRegistered(link.Scheme);
             _schemes[link.Scheme] = registered;
         }
         return registered ? link : null;
@@ -349,9 +349,11 @@ internal sealed class TrayController : IDisposable, INotipetHost
             Settings = () => _settings,
             Dispatcher = _dispatcher,
             History = _history,
-            Sound = _sound,
+            Alarms = _sound.Alarms,
+            SoundEngine = _sound.Describe,
             Channels = () => _channels,
-            Presence = _presence,
+            Presence = () => _presence.Current.ToString(),
+            FocusAssistActive = PresenceMonitor.IsFocusAssistActive,
             Guard = guard,
             InstanceId = _instanceId,
             Version = AppVersion,
@@ -455,7 +457,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         // of the app is the sound, and silently not making one is the failure
         // mode nobody would notice.
         if (_settings.Sound.Enabled && !_sound.Describe().Available) return TrayIconState.SoundUnavailable;
-        if (ApiRoutes.IsQuietNow(_settings)) return TrayIconState.QuietHours;
+        if (ApiRoutes.IsQuietNow(_settings, PresenceMonitor.IsFocusAssistActive)) return TrayIconState.QuietHours;
         return TrayIconState.Idle;
     }
 

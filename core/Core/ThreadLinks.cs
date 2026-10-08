@@ -1,5 +1,4 @@
 using System;
-using Microsoft.Win32;
 using Notipet.Shared;
 
 namespace Notipet.Core;
@@ -40,20 +39,8 @@ internal static class ThreadLinks
         return null;
     }
 
-    // A link is only offered when something will answer it. Without a
-    // registered handler, Windows shows "get an app to open this link".
-    public static bool IsSchemeRegistered(string scheme)
-    {
-        try
-        {
-            using var key = Registry.ClassesRoot.OpenSubKey(scheme);
-            return key?.GetValue("URL Protocol") is not null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    // Whether something will answer a scheme is the platform's question (the
+    // Windows daemon asks HKCR - see app/UrlSchemes.cs).
 
     public static bool RunSelfTest()
     {

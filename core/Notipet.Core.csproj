@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Everything notipet does that is not Windows: the wire contract, rules,
+       dispatch, history, the loopback HTTP API, settings, and the alarm loop.
+       The Windows daemon (app/) supplies the platform parts - sound engines,
+       tray, windows, presence - through interfaces; a macOS front end would
+       supply its own.
+
+       Plain net10.0 on purpose. CA1416 (platform compatibility) is an error
+       here, so a Windows-only API cannot creep back in unnoticed. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Notipet.Core</AssemblyName>
+    <RootNamespace>Notipet</RootNamespace>
+    <Version>1.2.0</Version>
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The wire contract and hook mapping. The CLI links the same files
+         directly (it is NativeAOT and stays dependency-free). -->
+    <Compile Include="..\shared\**\*.cs" Link="Shared\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The daemon's self-test runs the core's checks, which are internal. -->
+    <InternalsVisibleTo Include="NotipetTray" />
+  </ItemGroup>
+</Project>

@@ -8,13 +8,13 @@
 
 ## Related Files
 
-- [app/Sound/ISoundEngine.cs](../../app/Sound/ISoundEngine.cs) — 엔진/핸들 인터페이스
+- [core/Sound/ISoundEngine.cs](../../core/Sound/ISoundEngine.cs) — 엔진/핸들 인터페이스
 - [app/Sound/MediaPlayerSoundEngine.cs](../../app/Sound/MediaPlayerSoundEngine.cs) — 주 엔진
 - [app/Sound/PlaySoundEngine.cs](../../app/Sound/PlaySoundEngine.cs) — 폴백 엔진
 - [app/Sound/SystemSoundCatalog.cs](../../app/Sound/SystemSoundCatalog.cs) — 별칭 → 경로
-- [app/Sound/SoundResolver.cs](../../app/Sound/SoundResolver.cs) — 요청+설정+레벨 → `ResolvedSound`
-- [app/Sound/AlarmSession.cs](../../app/Sound/AlarmSession.cs) — 반복 루프와 상한
-- [app/Sound/AlarmRegistry.cs](../../app/Sound/AlarmRegistry.cs) — 울리는 알람 추적, ack 수렴
+- [core/Sound/SoundResolver.cs](../../core/Sound/SoundResolver.cs) — 요청+설정+레벨 → `ResolvedSound`
+- [core/Sound/AlarmSession.cs](../../core/Sound/AlarmSession.cs) — 반복 루프와 상한
+- [core/Sound/AlarmRegistry.cs](../../core/Sound/AlarmRegistry.cs) — 울리는 알람 추적, ack 수렴
 - [app/Sound/SoundService.cs](../../app/Sound/SoundService.cs) — 엔진 선택과 동시 알람 정책
 - [app/Channels/WindowsSoundChannel.cs](../../app/Channels/WindowsSoundChannel.cs) — 디스패처와의 접점
 

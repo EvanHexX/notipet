@@ -41,14 +41,27 @@ internal static class Paths
     public static string RuntimePathForSession(int sessionId) =>
         Path.Combine(DataDir, $"runtime-{sessionId}.json");
 
-    // Creates the data directory with a DACL granting only the current user.
-    // runtime.json holds the API token in plaintext - inherent to same-user
-    // loopback IPC - so at minimum keep other accounts on the box out of it.
-    [SupportedOSPlatform("windows")]
+    // Creates the data directory readable by the current user only: a DACL on
+    // Windows, mode 0700 elsewhere. runtime.json holds the API token in
+    // plaintext - inherent to same-user loopback IPC - so at minimum keep other
+    // accounts on the box out of it.
     public static void EnsureDataDir()
     {
         if (Directory.Exists(DataDir)) return;
 
+        if (!OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(DataDir,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            return;
+        }
+
+        CreateWindowsDataDir();
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void CreateWindowsDataDir()
+    {
         try
         {
             var security = new DirectorySecurity();

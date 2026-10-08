@@ -1,13 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using Notipet.Core;
-using Notipet.Http;
 using Notipet.Presence;
-using Notipet.Rules;
-using Notipet.Settings;
-using Notipet.Shared;
 using Notipet.Sound;
 
 namespace Notipet.SelfTest;
@@ -22,28 +18,13 @@ internal static class SelfTestRunner
     {
         AttachParentConsole();
 
-        var checks = new (string Name, Func<bool> Check)[]
+        // The core's checks (shared with any other front end), then Windows'.
+        var checks = new List<(string Name, Func<bool> Check)>(CoreSelfTests.All)
         {
-            ("Loc", Loc.RunSelfTest),
-            ("NotificationLevelParser", NotificationLevelParser.RunSelfTest),
-            ("PayloadMapper", PayloadMapper.RunSelfTest),
-            ("AgentIdentity", AgentIdentity.RunSelfTest),
-            ("EnvelopeFactory", EnvelopeFactory.RunSelfTest),
-            ("ThreadLinks", ThreadLinks.RunSelfTest),
-            ("ThreadTitleLookup", ThreadTitleLookup.RunSelfTest),
-            ("HistoryGrouping", Notipet.Windows.HistoryGrouping.RunSelfTest),
-            ("AppSettings", AppSettings.RunSelfTest),
-            ("HistoryStore", HistoryStore.RunSelfTest),
-            ("QuietHoursRule", QuietHoursRule.RunSelfTest),
-            ("RateLimitRule", RateLimitRule.RunSelfTest),
             ("SystemSoundCatalog", SystemSoundCatalog.RunSelfTest),
-            ("SoundResolver", SoundResolver.RunSelfTest),
-            ("AlarmRegistry", AlarmRegistry.RunSelfTest),
             ("PresenceMonitor", PresenceMonitor.RunSelfTest),
             ("UiText", Notipet.Windows.UiText.RunSelfTest),
             ("MenuGlyphs", Notipet.Tray.MenuGlyphs.RunSelfTest),
-            ("AuthGuard", AuthGuard.RunSelfTest),
-            ("RuntimeFile", RuntimeFile.RunSelfTest),
             ("HttpEndToEnd", HttpSelfTest.Run),
         };
 
@@ -65,8 +46,8 @@ internal static class SelfTestRunner
         }
 
         Console.WriteLine(failures == 0
-            ? $"notipet self-test: all {checks.Length} checks passed"
-            : $"notipet self-test: {failures} of {checks.Length} checks FAILED");
+            ? $"notipet self-test: all {checks.Count} checks passed"
+            : $"notipet self-test: {failures} of {checks.Count} checks FAILED");
         Console.Out.Flush();
         return failures == 0 ? 0 : 1;
     }

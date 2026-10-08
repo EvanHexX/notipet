@@ -91,3 +91,13 @@ internal static class SystemSoundCatalog
         return true;
     }
 }
+
+// The registry catalog as core's ISoundCatalog. Installed in Program.Main
+// before anything resolves a sound, self-test included.
+[SupportedOSPlatform("windows")]
+internal sealed class WindowsSoundCatalog : ISoundCatalog
+{
+    public static readonly WindowsSoundCatalog Instance = new();
+    public string? ResolvePath(string? alias) => SystemSoundCatalog.ResolvePath(alias);
+    public string? FallbackPath() => SystemSoundCatalog.FallbackPath();
+}

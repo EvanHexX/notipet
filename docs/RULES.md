@@ -51,10 +51,10 @@ dotnet build app\Notipet.App.csproj -p:BaseOutputPath=$env:TEMP/notipet-build/
 | `TrayIconHost._wndProc`는 인스턴스 필드여야 한다 | [TrayIconHost.cs](../app/Tray/TrayIconHost.cs) | 네이티브 콜백의 GC 루트가 사라져 `FailFast`로 프로세스가 죽는다 |
 | 풍선에 `NIIF_NOSOUND`를 세팅한다 | [TrayIconHost.cs](../app/Tray/TrayIconHost.cs) | 셸이 자체 알림음을 얹어 모든 알림이 이중으로 울린다 |
 | `MediaPlayer.CommandManager.IsEnabled = false` | [MediaPlayerSoundEngine.cs](../app/Sound/MediaPlayerSoundEngine.cs) | unpackaged 프로세스에서 SMTC 등록이 던지거나 사용자 미디어 키를 가로챈다 |
-| 알람 지속 시간 상한은 코드에서 강제한다 | [AppSettings.cs](../app/Settings/AppSettings.cs) | 잘못 구성된 훅이 자리 비운 사이 사이렌을 계속 울린다 |
-| 억제는 HTTP 200 + `accepted:false` | [Dispatcher.cs](../app/Core/Dispatcher.cs) | 비-2xx를 본 훅이 에이전트 동작을 바꿀 수 있다 |
+| 알람 지속 시간 상한은 코드에서 강제한다 | [AppSettings.cs](../core/Settings/AppSettings.cs) | 잘못 구성된 훅이 자리 비운 사이 사이렌을 계속 울린다 |
+| 억제는 HTTP 200 + `accepted:false` | [Dispatcher.cs](../core/Core/Dispatcher.cs) | 비-2xx를 본 훅이 에이전트 동작을 바꿀 수 있다 |
 | CLI는 기본적으로 항상 0으로 종료 | [cli/Program.cs](../cli/Program.cs) | 알림 데몬이 죽었다는 이유로 에이전트가 다르게 행동한다 |
-| 로컬 채널을 원격 채널보다 먼저 보낸다 | [Dispatcher.cs](../app/Core/Dispatcher.cs) | 느린 푸시 서비스가 소리를 지연시킬 수 있게 된다 |
+| 로컬 채널을 원격 채널보다 먼저 보낸다 | [Dispatcher.cs](../core/Core/Dispatcher.cs) | 느린 푸시 서비스가 소리를 지연시킬 수 있게 된다 |
 | `PayloadMapper`는 던지지도 거부하지도 않는다 | [PayloadMapper.cs](../shared/PayloadMapper.cs) | 에이전트가 페이로드 형식을 바꾸는 날 훅이 조용히 멈춘다 |
 | 트레이 메뉴 아이콘 렌더링은 `try/catch` 안에서 | [TrayIconHost.cs](../app/Tray/TrayIconHost.cs) | 창 프로시저 안이라 예외가 네이티브 경계를 넘으면 프로세스가 즉사한다. 실패하면 아이콘 없이 메뉴만 뜬다 |
 | 아이콘만 있는 버튼에는 `AutomationProperties.Name` | [Fluent.cs](../app/Windows/Fluent.cs) `IconButton` | 없으면 화면 낭독기와 ui-check가 버튼을 찾지 못한다 |

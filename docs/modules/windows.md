@@ -7,9 +7,9 @@
 ## Related Files
 
 - [app/Windows/HistoryWindow.cs](../../app/Windows/HistoryWindow.cs) — 최근 알림 카드, 프로젝트 그룹, 필터, 비우기, 트레이 토글
-- [app/Windows/HistoryGrouping.cs](../../app/Windows/HistoryGrouping.cs) — 카드를 프로젝트별로 나누는 순수 함수 (self-test 있음)
-- [app/Core/ThreadLinks.cs](../../app/Core/ThreadLinks.cs) — 카드 → 데스크톱 앱 딥링크 (검증된 ID로만 생성)
-- [app/Core/ThreadTitleLookup.cs](../../app/Core/ThreadTitleLookup.cs) — 에이전트 앱이 붙인 스레드 이름 조회
+- [core/Core/HistoryGrouping.cs](../../core/Core/HistoryGrouping.cs) — 카드를 프로젝트별로 나누는 순수 함수 (self-test 있음)
+- [core/Core/ThreadLinks.cs](../../core/Core/ThreadLinks.cs) — 카드 → 데스크톱 앱 딥링크 (검증된 ID로만 생성)
+- [core/Core/ThreadTitleLookup.cs](../../core/Core/ThreadTitleLookup.cs) — 에이전트 앱이 붙인 스레드 이름 조회
 - [app/Windows/SettingsWindow.cs](../../app/Windows/SettingsWindow.cs) — 옵션 (NavigationView 페이지)
 - [app/Windows/Fluent.cs](../../app/Windows/Fluent.cs) — 공용 부품(`Card`, `SettingCard`, `ExpandedCard`, `Toggle`, `IconButton`, `LevelBadge`, `Chip`, `TitleBar`, `Chrome`)과 `Glyphs` 표
 - [app/Windows/UiText.cs](../../app/Windows/UiText.cs) — 레벨·소리·사유·채널·상대 시간의 EN/KO 이름

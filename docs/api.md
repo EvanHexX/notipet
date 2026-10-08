@@ -2,7 +2,7 @@
 
 `http://127.0.0.1:<port>` 에만 바인딩된다. 포트와 토큰은 데몬이 `%LOCALAPPDATA%\notipet\runtime.json`에 쓴다.
 
-정의: [shared/Wire.cs](../shared/Wire.cs) · 라우트: [app/Http/ApiRoutes.cs](../app/Http/ApiRoutes.cs)
+정의: [shared/Wire.cs](../shared/Wire.cs) · 라우트: [core/Http/ApiRoutes.cs](../core/Http/ApiRoutes.cs)
 
 ## 모든 요청에 적용되는 규칙
 

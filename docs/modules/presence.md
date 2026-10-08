@@ -10,7 +10,7 @@
 
 - [app/Presence/PresenceMonitor.cs](../../app/Presence/PresenceMonitor.cs)
 - [app/Tray/TrayIconHost.cs](../../app/Tray/TrayIconHost.cs) — `WM_WTSSESSION_CHANGE`를 전달
-- [app/Rules/RuleEngine.cs](../../app/Rules/RuleEngine.cs) — Focus Assist 조회
+- [core/Rules/RuleEngine.cs](../../core/Rules/RuleEngine.cs) — Focus Assist 조회
 
 ## Public APIs
 

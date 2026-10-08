@@ -100,6 +100,13 @@ if ($recent) { Shot $recent 'recent' }
 $tray = [NotipetUi]::FindWindow('NotipetTrayWindow', [NullString]::Value)
 function TrayClick { [NotipetUi]::PostMessage($tray, 0x8001, [IntPtr]1, [IntPtr]0x0202) | Out-Null; Start-Sleep -Milliseconds 900 }
 if ($recent) {
+    # A ringing alarm would take the first click (stopping the alarm comes
+    # first, by design) and shift the whole sequence. Silence it first.
+    try {
+        $rt = Get-Content (Join-Path $env:LOCALAPPDATA 'notipet\runtime.json') -Raw | ConvertFrom-Json
+        Invoke-RestMethod -Method Post -Uri "$($rt.baseUrl)/v1/ack" -Headers @{ Authorization = "Bearer $($rt.token)" } `
+            -ContentType 'application/json' -Body '{"all":true}' | Out-Null
+    } catch { }
     $recentHwnd = [IntPtr]$recent.Current.NativeWindowHandle
     try { $recent.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close() } catch { }
     Start-Sleep -Milliseconds 600

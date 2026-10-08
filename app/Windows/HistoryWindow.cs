@@ -456,7 +456,7 @@ internal sealed class HistoryWindow
         var id = envelope.SourceSession;
         if (title is null && id is null && link is null) return null;
 
-        var text = title ?? ShortId(id) ?? UiText.OpenThreadIn(envelope.SourceId);
+        var text = title ?? HistoryGrouping.ShortId(id) ?? UiText.OpenThreadIn(envelope.SourceId);
         var brush = link is null ? "TextFillColorSecondaryBrush" : "AccentTextFillColorPrimaryBrush";
 
         // Icon | label (takes the rest, ends in an ellipsis) | open glyph. A
@@ -493,17 +493,6 @@ internal sealed class HistoryWindow
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"{action}: {text}");
         button.Click += (_, _) => _host.OpenThread(entry);
         return button;
-    }
-
-    // A label for a thread with no name: the END of its id. Codex ids are
-    // UUIDv7, whose first eight hex digits are a timestamp - every thread
-    // started in the same minute would get the same label. The tail is random
-    // in v4 and v7 alike.
-    internal static string? ShortId(string? id)
-    {
-        if (string.IsNullOrEmpty(id)) return null;
-        var compact = id.Replace("-", "");
-        return "#" + (compact.Length > 8 ? compact[^8..] : compact);
     }
 
     private static void Copy(HistoryEntry entry)

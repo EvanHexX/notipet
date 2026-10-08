@@ -16,14 +16,19 @@ It is a **public repository** (MIT). Documentation is Korean prose with English 
 
 ## Current implementation
 
-- Daemon: `app/Notipet.App.csproj` — .NET 10, WinUI 3 / Windows App SDK 1.8, unpackaged, self-contained, x64.
+Three projects:
+
+- Core: `core/Notipet.Core.csproj` — plain `net10.0`, **no Windows**. The wire contract (it compiles `shared/`), rules, dispatcher, history, the loopback HTTP API, settings, paths, and the alarm loop / sound resolution. Platform parts come in through seams: `ISoundEngine`, `ISoundCatalog` (`SoundResolver.Catalog`), `INotificationChannel`, and delegates on `ApiContext` (alarm registry, engine info, presence, focus assist). CA1416 is an **error** in this project: a Windows-only API in core fails the build. Its checks are listed once in `core/CoreSelfTests.cs` and every front end runs them.
+- Daemon: `app/Notipet.App.csproj` — .NET 10, WinUI 3 / Windows App SDK 1.8, unpackaged, self-contained, x64. Everything Windows: sound engines (MediaPlayer, winmm), the registry sound catalog, tray, windows, presence (idle/lock/Focus Assist), autostart, URL-scheme lookup. References core.
 - CLI: `cli/Notipet.Cli.csproj` — .NET 10 console, NativeAOT. Deliberately a separate exe: hooks sit on the agent's critical path, and every hook invocation pays the startup. Measured on this machine (7 runs, `Start-Process -Wait`, so both figures include ~30 ms of harness overhead): CLI `--help` 48 ms median, daemon `--help` 68 ms median — and the daemon's `--help` returns before any WindowsAppSDK initialisation, so that is the best case for it. The console and exit-code behaviour is the other half of the argument: a `WinExe` has neither.
 - Entry point: `app/Program.cs` — hand-written `Main` (`DISABLE_XAML_GENERATED_MAIN`) so `--self-test` and `--test-sound` run before any XAML initialisation.
 - Lifecycle: `app/TrayController.cs` owns the tray icon, the HTTP server, the sound engines and `runtime.json`.
 
 ### Shared sources
 
-`shared/*.cs` is compiled into **both** projects via `Compile Include` in each csproj. Editing one of those files changes both executables — the same arrangement quota-scope uses for `app/`.
+`shared/*.cs` is compiled into the **core** (and through it the daemon) and into the **CLI**, via `Compile Include` in those two csproj files. Editing one of those files changes both executables. The CLI links the files rather than referencing core so it stays a dependency-free NativeAOT exe.
+
+Where new code goes: if it does not need Windows, it goes in `core/`. If it does, put an interface or delegate in core and the implementation in `app/`.
 
 - Wire contract: `shared/Wire.cs`
 - Hook payload mapping: `shared/PayloadMapper.cs`, `shared/AgentEvents.cs`
@@ -46,6 +51,8 @@ dotnet build notipet.slnx
 .\app\bin\Debug\net10.0-windows10.0.19041.0\win-x64\NotipetTray.exe --self-test
 .\cli\bin\Debug\net10.0\win-x64\notipet.exe --self-test
 ```
+
+The daemon's `--self-test` runs the core's checks (`CoreSelfTests.All`) plus the Windows ones. `dotnet build core\Notipet.Core.csproj` on its own is the quick way to confirm core is still platform-neutral.
 
 Run the executables directly rather than through `dotnet run`. The daemon is a `WinExe`; under `dotnet run` in some shells its console output is swallowed, and the self-test report is the point.
 

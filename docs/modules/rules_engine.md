@@ -8,9 +8,9 @@
 
 ## Related Files
 
-- [app/Rules/RuleEngine.cs](../../app/Rules/RuleEngine.cs) — 순서, TTL/소스/음소거/방해금지/중복
-- [app/Rules/RateLimitRule.cs](../../app/Rules/RateLimitRule.cs) — 토큰 버킷
-- [app/Core/HistoryStore.cs](../../app/Core/HistoryStore.cs) — 중복 판정의 조회 대상
+- [core/Rules/RuleEngine.cs](../../core/Rules/RuleEngine.cs) — 순서, TTL/소스/음소거/방해금지/중복
+- [core/Rules/RateLimitRule.cs](../../core/Rules/RateLimitRule.cs) — 토큰 버킷
+- [core/Core/HistoryStore.cs](../../core/Core/HistoryStore.cs) — 중복 판정의 조회 대상
 - [app/Presence/PresenceMonitor.cs](../../app/Presence/PresenceMonitor.cs) — Focus Assist 조회
 
 ## Public APIs

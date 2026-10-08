@@ -8,9 +8,9 @@ CLI와 훅이 실행 중인 데몬을 찾게 하고, 찾은 뒤에 아무나 그
 
 ## Related Files
 
-- [app/Http/AuthGuard.cs](../../app/Http/AuthGuard.cs) — 토큰, Origin/Sec-Fetch-Site/Host 검사
-- [app/Http/RuntimeFile.cs](../../app/Http/RuntimeFile.cs) — `runtime.json` 쓰기/삭제/stale 판정
-- [app/Paths.cs](../../app/Paths.cs) — 데이터 디렉터리와 DACL
+- [core/Http/AuthGuard.cs](../../core/Http/AuthGuard.cs) — 토큰, Origin/Sec-Fetch-Site/Host 검사
+- [core/Http/RuntimeFile.cs](../../core/Http/RuntimeFile.cs) — `runtime.json` 쓰기/삭제/stale 판정
+- [core/Paths.cs](../../core/Paths.cs) — 데이터 디렉터리와 DACL
 - [cli/RuntimeDiscovery.cs](../../cli/RuntimeDiscovery.cs) — CLI 쪽 탐색과 자동 기동
 - [shared/Wire.cs](../../shared/Wire.cs) — `RuntimeInfo`
 

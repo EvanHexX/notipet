@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -34,7 +33,6 @@ internal sealed class RouteTable
 // and a second application lifetime to fight with the tray's. HttpListener is
 // already in Microsoft.NETCore.App, needs no admin and no URL ACL for a
 // 127.0.0.1 prefix, and is one object the tray controller can own.
-[SupportedOSPlatform("windows")]
 internal sealed class NotipetHttpServer : IDisposable
 {
     private readonly RouteTable _routes;

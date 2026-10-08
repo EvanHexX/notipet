@@ -20,6 +20,10 @@ internal static class Program
     {
         var verb = args.Length > 0 ? args[0].ToLowerInvariant() : "";
 
+        // The core resolves sound names through whatever catalog the platform
+        // installs; on Windows that is the user's Sound control panel scheme.
+        SoundResolver.Catalog = WindowsSoundCatalog.Instance;
+
         // Both diagnostic paths must run before any XAML or WinRT
         // initialisation so they stay headless.
         if (verb is "--self-test" or "-t")

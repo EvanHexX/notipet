@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Notipet.Core;
 
-namespace Notipet.Windows;
+namespace Notipet.Core;
 
 // One project's cards in the recent window.
 internal sealed record HistoryGroup(string Key, string? Project, IReadOnlyList<HistoryEntry> Entries, IReadOnlyList<string> Paths)
@@ -50,6 +49,17 @@ internal static class HistoryGrouping
             .ToList();
     }
 
+    // A label for a thread with no name: the END of its id. Codex ids are
+    // UUIDv7, whose first eight hex digits are a timestamp - every thread
+    // started in the same minute would get the same label. The tail is random
+    // in v4 and v7 alike.
+    public static string? ShortId(string? id)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        var compact = id.Replace("-", "");
+        return "#" + (compact.Length > 8 ? compact[^8..] : compact);
+    }
+
     public static bool RunSelfTest()
     {
         HistoryEntry E(string? project, string title, string? cwd = null) => new()
@@ -84,9 +94,9 @@ internal static class HistoryGrouping
 
         // Unnamed threads are labelled by the random END of their id: two Codex
         // (UUIDv7) threads from the same minute share their first 8 digits.
-        if (HistoryWindow.ShortId("0199a213-81c0-7800-8a9b-0c1d2e3f4a5b") == HistoryWindow.ShortId("0199a213-9f44-7a11-9d00-77aa66bb55cc")) return false;
-        if (HistoryWindow.ShortId("0199a213-81c0-7800-8a9b-0c1d2e3f4a5b") != "#2e3f4a5b") return false;
-        if (HistoryWindow.ShortId("s1") != "#s1" || HistoryWindow.ShortId(null) is not null) return false;
+        if (ShortId("0199a213-81c0-7800-8a9b-0c1d2e3f4a5b") == ShortId("0199a213-9f44-7a11-9d00-77aa66bb55cc")) return false;
+        if (ShortId("0199a213-81c0-7800-8a9b-0c1d2e3f4a5b") != "#2e3f4a5b") return false;
+        if (ShortId("s1") != "#s1" || ShortId(null) is not null) return false;
 
         // Only leftovers: a single Other group. Nothing: no groups.
         if (Group(new[] { E(null, "x") }) is not [{ IsOther: true }]) return false;

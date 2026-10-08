@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.Versioning;
 using System.Text.Json;
 using Notipet.Shared;
 
@@ -9,7 +8,6 @@ namespace Notipet.Http;
 
 // Writes and clears %LOCALAPPDATA%\notipet\runtime.json, the file the CLI and
 // the hooks use to find a running daemon without hardcoding a port.
-[SupportedOSPlatform("windows")]
 internal static class RuntimeFile
 {
     // Written only after the listener is actually bound: never advertise a port

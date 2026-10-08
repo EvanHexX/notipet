@@ -5,4 +5,7 @@
   <Folder Name="/cli/">
     <Project Path="cli/Notipet.Cli.csproj" />
   </Folder>
+  <Folder Name="/core/">
+    <Project Path="core/Notipet.Core.csproj" />
+  </Folder>
 </Solution>

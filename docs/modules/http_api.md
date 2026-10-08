@@ -6,10 +6,10 @@
 
 ## Related Files
 
-- [app/Http/NotipetHttpServer.cs](../../app/Http/NotipetHttpServer.cs) — 수명, 포트 선택, 수신 루프, 라우트 테이블
-- [app/Http/ApiRoutes.cs](../../app/Http/ApiRoutes.cs) — 라우트 정의와 핸들러
-- [app/Http/HttpJson.cs](../../app/Http/HttpJson.cs) — JSON 읽기/쓰기, `HttpApiException`
-- [app/Http/AuthGuard.cs](../../app/Http/AuthGuard.cs) — [discovery_auth](discovery_auth.md) 참고
+- [core/Http/NotipetHttpServer.cs](../../core/Http/NotipetHttpServer.cs) — 수명, 포트 선택, 수신 루프, 라우트 테이블
+- [core/Http/ApiRoutes.cs](../../core/Http/ApiRoutes.cs) — 라우트 정의와 핸들러
+- [core/Http/HttpJson.cs](../../core/Http/HttpJson.cs) — JSON 읽기/쓰기, `HttpApiException`
+- [core/Http/AuthGuard.cs](../../core/Http/AuthGuard.cs) — [discovery_auth](discovery_auth.md) 참고
 - [app/SelfTest/HttpSelfTest.cs](../../app/SelfTest/HttpSelfTest.cs) — 실제 서버 + 소켓 엔드투엔드 검사
 
 계약 문서는 [../api.md](../api.md).

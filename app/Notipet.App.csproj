@@ -38,8 +38,9 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.*" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Shared sources linked from shared\; editing one changes BOTH exes. -->
-    <Compile Include="..\shared\**\*.cs" Link="Shared\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- The platform-neutral core (rules, dispatch, history, HTTP API, settings,
+         and the shared wire contract). This project adds only Windows. -->
+    <ProjectReference Include="..\core\Notipet.Core.csproj" />
   </ItemGroup>
   <!-- Unpackaged publish leaves out the app's own resource index. Without
        NotipetTray.pri the compiled App.xaml (XamlControlsResources) is gone,
