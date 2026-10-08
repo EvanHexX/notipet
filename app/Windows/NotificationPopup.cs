@@ -28,23 +28,46 @@ internal sealed class NotificationPopup
     private readonly Window _window = new();
     private readonly IntPtr _hwnd;
     private readonly DispatcherTimer _timer = new();
+    private TextBlock? _overflowText;
     private bool _closed;
 
-    public NotificationEnvelope Envelope { get; }
+    // Null for the overflow card.
+    public NotificationEnvelope? Envelope { get; }
     public SizeInt32 PixelSize { get; }
+
+    // Stays until clicked (PopupSettings.StayLevels for its level). When the
+    // stack is full such a card is not dropped silently: it is counted on the
+    // overflow card instead.
+    public bool Stays { get; init; }
+
     public event Action<NotificationPopup>? Closed;
 
-    public NotificationPopup(NotificationEnvelope envelope, Uri? link, Action onClick, Action onOpenThread)
+    public static NotificationPopup ForNotification(NotificationEnvelope envelope, Uri? link, bool stays, Action onClick, Action onOpenThread)
+    {
+        var popup = new NotificationPopup(envelope, link is null ? 116 : 148, envelope.Title) { Stays = stays };
+        popup._window.Content = popup.Build(envelope, link, onClick, onOpenThread);
+        return popup;
+    }
+
+    // "+N more": the cards that stayed until clicked but no longer fit on
+    // screen. Clicking it opens Recent notifications, where they all are.
+    public static NotificationPopup ForOverflow(int count, Action onOpen, Action onDismiss)
+    {
+        var popup = new NotificationPopup(null, 60, "notipet");
+        popup._window.Content = popup.BuildOverflow(onOpen, onDismiss);
+        popup.SetOverflowCount(count);
+        return popup;
+    }
+
+    private NotificationPopup(NotificationEnvelope? envelope, double heightDip, string title)
     {
         Envelope = envelope;
         _hwnd = WindowNative.GetWindowHandle(_window);
 
-        var heightDip = link is null ? 116 : 148;
         var scale = GetDpiForWindow(_hwnd) / 96.0;
         PixelSize = new SizeInt32((int)(WidthDip * scale), (int)(heightDip * scale));
 
-        _window.Content = Build(envelope, link, onClick, onOpenThread);
-        _window.Title = envelope.Title;
+        _window.Title = title;
         try { _window.SystemBackdrop = new DesktopAcrylicBackdrop(); } catch { }
 
         // A small borderless card: no title bar, no taskbar button, no Alt+Tab
@@ -125,6 +148,57 @@ internal sealed class NotificationPopup
         _closed = true;
         _timer.Stop();
         Closed?.Invoke(this);
+    }
+
+    public void SetOverflowCount(int count)
+    {
+        if (_overflowText is null) return;
+        _overflowText.Text = Loc.T($"+{count} more waiting for you", $"외 {count}개 알림이 더 있습니다");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName((UIElement)_window.Content, $"notipet: {_overflowText.Text}");
+    }
+
+    private UIElement BuildOverflow(Action onOpen, Action onDismiss)
+    {
+        // bell | "+N more" + "Open Recent notifications" | close
+        var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(18, 8, 8, 8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+        var icon = Fluent.Icon(Glyphs.History, 18, "AccentTextFillColorPrimaryBrush");
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(icon);
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 0 };
+        _overflowText = Fluent.Text("", "BodyStrongTextBlockStyle", wrap: false);
+        text.Children.Add(_overflowText);
+        text.Children.Add(Fluent.Text(Loc.T("Click to open Recent notifications", "클릭하면 최근 알림을 엽니다"),
+            "CaptionTextBlockStyle", "TextFillColorSecondaryBrush", wrap: false));
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        var close = Fluent.Xaml<Button>(
+            "<Button $NS Background='Transparent' BorderThickness='0' Padding='6' VerticalAlignment='Center' " +
+            "CornerRadius='{ThemeResource ControlCornerRadius}'/>");
+        close.Content = Fluent.Icon(Glyphs.Cancel, 12);
+        var closeLabel = Loc.T("Close", "닫기");
+        ToolTipService.SetToolTip(close, closeLabel);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, closeLabel);
+        close.Click += (_, _) => { onDismiss(); Close(); };
+        Grid.SetColumn(close, 2);
+        grid.Children.Add(close);
+
+        grid.Tapped += (_, e) =>
+        {
+            for (var node = e.OriginalSource as DependencyObject; node is not null && node != grid; node = VisualTreeHelper.GetParent(node))
+            {
+                if (node is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase) return;
+            }
+            onOpen();
+            Close();
+        };
+        return grid;
     }
 
     private UIElement Build(NotificationEnvelope envelope, Uri? link, Action onClick, Action onOpenThread)

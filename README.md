@@ -32,7 +32,7 @@ You start a long task in Claude Code or Codex and switch to something else. Fort
 - **Agent hooks and an agent skill** - hooks never miss "waiting for input" or "turn finished"; the skill lets the agent say *what* it needs.
 - **Recent notifications, grouped by project** - each card shows which agent sent it (colour stripe + badge), the thread name the agent app uses, and why a notification was held back if it was.
 - **Jump to the thread** - click a card to open that conversation in the **Codex** or **Claude** desktop app.
-- **Pop-ups that stay until clicked**, and that show **over full-screen apps** - optional; clicking one stops the alarm. They never steal keyboard focus.
+- **Pop-ups that stay until clicked** (you pick the levels) and that show **over full-screen apps** - optional; clicking one stops the alarm, they never steal keyboard focus, and when too many pile up the older ones fold into a "+N more" card instead of vanishing.
 - **At my desk** - shorten long alarms, or swap them for a quieter sound, while you are at the PC.
 - **Quiet hours, mute, rate limit, dedupe** - a hook firing on every tool call does not turn the tray into a machine gun.
 - **English / 한국어** UI, Fluent design, light and dark.

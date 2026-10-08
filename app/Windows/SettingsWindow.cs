@@ -211,11 +211,7 @@ internal sealed class SettingsWindow
         // Either one switches from the Windows notification to notipet's own
         // pop-up: the shell decides how long a balloon stays and holds it back
         // over full-screen apps, so neither is possible with it.
-        page.Children.Add(Fluent.SettingCard(Glyphs.Pin,
-            Loc.T("Keep notifications until clicked", "클릭할 때까지 알림 유지"),
-            Loc.T("The pop-up stays on screen until you click or close it. Clicking it stops the alarm.",
-                  "알림 창이 클릭하거나 닫을 때까지 화면에 남습니다. 클릭하면 알람도 멈춥니다."),
-            Fluent.Toggle(Settings.Popup.StayUntilClicked, on => { Settings.Popup.StayUntilClicked = on; Changed(); })));
+        page.Children.Add(BuildStayLevels());
 
         page.Children.Add(Fluent.SettingCard(Glyphs.FullScreen,
             Loc.T("Show over full-screen apps", "전체화면 앱 위에도 표시"),
@@ -293,6 +289,53 @@ internal sealed class SettingsWindow
                 page.Children.Add(Fluent.Text($"[{level}] {ex.Message}"));
             }
         }
+    }
+
+    // Which levels' pop-ups stay until clicked: a checkbox per level, under
+    // the card's heading. Any one checked switches to notipet's own pop-up.
+    private UIElement BuildStayLevels()
+    {
+        var header = new Grid { ColumnSpacing = 16 };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var icon = Fluent.Icon(Glyphs.Pin, 20);
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        header.Children.Add(icon);
+        var text = new StackPanel { Spacing = 2 };
+        text.Children.Add(Fluent.Text(Loc.T("Keep notifications until clicked", "클릭할 때까지 알림 유지")));
+        text.Children.Add(Fluent.Secondary(Loc.T(
+            "For the checked levels the pop-up stays until you click or close it (clicking stops the alarm); the others close after a few seconds.",
+            "체크한 레벨의 알림 창은 클릭하거나 닫을 때까지 남습니다(클릭하면 알람도 멈춤). 나머지는 몇 초 뒤 닫힙니다.")));
+        Grid.SetColumn(text, 1);
+        header.Children.Add(text);
+
+        var boxes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(36, 0, 0, 0) };
+        foreach (var key in Levels)
+        {
+            var level = NotificationLevelParser.Parse(key);
+            var box = new CheckBox
+            {
+                Content = UiText.Level(level),
+                IsChecked = Settings.Popup.Stays(level),
+                MinWidth = 0,
+                Margin = new Thickness(0, 0, 12, 0)
+            };
+            ToolTipService.SetToolTip(box, UiText.LevelDescription(level));
+            box.Checked += (_, _) => SetStay(key, true);
+            box.Unchecked += (_, _) => SetStay(key, false);
+            boxes.Children.Add(box);
+        }
+        return Fluent.ExpandedCard(header, boxes);
+    }
+
+    private void SetStay(string key, bool stays)
+    {
+        var levels = Settings.Popup.StayLevels;
+        levels.RemoveAll(l => string.Equals(l, key, StringComparison.OrdinalIgnoreCase));
+        if (stays) levels.Add(key);
+        // Keep the file readable: severity order, not click order.
+        Settings.Popup.StayLevels = Levels.Where(l => levels.Contains(l, StringComparer.OrdinalIgnoreCase)).ToList();
+        Changed();
     }
 
     private UIElement BuildLevelCard(string key)

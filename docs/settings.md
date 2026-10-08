@@ -106,7 +106,8 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
   },
 
   "popup": {                         // notipet 자체 알림 창 (둘 중 하나라도 켜면 트레이 알림 대신)
-    "stayUntilClicked": false,       // 클릭·닫기 전까지 유지
+    "stayLevels": [],                // 클릭·닫기 전까지 유지할 레벨, 예: ["attention", "error", "critical"]
+                                     // (1.2.0의 "stayUntilClicked": true는 모든 레벨로 한 번 옮겨 읽는다)
     "showOverFullscreen": false,     // 전체화면 앱 위에도 표시
     "timeoutSec": 8                  // 유지하지 않을 때 스스로 닫히기까지 (3~120)
   },

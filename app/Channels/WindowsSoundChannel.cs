@@ -49,6 +49,11 @@ internal sealed class WindowsSoundChannel : INotificationChannel
 
         var outcome = _sound.Play(resolved, envelope.Level, envelope.Tag);
 
+        if (outcome.Skipped)
+        {
+            return Task.FromResult(new ChannelResult(Id, DeliveryStatus.Skipped, null, outcome.Detail));
+        }
+
         if (!outcome.Played)
         {
             // A missing audio endpoint is a channel failure, not a request

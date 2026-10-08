@@ -140,14 +140,14 @@ HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상�
 
 ## 알림 창 (NotificationPopup / PopupHost)
 
-`PopupSettings.StayUntilClicked`나 `ShowOverFullscreen` 중 하나라도 켜면 시각 채널(`TrayBalloonChannel`)이 셸 풍선 대신 `PopupHost.Show`를 부른다. 풍선으로는 둘 다 불가능하다 — 표시 시간은 Windows가 정하고, 전체화면 앱 앞에서는 셸이 알림을 보류한다. 채널 ID는 그대로라 켜고 끄기, 기록의 "알림 전달" 칩, 규칙이 모두 같다.
+`PopupSettings.StayLevels`에 레벨이 하나라도 있거나 `ShowOverFullscreen`이 켜져 있으면 시각 채널(`TrayBalloonChannel`)이 셸 풍선 대신 `PopupHost.Show`를 부른다. 풍선으로는 둘 다 불가능하다 — 표시 시간은 Windows가 정하고, 전체화면 앱 앞에서는 셸이 알림을 보류한다. 채널 ID는 그대로라 켜고 끄기, 기록의 "알림 전달" 칩, 규칙이 모두 같다.
 
 - **포커스를 뺏지 않는다**: `AppWindow.Show(false)` — 활성화 없이 표시. 입력 중인 창의 커서가 그대로다. 검증: 표시 전후 `GetForegroundWindow`가 같다.
 - **창 모양**: `OverlappedPresenter` + `SetBorderAndTitleBar(true, false)`(제목 표시줄 없는 둥근 카드), `IsShownInSwitchers = false`(작업 표시줄·Alt+Tab에 없음), `DesktopAcrylicBackdrop`.
 - **전체화면 위**: `IsAlwaysOnTop` + `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE)`로 topmost 띠의 맨 위에. 전체화면 영상 플레이어도 topmost인 경우가 많아서, 열린 창이 있는 동안 2초마다 다시 올린다(나중에 전체화면이 된 창이 덮는 경우). 독점 전체화면 D3D는 불가능.
 - **전체화면 위 끔 + 전체화면 앞**: topmost가 아니고 포그라운드 창 **바로 뒤**에 넣는다(`SetWindowPos(hwnd, foreground)`). 전체화면을 나오면 보인다.
 - **클릭**: 카드 클릭 = 알람 정지 + 닫기(풍선 클릭과 같음). X = 닫기만. "Claude/Codex에서 열기" = 스레드 열기 + 알람 정지 + 닫기.
-- **쌓기**: 주 모니터 작업 영역 오른쪽 아래부터 위로, 새 것이 아래. 최대 4개, 넘으면 오래된 것부터 닫는다. 닫히면 나머지가 빈자리를 메운다.
-- **자동 닫힘**: 유지 옵션이 꺼져 있으면 `timeoutSec`(기본 8초) 뒤. 마우스가 올라가 있는 동안은 멈춘다.
+- **쌓기**: 주 모니터 작업 영역 오른쪽 아래부터 위로, 새 것이 아래. 최대 4개. 넘치면 가장 오래된 것부터 빠지는데, **유지하는 레벨의 창은 맨 위 오버플로 카드("외 N개")에 수를 더하고** 빠진다 — 아무 표시 없이 사라지면 "클릭할 때까지 유지"가 깨지고, 가장 오래 기다린 요청이 먼저 사라진다. 오버플로 카드가 있으면 슬롯 하나를 차지한다(카드 3 + 요약 1). 누르면 최근 알림 창을 열고 수를 0으로. 스스로 닫히는 레벨의 창은 세지 않는다.
+- **자동 닫힘**: 그 레벨이 `StayLevels`에 없으면 `timeoutSec`(기본 8초) 뒤. 마우스가 올라가 있는 동안은 멈춘다.
 
 검증(수동 스크립트로 확인): 포커스 유지, 12초 뒤에도 남아 있음, 3개 쌓임, 전체화면 topmost 창보다 위(먼저 떠 있던 것 포함), X로 하나만 닫힘, 카드 클릭으로 알람 1→0 + 닫힘, 유지 끔이면 4초(테스트 설정) 뒤 닫힘.

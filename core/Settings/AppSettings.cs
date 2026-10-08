@@ -153,8 +153,16 @@ internal sealed class HistorySettings
 // full-screen app is in front.
 internal sealed class PopupSettings
 {
-    // Stays on screen until clicked (or closed), however long that takes.
-    public bool StayUntilClicked { get; set; }
+    // Levels whose pop-up stays on screen until clicked (or closed), however
+    // long that takes - e.g. attention and critical stay, a finished turn
+    // closes by itself. Wire names: info, success, attention, warn, error,
+    // critical. Empty: nothing stays.
+    public List<string> StayLevels { get; set; } = new();
+
+    // 1.2.0 had one switch for every level. Read once, turned into
+    // StayLevels (all levels) by Normalize(), and never written again.
+    [JsonPropertyName("stayUntilClicked")]
+    public bool? LegacyStayUntilClicked { get; set; }
 
     // Shown above full-screen apps too (games in borderless/windowed mode,
     // full-screen video, presentations). An exclusive-mode full-screen game
@@ -164,8 +172,14 @@ internal sealed class PopupSettings
     // How long a pop-up that does not stay waits before it closes itself.
     public int TimeoutSec { get; set; } = 8;
 
+    public bool Stays(NotificationLevel level) =>
+        StayLevels.Contains(NotificationLevelParser.ToWire(level), StringComparer.OrdinalIgnoreCase);
+
+    // notipet's own pop-up is used for every notification as soon as any
+    // level stays or over-full-screen is on - mixing it with Windows'
+    // notification by level would look like two different apps.
     [JsonIgnore]
-    public bool UseOwnPopup => StayUntilClicked || ShowOverFullscreen;
+    public bool UseOwnPopup => StayLevels.Count > 0 || ShowOverFullscreen;
 }
 
 internal sealed class AppSettings
@@ -259,6 +273,19 @@ internal sealed class AppSettings
         History ??= new HistorySettings();
         Popup ??= new PopupSettings();
         Popup.TimeoutSec = Math.Clamp(Popup.TimeoutSec, 3, 120);
+        Popup.StayLevels ??= new List<string>();
+        if (Popup.LegacyStayUntilClicked == true && Popup.StayLevels.Count == 0)
+        {
+            Popup.StayLevels = NotificationLevelNames.ToList();
+        }
+        Popup.LegacyStayUntilClicked = null;
+        // Known names only, one spelling, each once.
+        Popup.StayLevels = Popup.StayLevels
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim().ToLowerInvariant())
+            .Where(name => NotificationLevelNames.Contains(name))
+            .Distinct()
+            .ToList();
         Channels ??= new Dictionary<string, ChannelSettings>(StringComparer.OrdinalIgnoreCase);
         Sources ??= new Dictionary<string, SourceSettings>(StringComparer.OrdinalIgnoreCase);
 
@@ -316,6 +343,9 @@ internal sealed class AppSettings
         History.KeepInMemory = Math.Clamp(History.KeepInMemory, 10, 5000);
     }
 
+    // The six levels by wire name, in severity order.
+    public static readonly string[] NotificationLevelNames = { "info", "success", "attention", "warn", "error", "critical" };
+
     public const int AbsoluteMaxAlarmSeconds = 600;
 
     // sound.maxDurationSec == 0 means "no deadline". It applies to until_ack
@@ -357,6 +387,12 @@ internal sealed class AppSettings
         var key = NotificationLevelParser.ToWire(level);
         if (Sound.ByLevel.TryGetValue(key, out var spec) && spec is not null) return spec;
         return SoundSettings.DefaultByLevel()[key];
+    }
+
+    private static string WriteTemp(string path, string json)
+    {
+        File.WriteAllText(path, json);
+        return path;
     }
 
     public static bool RunSelfTest()
@@ -411,6 +447,22 @@ internal sealed class AppSettings
             endless.Sound.MaxDurationSec = UnlimitedAlarmSeconds;
             endless.Normalize();
             if (endless.Sound.MaxDurationSec != UnlimitedAlarmSeconds) return false;
+
+            // Pop-ups that stay: per level. The 1.2.0 single switch becomes
+            // "every level" once, and is not written back.
+            var legacy = Load(WriteTemp(path, "{\"popup\":{\"stayUntilClicked\":true}}"));
+            if (legacy.Popup.StayLevels.Count != 6 || legacy.Popup.LegacyStayUntilClicked is not null) return false;
+            if (!legacy.Popup.Stays(NotificationLevel.Info) || !legacy.Popup.UseOwnPopup) return false;
+            legacy.Save(path);
+            if (File.ReadAllText(path).Contains("stayUntilClicked", StringComparison.Ordinal)) return false;
+
+            var picked = Load(WriteTemp(path, "{\"popup\":{\"stayLevels\":[\"Attention\",\"critical\",\"critical\",\"loud\"]}}"));
+            if (picked.Popup.StayLevels.Count != 2) return false;     // normalised, de-duplicated, unknown dropped
+            if (!picked.Popup.Stays(NotificationLevel.Attention) || picked.Popup.Stays(NotificationLevel.Success)) return false;
+
+            var none = new AppSettings();
+            none.Normalize();
+            if (none.Popup.UseOwnPopup || none.Popup.Stays(NotificationLevel.Critical)) return false;
 
             return true;
         }

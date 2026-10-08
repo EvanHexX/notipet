@@ -70,7 +70,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _channels.Add(new WindowsSoundChannel(_sound, () => _settings, () => _settings.Presence.AtDesk));
         // notipet's own pop-ups (PopupSettings); the visual channel uses them
         // instead of the shell balloon when either pop-up option is on.
-        _popups = new PopupHost(() => _settings, ThreadLinkFor, StopAlarms, OpenThreadFor);
+        _popups = new PopupHost(() => _settings, ThreadLinkFor, StopAlarms, OpenThreadFor, ShowHistory);
         _channels.Add(new TrayBalloonChannel(() => _trayIcon, () => _settings, OnUiThread, () => _popups));
 
         _dispatcher = new Dispatcher(

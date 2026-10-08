@@ -115,6 +115,24 @@ internal static class UiText
         return label.Length == 0 ? Loc.T("Unknown", "알 수 없음") : label;
     }
 
+    // A short, translated reason for a delivery that did not happen normally,
+    // shown next to the status on a card. Null when there is nothing to add.
+    public static string? DeliveryNote(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail)) return null;
+        if (detail.EndsWith("alarms already sounding", StringComparison.Ordinal))
+        {
+            var count = detail.Split(' ')[0];
+            return Loc.T($"{count} alarms already ringing", $"알람 {count}개가 이미 울리는 중");
+        }
+        return detail switch
+        {
+            "muted by request" => Loc.T("silent by request", "요청으로 무음"),
+            "silenced at desk" => Loc.T("at my desk", "PC 앞에 있음"),
+            _ => null
+        };
+    }
+
     // The group for cards that did not say which project they came from.
     public static string OtherProject() => Loc.T("Other", "기타");
 
@@ -161,6 +179,8 @@ internal static class UiText
             if (Sound("library:ding") != "내 소리: ding") return false;
             if (Reason("focus_assist") != "윈도우 방해 금지") return false;
             if (OtherProject() != "기타") return false;
+            if (DeliveryNote("3 alarms already sounding") != "알람 3개가 이미 울리는 중") return false;
+            if (DeliveryNote("no audio endpoint") is not null || DeliveryNote(null) is not null) return false;
             if (Agent(null) != "알 수 없음") return false;
             if (Agent("mybot") != "mybot") return false;
             if (OpenThreadIn(PayloadMapper.SourceCodex) != "Codex에서 열기") return false;

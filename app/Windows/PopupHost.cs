@@ -13,9 +13,11 @@ namespace Notipet.Windows;
 // the primary screen's work area (above the taskbar), newest at the bottom
 // like Windows' own. When one closes the rest close the gap.
 //
-// Bounded: a burst of notifications must not cover the screen, so past
-// MaxVisible the oldest goes. (The rate limit already caps bursts; this caps
-// what is left on screen when nobody is there to click.)
+// Bounded: a burst of notifications must not cover the screen. Past
+// MaxVisible the oldest card goes - but a card that was meant to stay until
+// clicked is not dropped silently: it is counted on an overflow card at the
+// top ("+3 more"), which opens Recent notifications, where every one of them
+// still is. A card that would have closed by itself anyway just closes.
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class PopupHost
 {
@@ -27,82 +29,144 @@ internal sealed class PopupHost
     private readonly Func<NotificationEnvelope, Uri?> _link;
     private readonly Action _stopAlarms;
     private readonly Action<NotificationEnvelope> _openThread;
+    private readonly Action _showHistory;
     private readonly List<NotificationPopup> _open = new();
+
+    // Cards that stayed until clicked but were pushed off the stack.
+    private int _overflowCount;
+    private NotificationPopup? _overflowCard;
 
     // While pop-ups are open and "show over full-screen apps" is on, they are
     // put back on top every couple of seconds: a window that turns full-screen
     // and topmost after a pop-up appeared would otherwise cover it.
     private readonly Microsoft.UI.Xaml.DispatcherTimer _keepOnTop = new() { Interval = TimeSpan.FromSeconds(2) };
 
-    public PopupHost(Func<AppSettings> settings, Func<NotificationEnvelope, Uri?> link, Action stopAlarms, Action<NotificationEnvelope> openThread)
+    public PopupHost(Func<AppSettings> settings, Func<NotificationEnvelope, Uri?> link, Action stopAlarms,
+        Action<NotificationEnvelope> openThread, Action showHistory)
     {
         _settings = settings;
         _link = link;
         _stopAlarms = stopAlarms;
         _openThread = openThread;
+        _showHistory = showHistory;
         _keepOnTop.Tick += (_, _) =>
         {
-            if (_open.Count == 0 || !_settings().Popup.ShowOverFullscreen) { _keepOnTop.Stop(); return; }
+            if (Cards().Count == 0 || !_settings().Popup.ShowOverFullscreen) { _keepOnTop.Stop(); return; }
             // Oldest first, so the newest ends up on top.
-            foreach (var popup in _open.ToArray()) popup.RaiseTopmost();
+            foreach (var card in Cards()) card.RaiseTopmost();
         };
     }
 
     public int OpenCount => _open.Count;
+    public int OverflowCount => _overflowCount;
 
     // Must run on the UI thread.
     public void Show(NotificationEnvelope envelope)
     {
         var options = _settings().Popup;
         var fullScreen = PresenceMonitor.IsFullScreenForeground();
+        var topmost = options.ShowOverFullscreen || !fullScreen;
+        var belowForeground = fullScreen && !options.ShowOverFullscreen;
 
-        var popup = new NotificationPopup(envelope, _link(envelope), _stopAlarms, () => _openThread(envelope));
+        var popup = NotificationPopup.ForNotification(envelope, _link(envelope), options.Stays(envelope.Level),
+            _stopAlarms, () => _openThread(envelope));
         popup.Closed += closed =>
         {
             _open.Remove(closed);
             Layout();
         };
         _open.Add(popup);
-        while (_open.Count > MaxVisible) _open[0].Close();
+
+        // Make room. With an overflow card on screen it takes one of the slots.
+        while (_open.Count > (_overflowCount > 0 ? MaxVisible - 1 : MaxVisible))
+        {
+            var oldest = _open[0];
+            if (oldest.Stays) _overflowCount++;
+            oldest.Close();
+        }
+        UpdateOverflowCard(topmost, belowForeground);
 
         var positions = Positions();
-        var topmost = options.ShowOverFullscreen || !fullScreen;
-        popup.Show(positions[^1], topmost, belowForeground: fullScreen && !options.ShowOverFullscreen);
+        popup.Show(positions[^1], topmost, belowForeground);
         Layout();
         if (options.ShowOverFullscreen)
         {
-            foreach (var older in _open.ToArray()) older.RaiseTopmost();
+            foreach (var card in Cards()) card.RaiseTopmost();
             _keepOnTop.Start();
         }
 
-        if (!options.StayUntilClicked) popup.CloseAfter(TimeSpan.FromSeconds(options.TimeoutSec));
+        if (!popup.Stays) popup.CloseAfter(TimeSpan.FromSeconds(options.TimeoutSec));
     }
 
     public void CloseAll()
     {
         foreach (var popup in _open.ToArray()) popup.Close();
+        ClearOverflow();
+    }
+
+    private void UpdateOverflowCard(bool topmost, bool belowForeground)
+    {
+        if (_overflowCount == 0) return;
+        if (_overflowCard is not null)
+        {
+            _overflowCard.SetOverflowCount(_overflowCount);
+            return;
+        }
+
+        _overflowCard = NotificationPopup.ForOverflow(_overflowCount,
+            onOpen: () => { ClearOverflow(); _showHistory(); },
+            onDismiss: ClearOverflow);
+        _overflowCard.Closed += _ =>
+        {
+            _overflowCard = null;
+            _overflowCount = 0;
+            Layout();
+        };
+        // Placed by Layout(); shown where the stack's top will be.
+        _overflowCard.Show(Positions()[0], topmost, belowForeground);
+    }
+
+    private void ClearOverflow()
+    {
+        _overflowCount = 0;
+        var card = _overflowCard;
+        _overflowCard = null;
+        card?.Close();
+        Layout();
+    }
+
+    // What is on screen, top to bottom: the overflow card (it stands for the
+    // oldest ones), then the cards oldest first.
+    private List<NotificationPopup> Cards()
+    {
+        var cards = new List<NotificationPopup>(_open.Count + 1);
+        if (_overflowCard is not null) cards.Add(_overflowCard);
+        cards.AddRange(_open);
+        return cards;
     }
 
     private void Layout()
     {
+        var cards = Cards();
         var positions = Positions();
-        for (var i = 0; i < _open.Count; i++) _open[i].MoveTo(positions[i]);
+        for (var i = 0; i < cards.Count; i++) cards[i].MoveTo(positions[i]);
     }
 
-    // One position per open pop-up, oldest first: the newest sits at the
-    // bottom, older ones above it.
+    // One position per card in Cards() order: the newest sits at the bottom,
+    // older ones above it, the overflow card on top.
     private List<PointInt32> Positions()
     {
+        var cards = Cards();
         var work = DisplayArea.Primary.WorkArea;
-        var scale = _open.Count > 0 ? (double)_open[0].PixelSize.Width / NotificationPopup.WidthDip : 1.0;
+        var scale = cards.Count > 0 ? (double)cards[0].PixelSize.Width / NotificationPopup.WidthDip : 1.0;
         var margin = (int)(MarginDip * scale);
         var gap = (int)(GapDip * scale);
 
-        var positions = new PointInt32[_open.Count];
+        var positions = new PointInt32[cards.Count];
         var bottom = work.Y + work.Height - margin;
-        for (var i = _open.Count - 1; i >= 0; i--)
+        for (var i = cards.Count - 1; i >= 0; i--)
         {
-            var size = _open[i].PixelSize;
+            var size = cards[i].PixelSize;
             var top = bottom - size.Height;
             positions[i] = new PointInt32(work.X + work.Width - size.Width - margin, top);
             bottom = top - gap;

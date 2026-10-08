@@ -7,7 +7,8 @@ using Notipet.Shared;
 
 namespace Notipet.Sound;
 
-internal sealed record SoundPlayOutcome(bool Played, string? AlarmId, string? Detail);
+// Skipped: not played on purpose (the alarm limit), as opposed to a failure.
+internal sealed record SoundPlayOutcome(bool Played, string? AlarmId, string? Detail, bool Skipped = false);
 
 // Owns the engines and the alarm registry, and is the only thing that decides
 // which engine plays a given sound.
@@ -73,7 +74,10 @@ internal sealed class SoundService : IDisposable
         {
             if (!Alarms.TryAdmit(level, out var preempted))
             {
-                return new SoundPlayOutcome(false, null, "collapsed into an alarm already sounding");
+                // Not a failure: the limit doing its job. Reported as a skip
+                // so the card does not show a red "sound failed".
+                return new SoundPlayOutcome(false, null,
+                    $"{AlarmRegistry.MaxConcurrent} alarms already sounding", Skipped: true);
             }
             preempted?.Stop();
         }

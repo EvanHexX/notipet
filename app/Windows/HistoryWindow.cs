@@ -365,6 +365,7 @@ internal sealed class HistoryWindow
         content.Children.Add(metaText);
 
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 2, 0, 0) };
+        var notes = new List<string>();
         chips.Children.Add(Fluent.AgentChip(envelope.SourceId, UiText.Agent(envelope.SourceId)));
         if (!entry.Accepted)
         {
@@ -380,11 +381,16 @@ internal sealed class HistoryWindow
                 var background = delivery.Status == "failed"
                     ? "SystemFillColorCriticalBackgroundBrush"
                     : "SystemFillColorNeutralBackgroundBrush";
-                chips.Children.Add(Fluent.Chip(
-                    $"{UiText.Channel(delivery.Channel)} {UiText.Status(delivery.Status)}", glyph, background));
+                var chip = Fluent.Chip($"{UiText.Channel(delivery.Channel)} {UiText.Status(delivery.Status)}", glyph, background);
+                if (!string.IsNullOrWhiteSpace(delivery.Detail)) ToolTipService.SetToolTip(chip, delivery.Detail);
+                chips.Children.Add(chip);
+                // Why, on its own line: in the chip it pushed the next chip
+                // off the card.
+                if (UiText.DeliveryNote(delivery.Detail) is { } note) notes.Add($"{UiText.Channel(delivery.Channel)}: {note}");
             }
         }
         content.Children.Add(chips);
+        if (notes.Count > 0) content.Children.Add(Fluent.Secondary(string.Join("  ·  ", notes)));
 
         if (!string.IsNullOrWhiteSpace(envelope.SourceCwd))
         {
