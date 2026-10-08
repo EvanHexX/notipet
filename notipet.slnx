@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/app/">
+    <Project Path="app/Notipet.App.csproj" />
+  </Folder>
+  <Folder Name="/cli/">
+    <Project Path="cli/Notipet.Cli.csproj" />
+  </Folder>
+</Solution>

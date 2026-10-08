@@ -1,0 +1,32 @@
+{
+  "//": "The leaner variant: Claude Code's native `http` hook type POSTs the raw hook JSON straight to notipet, with no CLI process in the middle. Fastest path, nothing to install on PATH.",
+
+  "//1": "REQUIRES a pinned port. notipet defaults to server.port = 0 (ephemeral), which makes port conflicts impossible but leaves no stable URL. Set \"server\": { \"port\": 47811 } in %LOCALAPPDATA%\\notipet\\settings.json before using this file, and restart the daemon.",
+  "//2": "The daemon still requires a bearer token on /hooks/*, so this only works if Claude Code is configured to send one - otherwise use settings.hooks.example.json, where the CLI reads the token out of runtime.json for you.",
+
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "agent_needs_input|agent_completed|permission_prompt|idle_prompt",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:47811/hooks/claude-code",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:47811/hooks/claude-code",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+# notipet <-> Codex CLI
+#
+# Append this to %USERPROFILE%\.codex\config.toml and fix the paths.
+#
+# ---------------------------------------------------------------------------
+# Do NOT touch an existing `notify = [...]` line.
+# ---------------------------------------------------------------------------
+# `notify` is a single slot. On this machine it is already held by Codex's own
+# computer-use integration, and overwriting it would silently break that. Use
+# the hooks below instead, which are additive.
+#
+# Hooks are better here on every axis anyway:
+#
+#   - `notify` has exactly one event, agent-turn-complete. The request to add a
+#     "waiting for user input" event was closed as not planned, so notify can
+#     never tell you the agent is blocked on you - which is the alert worth
+#     having.
+#   - Hooks deliver the payload on stdin, so it shares a parser with Claude Code.
+#     `notify` appends it as the final argv element, and openai/codex#25141
+#     (still open) lets that payload grow with the whole prompt history until it
+#     exceeds the Windows command-line limit.
+#   - Hooks give PermissionRequest.
+#
+# notipet still understands the legacy `notify` payload shape, so if you would
+# rather use that slot it works - it just tells you less.
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = 'C:\src\notipet\bin\notipet.exe'
+args = ["--source", "codex"]
+timeout = 10
+
+[[hooks.PermissionRequest]]
+[[hooks.PermissionRequest.hooks]]
+type = "command"
+command = 'C:\src\notipet\bin\notipet.exe'
+args = ["--source", "codex"]
+timeout = 10
+
+# Optional: the terminal's own bell, independent of notipet. No program runs,
+# so notipet cannot hook it - listed only so the two are not confused.
+# [tui]
+# notifications = true
+# notification_method = "auto"
+# notification_condition = "unfocused"

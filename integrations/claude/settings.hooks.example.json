@@ -1,0 +1,51 @@
+{
+  "//": "Merge this hooks block into %USERPROFILE%\\.claude\\settings.json. Claude Code merges hook config across user, project and local settings, so an existing hooks block is extended rather than replaced. Fix the command paths to match where notipet.exe actually lives.",
+
+  "//1": "notification_type is what the Notification matcher tests. agent_needs_input and agent_completed are the two that matter; permission_prompt and idle_prompt cover the same ground on older builds.",
+  "//2": "async:true keeps notipet off the agent's critical path entirely - the timeout is not enforced and the turn does not wait for the hook.",
+  "//3": "Notification, Stop and SubagentStop cannot block the agent by design, so notipet can never change how Claude Code behaves.",
+
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "agent_needs_input|agent_completed|permission_prompt|idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\src\\notipet\\bin\\notipet.exe",
+            "args": ["--source", "claude-code"],
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\src\\notipet\\bin\\notipet.exe",
+            "args": ["--source", "claude-code"],
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\src\\notipet\\bin\\notipet.exe",
+            "args": ["--source", "claude-code"],
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

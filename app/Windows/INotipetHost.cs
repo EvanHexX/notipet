@@ -1,0 +1,46 @@
+using Notipet.Core;
+using Notipet.Settings;
+using Notipet.Shared;
+
+namespace Notipet.Windows;
+
+// What the windows need from the tray controller. An interface rather than a
+// bag of callbacks, so each window states its dependencies in one place and
+// the controller owns every side effect (saving, trimming, tray refresh).
+internal interface INotipetHost
+{
+    AppSettings Settings { get; }
+    HistoryStore History { get; }
+    System.Drawing.Icon? AppIcon { get; }
+    int? ApiPort { get; }
+    string Version { get; }
+
+    // Call after mutating Settings; the host saves and redraws the tray.
+    void SettingsChanged();
+
+    // Call after Settings.Language changed; the host re-localises everything.
+    void LanguageChanged();
+
+    void PreviewLevel(NotificationLevel level);
+    void PreviewAtDeskSound();
+    void StopPreview();
+    void SendTest();
+
+    void ShowHistory();
+    void ShowSettings(string? page = null);
+
+    int ClearHistory();
+    bool RemoveHistoryEntry(string id);
+
+    bool AutostartEnabled { get; }
+    bool SetAutostart(bool enabled);
+
+    void OpenDataFolder();
+    void OpenFolder(string path);
+
+    // The deep link that opens this card's thread in the agent's desktop app,
+    // or null when there is none (no thread id, the app is not installed, or
+    // the agent has no link format). Built from validated ids only.
+    System.Uri? ThreadLink(HistoryEntry entry);
+    void OpenThread(HistoryEntry entry);
+}

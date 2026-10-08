@@ -1,0 +1,20 @@
+# build output
+bin/
+obj/
+publish/
+releases/
+TestResults/
+
+# IDE / tool state
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+.claude/
+
+# runtime files never belong in the repo (runtime.json holds the API token)
+runtime*.json
+settings.json
+crash.log
+*.log

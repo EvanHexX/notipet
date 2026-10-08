@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <!-- Raised from quota-scope's 17763: Windows.Media.Playback.MediaPlayer, the
+         primary sound engine, needs 19041. -->
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- NotipetTray, not Notipet: the CLI publishes as notipet.exe into the same
+         folder and Windows filenames are case-insensitive, so "Notipet.exe" and
+         "notipet.exe" are one file. -->
+    <AssemblyName>NotipetTray</AssemblyName>
+    <RootNamespace>Notipet</RootNamespace>
+    <Version>1.2.0</Version>
+    <!-- WindowsAppSDK rejects AnyCPU; pin so plain `dotnet build` works. -->
+    <Platforms>x64;arm64</Platforms>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Unpackaged with the WinAppSDK runtime copied next to the exe: no installer
+         needed, and the headless self-test path never touches the bootstrapper. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- We provide our own Main so the self-test flag runs before any XAML init. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Generated from the same renderer the tray uses (NotipetTray.exe with the
+         export-icon flag, see docs/modules/windows.md); regenerate after
+         changing the bell. -->
+    <ApplicationIcon>Assets/Notipet.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.*" />
+    <!-- TrayIconRenderer draws the tray icon at runtime (System.Drawing.Icon). -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shared sources linked from shared\; editing one changes BOTH exes. -->
+    <Compile Include="..\shared\**\*.cs" Link="Shared\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <!-- Unpackaged publish leaves out the app's own resource index. Without
+       NotipetTray.pri the compiled App.xaml (XamlControlsResources) is gone,
+       theme brushes do not resolve, and every window fails to open in bin
+       while the build output works. See docs/regression.md. -->
+  <Target Name="NotipetPublishPri" AfterTargets="Publish">
+    <Copy SourceFiles="$(OutDir)$(TargetName).pri" DestinationFolder="$(PublishDir)" Condition="Exists('$(OutDir)$(TargetName).pri')" />
+    <Error Text="$(TargetName).pri is missing from the publish folder" Condition="!Exists('$(PublishDir)$(TargetName).pri')" />
+  </Target>
+</Project>

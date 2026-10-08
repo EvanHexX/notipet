@@ -1,0 +1,76 @@
+# AGENTS.md
+
+## Project identity
+
+This repository is `notipet`.
+
+notipet is a Windows tray daemon that makes a noise when an AI coding agent needs the user. Claude Code and Codex CLI call it through hooks; it plays a level-appropriate sound and shows a tray notification. It exists because the moment an agent blocks on a permission prompt — or finishes a forty-minute run — is easy to miss while doing something else.
+
+It is a **public repository** (MIT). Documentation is Korean prose with English identifiers. Never commit anything from a maintainer machine: tokens, local absolute paths, user names, or other projects' names. Examples and test fixtures use neutral paths such as `C:\src\notipet`.
+
+## Scope boundaries
+
+- **Local only, for now.** Phases 1 and 2 contain no outbound network code at all: `app/` has no `HttpClient` anywhere, and the CLI's is hard-pinned to `127.0.0.1`. Mobile push (phase 3) is the single exception and is gated behind `channels.mobile_push.outboundNetworkApproved`, which is settable only from the settings UI, never over the API. Do not add outbound calls without explicit maintainer approval.
+- **Do not merge this into [`quota-scope`](https://github.com/EvanHexX/quota-scope).** It is a separate product with tagged releases; adding a listening socket and third-party egress to it would change its threat model. Code was copied from it, not linked. See `docs/PROJECT_MAP.md`.
+- Do not perform UI framework rewrites, namespace changes, or channel expansions as part of an unrelated fix.
+
+## Current implementation
+
+- Daemon: `app/Notipet.App.csproj` — .NET 10, WinUI 3 / Windows App SDK 1.8, unpackaged, self-contained, x64.
+- CLI: `cli/Notipet.Cli.csproj` — .NET 10 console, NativeAOT. Deliberately a separate exe: hooks sit on the agent's critical path, and every hook invocation pays the startup. Measured on this machine (7 runs, `Start-Process -Wait`, so both figures include ~30 ms of harness overhead): CLI `--help` 48 ms median, daemon `--help` 68 ms median — and the daemon's `--help` returns before any WindowsAppSDK initialisation, so that is the best case for it. The console and exit-code behaviour is the other half of the argument: a `WinExe` has neither.
+- Entry point: `app/Program.cs` — hand-written `Main` (`DISABLE_XAML_GENERATED_MAIN`) so `--self-test` and `--test-sound` run before any XAML initialisation.
+- Lifecycle: `app/TrayController.cs` owns the tray icon, the HTTP server, the sound engines and `runtime.json`.
+
+### Shared sources
+
+`shared/*.cs` is compiled into **both** projects via `Compile Include` in each csproj. Editing one of those files changes both executables — the same arrangement quota-scope uses for `app/`.
+
+- Wire contract: `shared/Wire.cs`
+- Hook payload mapping: `shared/PayloadMapper.cs`, `shared/AgentEvents.cs`
+- Levels: `shared/NotificationLevel.cs`
+- JSON source-gen context: `shared/NotipetJson.cs` — **mandatory**, not an optimisation. The CLI is NativeAOT, where reflection-based `System.Text.Json` trim-warns and fails at runtime.
+
+## Required workflow
+
+1. Read this file and `docs/PROJECT_MAP.md`.
+2. Read the module doc for the area you are touching (`docs/modules/`).
+3. Inspect the specific source files.
+4. Summarise the intended change and keep it narrowly scoped.
+
+Prefer small, reviewable diffs.
+
+## Build and verification
+
+```powershell
+dotnet build notipet.slnx
+.\app\bin\Debug\net10.0-windows10.0.19041.0\win-x64\NotipetTray.exe --self-test
+.\cli\bin\Debug\net10.0\win-x64\notipet.exe --self-test
+```
+
+Run the executables directly rather than through `dotnet run`. The daemon is a `WinExe`; under `dotnet run` in some shells its console output is swallowed, and the self-test report is the point.
+
+When the maintainer has the daemon running it locks `app\bin\`. Build to a scratch output instead of killing it:
+
+```powershell
+dotnet build app\Notipet.App.csproj -p:BaseOutputPath=$env:TEMP/notipet-build/
+```
+
+`--self-test` must stay **silent and headless**: no tray icon, no window, no sound. Audible verification is `--test-sound [level]`. The HTTP check inside it binds a real ephemeral port — that is deliberate, it is the highest-value check in the suite.
+
+For tray, sound, or hook changes, report a manual smoke checklist (`docs/regression.md`, automated through step 8 by `scripts/smoke.ps1`) and do not launch the GUI yourself unless asked. If a command fails, report the exact failure. Do not claim verification that was not actually run.
+
+## Invariants worth not breaking
+
+These each exist because of a specific failure, and each is commented at its site.
+
+- `TrayIconHost._wndProc` is an instance field on purpose. It is a GC root for a native callback; without it the process dies by `FailFast`.
+- Balloons must set `NIIF_NOSOUND`. Otherwise the shell plays its own chime on top of the sound channel and every notification double-sounds.
+- The alarm duration cap is enforced in code (`AppSettings.AbsoluteMaxAlarmSeconds`), independently of settings, so a misconfigured hook firing `until_ack` in a loop cannot invent an endless alarm. The one exception is `sound.maxDurationSec = 0` (`UnlimitedAlarmSeconds`), which the user picks in Settings and which applies to `until_ack` alarms only: the cap was silencing the alarm while they were away, which is the case it exists for. Requests still cannot raise a duration, and at-desk shortening still cuts it to 30 s.
+- Suppression returns **HTTP 200** with `accepted:false`, never a 4xx. Quiet hours are not a client error, and a hook that sees a non-2xx may change the agent's behaviour.
+- The CLI exits **0 even when delivery fails**, unless `--strict`. A notification daemon being down must never alter what Claude Code or Codex does.
+- Local channels are dispatched before remote ones, so a slow or failing push service structurally cannot delay the sound.
+- `PayloadMapper` never throws and never rejects. Agent payload shapes are external contracts; an unknown event becomes an `info` notification carrying the raw event name.
+
+## Safety
+
+Never commit secrets, tokens (`runtime.json` holds one), local absolute paths from a maintainer machine, build outputs, or telemetry/analytics/remote logging.

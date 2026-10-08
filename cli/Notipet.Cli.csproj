@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Deliberately not -windows: the CLI must start fast and stay portable. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>notipet</AssemblyName>
+    <RootNamespace>Notipet.Cli</RootNamespace>
+    <Version>1.2.0</Version>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Hooks sit on the agent's critical path; startup latency dominates. -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- AOT: reflection-based STJ would trim-warn and fail at runtime. -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\shared\**\*.cs" Link="Shared\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- One source of truth for the agent skill: `notipet install-skill` writes
+         exactly the file in integrations/, with the CLI path filled in. -->
+    <EmbeddedResource Include="../integrations/claude/skills/notipet/SKILL.md" LogicalName="notipet.SKILL.md" />
+  </ItemGroup>
+</Project>
