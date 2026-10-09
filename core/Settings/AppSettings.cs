@@ -196,6 +196,9 @@ internal sealed class AppSettings
 {
     public int SchemaVersion { get; set; } = 1;
     public string Language { get; set; } = "System";
+    // System (follow Windows) | Light | Dark. notipet's windows, pop-ups and
+    // tray menu.
+    public string Theme { get; set; } = "System";
     public bool Autostart { get; set; }
     public ServerSettings Server { get; set; } = new();
     public SoundSettings Sound { get; set; } = new();
@@ -359,6 +362,12 @@ internal sealed class AppSettings
             "KO" or "KOREAN" => "KO",
             _ => "System"
         };
+        Theme = Theme?.Trim().ToLowerInvariant() switch
+        {
+            "light" => "Light",
+            "dark" => "Dark",
+            _ => "System"
+        };
         History.KeepInMemory = Math.Clamp(History.KeepInMemory, 10, 5000);
     }
 
@@ -483,6 +492,13 @@ internal sealed class AppSettings
             none.Normalize();
             if (none.Popup.UseOwnPopup || none.Popup.Stays(NotificationLevel.Critical)) return false;
             if (none.Links.AllowedSchemes.Count != 0) return false;
+            if (none.Theme != "System") return false;
+            var themed = new AppSettings { Theme = " dark " };
+            themed.Normalize();
+            if (themed.Theme != "Dark") return false;
+            themed.Theme = "purple";
+            themed.Normalize();
+            if (themed.Theme != "System") return false;
 
             // Listed link schemes: one spelling, and never one that stays refused.
             var links = new AppSettings();

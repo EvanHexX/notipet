@@ -20,6 +20,7 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
 {
   "schemaVersion": 1,
   "language": "System",              // System | EN | KO. 설정 창에서 바꾸면 즉시 적용
+  "theme": "System",                 // System(Windows 따름) | Light | Dark. 창·알림 창·트레이 메뉴. 즉시 적용
   "autostart": false,                // 트레이 메뉴와 동기화됨
 
   "server": {

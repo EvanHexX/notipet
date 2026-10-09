@@ -249,7 +249,7 @@ internal static class ApiRoutes
         var level = QueryValue(ctx, "level") ?? "attention";
         var request = new NotifyRequest
         {
-            Title = "notipet",
+            Title = "Notipet",
             Body = Loc.T("Test notification", "테스트 알림"),
             Level = level,
             // A test that got swallowed by dedupe would be a bad test.

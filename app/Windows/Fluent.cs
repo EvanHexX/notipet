@@ -60,6 +60,7 @@ internal static class Glyphs
     public const string Pin = "\uE718";
     public const string FullScreen = "\uE740";
     public const string More = "\uE712";
+    public const string Theme = "\uE790";
 
     public static string ForLevel(NotificationLevel level) => level switch
     {
@@ -203,19 +204,51 @@ internal static class Fluent
         return button;
     }
 
-    // A circle with the level's icon, tinted with the matching system status
-    // colour so severity reads before the text does.
+    // The level's status colour. Theme brushes, so each theme gets its own
+    // tuning: light green/yellow/pink on dark, deep ones on light.
+    private static (string Fg, string Bg) LevelBrushes(NotificationLevel level) => level switch
+    {
+        NotificationLevel.Success => ("SystemFillColorSuccessBrush", "SystemFillColorSuccessBackgroundBrush"),
+        NotificationLevel.Attention => ("SystemFillColorCautionBrush", "SystemFillColorCautionBackgroundBrush"),
+        NotificationLevel.Warn => ("SystemFillColorCautionBrush", "SystemFillColorCautionBackgroundBrush"),
+        NotificationLevel.Error => ("SystemFillColorCriticalBrush", "SystemFillColorCriticalBackgroundBrush"),
+        NotificationLevel.Critical => ("SystemFillColorCriticalBrush", "SystemFillColorCriticalBackgroundBrush"),
+        _ => ("AccentTextFillColorPrimaryBrush", "SystemFillColorAttentionBackgroundBrush")
+    };
+
+    // The level's icon alone, in its status colour. What cards and pop-ups
+    // use: the tinted circle behind it (LevelBadge) turned olive and brown in
+    // dark mode, and took a column of its own.
+    public static FontIcon LevelIcon(NotificationLevel level, double size = 16)
+    {
+        var icon = Icon(Glyphs.ForLevel(level), size, LevelBrushes(level).Fg);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(icon, NotificationLevelParser.ToWire(level));
+        return icon;
+    }
+
+    // A title with the level's icon in front of it, on one line: the icon
+    // sits on the title's first line instead of in a column beside the card.
+    public static Grid TitleRow(NotificationLevel level, string levelName, string title, bool wrap)
+    {
+        var row = new Grid { ColumnSpacing = 7 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var icon = LevelIcon(level, 15);
+        icon.VerticalAlignment = VerticalAlignment.Top;
+        icon.Margin = new Thickness(0, 3, 0, 0);
+        ToolTipService.SetToolTip(icon, levelName);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(icon, levelName);
+        row.Children.Add(icon);
+        var text = Text(title, "BodyStrongTextBlockStyle", wrap: wrap);
+        Grid.SetColumn(text, 1);
+        row.Children.Add(text);
+        return row;
+    }
+
+    // A circle with the level's icon. Kept for the About page's mark.
     public static Border LevelBadge(NotificationLevel level, double size = 32)
     {
-        var (fg, bg) = level switch
-        {
-            NotificationLevel.Success => ("SystemFillColorSuccessBrush", "SystemFillColorSuccessBackgroundBrush"),
-            NotificationLevel.Attention => ("SystemFillColorCautionBrush", "SystemFillColorCautionBackgroundBrush"),
-            NotificationLevel.Warn => ("SystemFillColorCautionBrush", "SystemFillColorCautionBackgroundBrush"),
-            NotificationLevel.Error => ("SystemFillColorCriticalBrush", "SystemFillColorCriticalBackgroundBrush"),
-            NotificationLevel.Critical => ("SystemFillColorCriticalBrush", "SystemFillColorCriticalBackgroundBrush"),
-            _ => ("AccentTextFillColorPrimaryBrush", "SystemFillColorAttentionBackgroundBrush")
-        };
+        var (fg, bg) = LevelBrushes(level);
 
         var badge = Xaml<Border>(
             $"<Border $NS Width='{size}' Height='{size}' CornerRadius='{size / 2}' " +
@@ -277,6 +310,39 @@ internal static class Fluent
         return chip;
     }
 
+    // The theme picked in Settings → General. "System" follows Windows (and
+    // follows it live); Light/Dark pin every notipet window to one.
+    private static ElementTheme _theme = ElementTheme.Default;
+
+    public static void SetTheme(string? name) => _theme = name switch
+    {
+        "Light" => ElementTheme.Light,
+        "Dark" => ElementTheme.Dark,
+        _ => ElementTheme.Default
+    };
+
+    // On the window's root, so every {ThemeResource} below re-resolves; and on
+    // the title bar, whose caption buttons are drawn by the system, not XAML.
+    // Called after every rebuild of a window's content.
+    public static void ApplyTheme(Window window)
+    {
+        if (window.Content is FrameworkElement root) root.RequestedTheme = _theme;
+        try
+        {
+            window.AppWindow.TitleBar.PreferredTheme = _theme switch
+            {
+                ElementTheme.Light => TitleBarTheme.Light,
+                ElementTheme.Dark => TitleBarTheme.Dark,
+                _ => TitleBarTheme.UseDefaultAppMode
+            };
+        }
+        catch
+        {
+            // Older runtime without PreferredTheme: the caption buttons keep
+            // following Windows, which is all they did before.
+        }
+    }
+
     // Draws our own title bar so the Mica backdrop runs edge to edge, the way
     // Windows 11 apps look. Returns the element that must be passed to
     // SetTitleBar so dragging still works.
@@ -293,6 +359,10 @@ internal static class Fluent
 
         window.ExtendsContentIntoTitleBar = true;
         window.SetTitleBar(bar);
+        // Caption buttons as tall as the bar (48), so the icon and title sit
+        // on their centre line. With the default (32) they hung above our
+        // vertically-centred title.
+        try { window.AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall; } catch { }
         return bar;
     }
 

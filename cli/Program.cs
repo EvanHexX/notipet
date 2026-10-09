@@ -430,7 +430,7 @@ internal static class Program
 
     private static NotifyRequest TestRequest(string[] args) => new()
     {
-        Title = "notipet",
+        Title = "Notipet",
         Body = "Test notification",
         Level = OptionValue(args, "--level") ?? "attention",
         Tag = "notipet:cli-test:" + Guid.NewGuid().ToString("N")[..8],
@@ -1078,7 +1078,7 @@ internal static class Program
         if (Build("send", "--title", "x", "--cwd", @"C:\src\notipet").Source?.Project != "notipet") return false;
         var lone = Build("send", "--body", "only a body", "--cwd", @"D:\x");
         if (lone.Source?.Id != PayloadMapper.SourceManual || lone.Source.Session is not null || lone.Source.HostSession is not null) return false;
-        if (lone.Title != "notipet") return false;
+        if (lone.Title != "Notipet") return false;
 
         // Inside Claude Desktop: agent, thread and host session come from the
         // environment, and the default title names the agent.

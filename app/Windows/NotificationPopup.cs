@@ -46,6 +46,7 @@ internal sealed class NotificationPopup
     {
         var popup = new NotificationPopup(envelope, 116, envelope.Title) { Stays = stays };
         popup._window.Content = popup.Build(envelope, link, onClick, onOpenThread);
+        popup.Dress();
         return popup;
     }
 
@@ -53,8 +54,9 @@ internal sealed class NotificationPopup
     // screen. Clicking it opens Recent notifications, where they all are.
     public static NotificationPopup ForOverflow(int count, Action onOpen, Action onDismiss)
     {
-        var popup = new NotificationPopup(null, 60, "notipet");
+        var popup = new NotificationPopup(null, 60, "Notipet");
         popup._window.Content = popup.BuildOverflow(onOpen, onDismiss);
+        popup.Dress();
         popup.SetOverflowCount(count);
         return popup;
     }
@@ -68,7 +70,6 @@ internal sealed class NotificationPopup
         PixelSize = new SizeInt32((int)(WidthDip * scale), (int)(heightDip * scale));
 
         _window.Title = title;
-        try { _window.SystemBackdrop = new DesktopAcrylicBackdrop(); } catch { }
 
         // A small borderless card: no title bar, no taskbar button, no Alt+Tab
         // entry, not resizable.
@@ -117,6 +118,19 @@ internal sealed class NotificationPopup
         SetWindowPos(_hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
+    // Theme, then the backdrop - after the content, because the backdrop
+    // takes its theme from the content's root.
+    private void Dress()
+    {
+        Fluent.ApplyTheme(_window);
+        try { _window.SystemBackdrop = new ThemedAcrylicBackdrop(); } catch { }
+    }
+
+    public void ApplyTheme()
+    {
+        if (!_closed) Fluent.ApplyTheme(_window);
+    }
+
     public void MoveTo(PointInt32 position)
     {
         if (!_closed) _window.AppWindow.Move(position);
@@ -154,7 +168,7 @@ internal sealed class NotificationPopup
     {
         if (_overflowText is null) return;
         _overflowText.Text = Loc.T($"+{count} more waiting for you", $"외 {count}개 알림이 더 있습니다");
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName((UIElement)_window.Content, $"notipet: {_overflowText.Text}");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName((UIElement)_window.Content, $"Notipet: {_overflowText.Text}");
     }
 
     private UIElement BuildOverflow(Action onOpen, Action onDismiss)
@@ -203,23 +217,23 @@ internal sealed class NotificationPopup
 
     private UIElement Build(NotificationEnvelope envelope, Uri? link, Action onClick, Action onOpenThread)
     {
-        // badge | text | open + close
-        var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(14, 12, 8, 12) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // text | open + close. The level's icon is on the title line, not in
+        // a column of its own: the column cost a sixth of the width and left
+        // the card lopsided.
+        var grid = new Grid { ColumnSpacing = 8, Padding = new Thickness(16, 12, 8, 12) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         // Transparent, not null: the gaps between controls must take clicks too.
         grid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
-        var badge = Fluent.LevelBadge(envelope.Level, 28);
-        badge.VerticalAlignment = VerticalAlignment.Top;
-        grid.Children.Add(badge);
-
+        // Three steps of emphasis, as in Windows' own notifications: title in
+        // the primary colour and bold, body secondary, who-and-where tertiary.
+        // With all three in the same white the title did not stand out.
         var content = new StackPanel { Spacing = 2 };
-        content.Children.Add(Fluent.Text(envelope.Title, "BodyStrongTextBlockStyle", wrap: false));
+        content.Children.Add(Fluent.TitleRow(envelope.Level, UiText.Level(envelope.Level), envelope.Title, wrap: false));
         if (!string.IsNullOrWhiteSpace(envelope.Body))
         {
-            var body = Fluent.Text(envelope.Body, "BodyTextBlockStyle");
+            var body = Fluent.Text(envelope.Body, "BodyTextBlockStyle", "TextFillColorSecondaryBrush");
             body.MaxLines = 2;
             body.TextTrimming = TextTrimming.CharacterEllipsis;
             content.Children.Add(body);
@@ -233,11 +247,10 @@ internal sealed class NotificationPopup
         metaRow.Children.Add(Fluent.AgentDot(envelope.SourceId, 7));
         var meta = string.Join("  ·  ", new[] { UiText.Agent(envelope.SourceId), envelope.Project, envelope.ThreadTitle }
             .Where(s => !string.IsNullOrWhiteSpace(s)));
-        var metaText = Fluent.Text(meta, "CaptionTextBlockStyle", "TextFillColorSecondaryBrush", wrap: false);
+        var metaText = Fluent.Text(meta, "CaptionTextBlockStyle", "TextFillColorTertiaryBrush", wrap: false);
         Grid.SetColumn(metaText, 1);
         metaRow.Children.Add(metaText);
         content.Children.Add(metaRow);
-        Grid.SetColumn(content, 1);
         grid.Children.Add(content);
 
         // Open sits next to close as an icon: as a labelled button on a row of
@@ -258,7 +271,7 @@ internal sealed class NotificationPopup
             }));
         }
         actions.Children.Add(SmallButton(Glyphs.Cancel, Loc.T("Close", "닫기"), Close));
-        Grid.SetColumn(actions, 2);
+        Grid.SetColumn(actions, 1);
         grid.Children.Add(actions);
 
         // A click on the card (not on a button) is "I've seen it": the alarm
@@ -277,7 +290,7 @@ internal sealed class NotificationPopup
             Close();
         };
 
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(grid, $"notipet: {envelope.Title}");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(grid, $"Notipet: {envelope.Title}");
         return grid;
     }
 
