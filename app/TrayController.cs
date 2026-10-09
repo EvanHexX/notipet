@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Notipet.Channels;
 using Notipet.Core;
@@ -25,7 +26,7 @@ namespace Notipet;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class TrayController : IDisposable, INotipetHost
 {
-    public const string AppVersion = "1.2.0";
+    public const string AppVersion = "1.3.0";
 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly AppSettings _settings;
@@ -374,7 +375,8 @@ internal sealed class TrayController : IDisposable, INotipetHost
                 OnUiThread(RefreshTray);
                 return _settings.Presence.AtDesk;
             },
-            Shutdown = () => OnUiThread(Quit)
+            Shutdown = () => OnUiThread(Quit),
+            ClosePopups = ids => OnUiThreadAsync(() => _popups.CloseFor(ids), (IReadOnlyCollection<string>)Array.Empty<string>())
         };
 
         _server = new NotipetHttpServer(ApiRoutes.Build(api), guard);
@@ -602,6 +604,30 @@ internal sealed class TrayController : IDisposable, INotipetHost
         {
             try { action(); } catch (Exception ex) { CrashLog.Write("TrayController.UiThread", ex); }
         });
+    }
+
+    // The same, for a caller on a worker thread that needs the answer. Gives
+    // up after two seconds with the fallback rather than hold an HTTP request
+    // on a UI thread that is not answering.
+    private async Task<T> OnUiThreadAsync<T>(Func<T> func, T fallback)
+    {
+        if (_disposed) return fallback;
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            try { return func(); } catch (Exception ex) { CrashLog.Write("TrayController.UiThread", ex); return fallback; }
+        }
+
+        var result = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_dispatcherQueue.TryEnqueue(() =>
+            {
+                try { result.TrySetResult(func()); }
+                catch (Exception ex) { CrashLog.Write("TrayController.UiThread", ex); result.TrySetResult(fallback); }
+            }))
+        {
+            return fallback;
+        }
+        var finished = await Task.WhenAny(result.Task, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+        return finished == result.Task ? await result.Task.ConfigureAwait(false) : fallback;
     }
 
     public void Quit()

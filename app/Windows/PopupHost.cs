@@ -32,8 +32,9 @@ internal sealed class PopupHost
     private readonly Action _showHistory;
     private readonly List<NotificationPopup> _open = new();
 
-    // Cards that stayed until clicked but were pushed off the stack.
-    private int _overflowCount;
+    // Cards that stayed until clicked but were pushed off the stack, by
+    // notification id - so a resolved one can be taken off the count too.
+    private readonly HashSet<string> _overflowIds = new(StringComparer.Ordinal);
     private NotificationPopup? _overflowCard;
 
     // While pop-ups are open and "show over full-screen apps" is on, they are
@@ -58,7 +59,7 @@ internal sealed class PopupHost
     }
 
     public int OpenCount => _open.Count;
-    public int OverflowCount => _overflowCount;
+    public int OverflowCount => _overflowIds.Count;
 
     // Must run on the UI thread.
     public void Show(NotificationEnvelope envelope)
@@ -78,10 +79,10 @@ internal sealed class PopupHost
         _open.Add(popup);
 
         // Make room. With an overflow card on screen it takes one of the slots.
-        while (_open.Count > (_overflowCount > 0 ? MaxVisible - 1 : MaxVisible))
+        while (_open.Count > (_overflowIds.Count > 0 ? MaxVisible - 1 : MaxVisible))
         {
             var oldest = _open[0];
-            if (oldest.Stays) _overflowCount++;
+            if (oldest.Stays && oldest.Envelope is { } pushed) _overflowIds.Add(pushed.Id);
             oldest.Close();
         }
         UpdateOverflowCard(topmost, belowForeground);
@@ -98,6 +99,35 @@ internal sealed class PopupHost
         if (!popup.Stays) popup.CloseAfter(TimeSpan.FromSeconds(options.TimeoutSec));
     }
 
+    // The sender said these are over (/v1/resolve): close their cards and take
+    // them off the "+N more" count. Returns the ids that were on screen or in
+    // the count; one already closed is simply not there. Must run on the UI
+    // thread.
+    public IReadOnlyCollection<string> CloseFor(IReadOnlyCollection<string> ids)
+    {
+        var wanted = new HashSet<string>(ids, StringComparer.Ordinal);
+        var closed = new List<string>();
+        foreach (var popup in _open.ToArray())
+        {
+            if (popup.Envelope is not { } envelope || !wanted.Contains(envelope.Id)) continue;
+            popup.Close();
+            closed.Add(envelope.Id);
+        }
+
+        var uncounted = _overflowIds.RemoveWhere(id =>
+        {
+            if (!wanted.Contains(id)) return false;
+            closed.Add(id);
+            return true;
+        });
+        if (uncounted > 0)
+        {
+            if (_overflowIds.Count == 0) ClearOverflow();
+            else _overflowCard?.SetOverflowCount(_overflowIds.Count);
+        }
+        return closed;
+    }
+
     public void CloseAll()
     {
         foreach (var popup in _open.ToArray()) popup.Close();
@@ -106,20 +136,20 @@ internal sealed class PopupHost
 
     private void UpdateOverflowCard(bool topmost, bool belowForeground)
     {
-        if (_overflowCount == 0) return;
+        if (_overflowIds.Count == 0) return;
         if (_overflowCard is not null)
         {
-            _overflowCard.SetOverflowCount(_overflowCount);
+            _overflowCard.SetOverflowCount(_overflowIds.Count);
             return;
         }
 
-        _overflowCard = NotificationPopup.ForOverflow(_overflowCount,
+        _overflowCard = NotificationPopup.ForOverflow(_overflowIds.Count,
             onOpen: () => { ClearOverflow(); _showHistory(); },
             onDismiss: ClearOverflow);
         _overflowCard.Closed += _ =>
         {
             _overflowCard = null;
-            _overflowCount = 0;
+            _overflowIds.Clear();
             Layout();
         };
         // Placed by Layout(); shown where the stack's top will be.
@@ -128,7 +158,7 @@ internal sealed class PopupHost
 
     private void ClearOverflow()
     {
-        _overflowCount = 0;
+        _overflowIds.Clear();
         var card = _overflowCard;
         _overflowCard = null;
         card?.Close();

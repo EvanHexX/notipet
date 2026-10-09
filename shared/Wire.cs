@@ -108,6 +108,33 @@ public sealed class AckResponse
     [JsonPropertyName("stopped")] public int Stopped { get; set; }
 }
 
+// POST /v1/resolve - "the thing I alerted about is over". Stops that
+// notification's alarm and closes its pop-up, and nothing else: unlike /v1/ack
+// there is no "all", and a request with no selector is a 400. Selectors narrow
+// together (tag AND thread AND agent); id alone picks one notification.
+// Whatever already stopped or closed is skipped silently, so an agent can send
+// this without knowing whether the user got there first.
+public sealed class ResolveRequest
+{
+    [JsonPropertyName("id")] public string? Id { get; set; }
+    [JsonPropertyName("tag")] public string? Tag { get; set; }
+    // Any of these tags. Hooks use it to name the exact moments they end.
+    [JsonPropertyName("tags")] public List<string>? Tags { get; set; }
+    // The agent (claude-code | codex | ...), as on the notification.
+    [JsonPropertyName("source")] public string? Source { get; set; }
+    // The thread, as SourceInfo.session on the notification.
+    [JsonPropertyName("session")] public string? Session { get; set; }
+}
+
+public sealed class ResolveResponse
+{
+    [JsonPropertyName("ok")] public bool Ok { get; set; }
+    // Notifications that still had something live (an alarm, a pop-up).
+    [JsonPropertyName("resolved")] public int Resolved { get; set; }
+    [JsonPropertyName("alarmsStopped")] public int AlarmsStopped { get; set; }
+    [JsonPropertyName("popupsClosed")] public int PopupsClosed { get; set; }
+}
+
 public sealed class MuteRequest
 {
     [JsonPropertyName("muted")] public bool? Muted { get; set; }
@@ -205,6 +232,9 @@ public sealed class HistoryEntryDto
     [JsonPropertyName("count")] public int Count { get; set; }
     [JsonPropertyName("accepted")] public bool Accepted { get; set; }
     [JsonPropertyName("suppressedReason")] public string? SuppressedReason { get; set; }
+    // When the sender said it was over (/v1/resolve) while its alarm or
+    // pop-up was still live.
+    [JsonPropertyName("resolvedAt")] public string? ResolvedAt { get; set; }
     [JsonPropertyName("deliveries")] public List<DeliveryResult> Deliveries { get; set; } = new();
 }
 

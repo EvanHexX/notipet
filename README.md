@@ -9,7 +9,7 @@ English | [한국어](README.ko.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#install)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![WinUI 3](https://img.shields.io/badge/UI-WinUI%203-0063B1)](https://learn.microsoft.com/windows/apps/winui/winui3/)
-[![Version](https://img.shields.io/badge/version-1.2.0-blue)](#)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 <br>
 [![Claude Code](https://img.shields.io/badge/works%20with-Claude%20Code-D97757)](#connect-your-agents)
@@ -33,6 +33,7 @@ You start a long task in Claude Code or Codex and switch to something else. Fort
 - **Recent notifications, grouped by project** - each card shows which agent sent it, the thread name the agent app uses, and why a notification was held back if it was.
 - **Jump to the thread** - click a card to open that conversation in the **Codex** or **Claude** desktop app.
 - **Pop-ups that stay until clicked** (you pick the levels) and that show **over full-screen apps** - optional; clicking one stops the alarm, they never steal keyboard focus, and when too many pile up the older ones fold into a "+N more" card instead of vanishing.
+- **Alarms that end themselves** - when the agent finishes what it called you for (you approved from your phone, or it fixed the problem itself), it says so and only that alarm and its pop-up go away. Already stopped? Nothing happens.
 - **At my desk** - shorten long alarms, or swap them for a quieter sound, while you are at the PC.
 - **Quiet hours, mute, rate limit, dedupe** - a hook firing on every tool call does not turn the tray into a machine gun.
 - **English / 한국어** UI, Fluent design, light and dark.
@@ -104,7 +105,7 @@ notipet send --title "api: need a decision" --body "Rotate keys now or keep both
 | `error` | repeats 3x | failed, cannot continue |
 | `critical` | until acknowledged | must not be missed |
 
-Stop a ringing alarm with a click on the tray icon or the notification, or `notipet ack`. Every repeat mode can be changed per level in Settings → Sound; "until acknowledged" is capped by a maximum duration unless you choose **No limit**.
+Stop a ringing alarm with a click on the tray icon or the notification, or `notipet ack`. The sender can end it too: the turn finishing ends its permission prompt, and `notipet resolve` ends what an agent alerted about. Every repeat mode can be changed per level in Settings → Sound; "until acknowledged" is capped by a maximum duration unless you choose **No limit**.
 
 ## CLI
 
@@ -112,7 +113,7 @@ Stop a ringing alarm with a click on the tray icon or the notification, or `noti
 notipet send --title T --body B [--level L] [--tag T] [--project P] [--thread-title T]
 notipet status | ping | version | doctor
 notipet history [--limit N] | history clear
-notipet ack | mute [30m|off] | desk [on|off]
+notipet ack | resolve [--tag T] | mute [30m|off] | desk [on|off]
 notipet open [recent|settings]
 notipet start | stop | restart
 notipet install-hooks | install-skill

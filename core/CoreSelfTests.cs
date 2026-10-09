@@ -32,6 +32,7 @@ public static class CoreSelfTests
         ("RateLimitRule", RateLimitRule.RunSelfTest),
         ("SoundResolver", SoundResolver.RunSelfTest),
         ("AlarmRegistry", AlarmRegistry.RunSelfTest),
+        ("AlarmResolver", AlarmResolver.RunSelfTest),
         ("AuthGuard", AuthGuard.RunSelfTest),
         ("RuntimeFile", RuntimeFile.RunSelfTest),
     };

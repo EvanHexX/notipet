@@ -43,6 +43,13 @@ internal sealed class ApiContext
     // Quits the daemon. Runs after the response is written.
     public Action? Shutdown { get; init; }
 
+    // Closes the pop-ups of these notification ids; returns the ids it
+    // closed. Optional: a front end without pop-ups leaves it out.
+    public Func<IReadOnlyCollection<string>, Task<IReadOnlyCollection<string>>>? ClosePopups { get; init; }
+
+    private AlarmResolver? _resolver;
+    public AlarmResolver Resolver => _resolver ??= new AlarmResolver(History, Alarms, ClosePopups);
+
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.Now;
 }
 
@@ -59,6 +66,7 @@ internal static class ApiRoutes
 
         routes.Map("POST", "/v1/notify", ctx => NotifyAsync(api, ctx));
         routes.Map("POST", "/v1/ack", ctx => AckAsync(api, ctx));
+        routes.Map("POST", "/v1/resolve", ctx => ResolveAsync(api, ctx));
         routes.Map("POST", "/v1/mute", ctx => MuteAsync(api, ctx));
         routes.Map("POST", "/v1/test", ctx => TestAsync(api, ctx));
         routes.Map("GET", "/v1/channels", ctx => ChannelsAsync(api, ctx));
@@ -138,7 +146,18 @@ internal static class ApiRoutes
         var hook = await HttpJson.ReadAsync(
             ctx, api.Settings().Server.MaxBodyBytes, NotipetJson.Compact.AgentHookEvent).ConfigureAwait(false);
 
-        var request = PayloadMapper.FromHookEvent(hook, sourceHint);
+        // Ends what this event says is over first, then announces it - so a
+        // turn's own "finished" is never ended by the event that raised it.
+        var plan = PayloadMapper.PlanForHookEvent(hook, sourceHint);
+        ResolveResponse? resolved = null;
+        if (plan.Resolve is not null) resolved = await api.Resolver.ResolveAsync(plan.Resolve).ConfigureAwait(false);
+
+        if (plan.Notify is not { } request)
+        {
+            await HttpJson.WriteAsync(ctx, 200, resolved ?? new ResolveResponse { Ok = true },
+                NotipetJson.Compact.ResolveResponse).ConfigureAwait(false);
+            return;
+        }
 
         // The mapper always produces something usable, so a failure here would
         // be a bug rather than bad input - fall back rather than 400 a hook.
@@ -167,6 +186,27 @@ internal static class ApiRoutes
 
         await HttpJson.WriteAsync(ctx, 200, new AckResponse { Ok = true, Stopped = stopped },
             NotipetJson.Compact.AckResponse).ConfigureAwait(false);
+    }
+
+    // "It is over": stops the named notifications' alarms and closes their
+    // pop-ups. A 200 with zeros when they were already stopped and closed - an
+    // agent must be able to send this without knowing whether the user got
+    // there first. Naming nothing is a 400, not "everything": that is /v1/ack.
+    private static async Task ResolveAsync(ApiContext api, HttpListenerContext ctx)
+    {
+        api.Guard.Require(ctx.Request);
+        AuthGuard.RequireJsonContentType(ctx.Request);
+
+        var request = await HttpJson.ReadAsync(
+            ctx, api.Settings().Server.MaxBodyBytes, NotipetJson.Compact.ResolveRequest).ConfigureAwait(false);
+
+        if (!AlarmResolver.HasSelector(request))
+        {
+            throw HttpApiException.Validation("name what is over: id, tag, tags or session", "tag");
+        }
+
+        var response = await api.Resolver.ResolveAsync(request).ConfigureAwait(false);
+        await HttpJson.WriteAsync(ctx, 200, response, NotipetJson.Compact.ResolveResponse).ConfigureAwait(false);
     }
 
     private static async Task MuteAsync(ApiContext api, HttpListenerContext ctx)

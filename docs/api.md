@@ -21,6 +21,7 @@
 | GET | `/v1/health`, `/health`, `/healthz` | 선택 | 생존 확인 |
 | POST | `/v1/notify` | 필수 | 메인 진입점 |
 | POST | `/v1/ack` | 필수 | 울리는 알람 정지 |
+| POST | `/v1/resolve` | 필수 | "그 일은 끝났다" — 지목한 알림의 알람만 정지 + 알림 창만 닫기 |
 | POST | `/v1/mute` | 필수 | 음소거 켜기/끄기 |
 | POST | `/v1/test` | 필수 | 테스트 알림 (`?level=`) |
 | GET | `/v1/channels` | 필수 | 채널 상태 |
@@ -137,6 +138,16 @@ Claude Code의 네이티브 `http` 훅이 보내는 원본 JSON을 그대로 받
 
 매핑 규칙 전체는 [shared/PayloadMapper.cs](../shared/PayloadMapper.cs)에 있고, 그 클래스의 `RunSelfTest()`가 표를 고정한다. 모르는 이벤트는 `info` + 원본 이벤트명이 본문에 들어간다 — 절대 400이 되지 않는다.
 
+훅 이벤트 중 몇 개는 **알림을 띄우기 전에 끝난 것을 먼저 해제한다** (`PayloadMapper.PlanForHookEvent`, 아래 `/v1/resolve`와 같은 동작). 같은 에이전트·같은 세션의, 정확히 그 태그만:
+
+| 이벤트 | 해제하는 것 | 알림 |
+|---|---|---|
+| `Stop`, `StopFailure` | 이 세션의 권한 요청(`Notification:permission_prompt`, `elicitation_dialog`, `elicitation_url_dialog`, Codex `PermissionRequest`) — 턴이 끝났으면 이미 답했다는 뜻 | 그대로 (`success` / `error`) |
+| `UserPromptSubmit` | 지난 턴의 `Stop` 알림과 `idle_prompt` — 새 턴이 시작됐으니 "기다리는 중"이 아니다 | **없음** |
+| `SessionEnd` | 위 둘 다 | 그대로 (`info`) |
+
+`UserPromptSubmit`은 사용자가 친 것 말고도(예약 작업, 백그라운드 에이전트 보고, 다른 세션의 메시지) 발생하므로 "사용자가 봤다"의 증거로 쓰지 않는다. 스킬로 보낸 알림은 훅이 해제하지 않는다 — 에이전트가 `notipet resolve`로 직접 한다. 세션 ID가 없는 페이로드는 아무것도 해제하지 않는다. 응답: 알림이 있으면 `/v1/notify`와 같은 모양, 없으면(`UserPromptSubmit`) `/v1/resolve`의 응답.
+
 > `http` 훅을 쓰려면 `settings.server.port`를 고정해야 한다. 기본값 `0`은 매 실행마다 포트가 바뀐다.
 
 ## `POST /v1/ack`
@@ -150,6 +161,29 @@ Claude Code의 네이티브 `http` 훅이 보내는 원본 JSON을 그대로 받
 ```json
 { "ok": true, "stopped": 1 }
 ```
+
+## `POST /v1/resolve`
+
+"내가 알린 그 일은 끝났다." 원격에서 답했거나 에이전트가 스스로 해결했을 때, 자리에서 계속 울리는 알람을 보낸 쪽이 끈다.
+
+```json
+{ "source": "claude-code", "session": "0b7c3a5e-…", "tag": "api:needs-input" }
+{ "id": "ntp_…" }
+{ "source": "codex", "session": "019a…", "tags": ["codex:019a…:PermissionRequest"] }
+```
+
+- **지목한 것만.** 주어진 선택자를 **모두** 만족하는 알림(`id` / `tag`·`tags` 중 하나 / `source` / `session`)의 알람(소리 전달의 `referenceId`)을 멈추고 그 알림 창을 닫는다. "외 N개" 카드에 접혀 있던 것이면 수에서 뺀다. 다른 알람·창은 건드리지 않는다.
+- **선택자가 없으면 400.** `source`만 있어도 400이다("Codex가 보낸 전부"는 끝난 일 하나가 아니다). 전부 끄기는 `/v1/ack`.
+- **이미 끝났으면 조용히 통과.** 사용자가 먼저 알람을 끄고 창을 닫았으면 아무것도 바꾸지 않고 `200`에 0을 돌려준다. 보내는 쪽은 확인 없이 보내면 된다.
+- 억제(차단)된 알림은 울린 적이 없으므로 대상이 아니다.
+- 실제로 무언가 멈추거나 닫힌 알림만 기록에 `resolvedAt`이 붙고, 최근 알림 카드에 **해결됨** 칩이 생긴다.
+- 해제된 알림은 중복 병합 대상에서 빠진다. 같은 태그가 30초 안에 다시 와도 새 알림으로 울린다.
+
+```json
+{ "ok": true, "resolved": 1, "alarmsStopped": 1, "popupsClosed": 1 }
+```
+
+`tag`는 보낼 때와 같은 방식으로 다듬어 비교한다(앞뒤 공백 제거, 128자). Windows 기본 알림(풍선)은 닫지 못한다 — notipet 자체 알림 창을 쓸 때만 창이 닫힌다.
 
 ## `POST /v1/mute`
 
@@ -208,11 +242,13 @@ CLI가 stale `runtime.json`을 판별하기에는 충분하고, 사용자가 무
   { "id": "ntp_...", "at": "...", "level": "info", "title": "dup", "body": "same thing",
     "source": "manual", "project": "notipet", "thread": "8f3a…", "threadTitle": "project grouping",
     "tag": "smoke:dup", "count": 5, "accepted": true,
-    "suppressedReason": null, "deliveries": [ ... ] }
+    "suppressedReason": null, "resolvedAt": null, "deliveries": [ ... ] }
 ] }
 ```
 
 `count`는 중복 병합된 횟수다. 같은 태그로 5번 오면 소리는 1번, `count`는 5.
+
+`resolvedAt`은 보낸 쪽이 `/v1/resolve`로 끝났다고 알렸을 때(그 시점에 알람이나 창이 아직 살아 있었을 때만) 채워진다.
 
 `threadTitle`은 에이전트 앱이 붙인 이름(Codex `session_index.jsonl`, Claude `~/.claude/sessions`)을 찾으면 그것이고, 못 찾으면 보낸 쪽이 준 이름이다. 앱 이름 조회는 전달이 끝난 뒤 따로 돌므로 직후 조회에는 아직 없을 수 있다. 설정 → 최근 알림 → "에이전트 앱의 스레드 이름 표시"로 끈다.
 

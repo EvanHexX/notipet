@@ -66,6 +66,72 @@ public static class PayloadMapper
         };
     }
 
+    // What one hook event asks of notipet: a notification to show, the earlier
+    // moments it ends, or both. The caller resolves first and notifies second,
+    // so a turn's own "finished" is never resolved by the event that raised it.
+    //
+    // Only moments that are over by definition are ended - never "everything
+    // from this thread". A prompt the agent stopped on mid-turn is over once
+    // the turn has ended; "the turn finished" and "idle for a minute" are over
+    // once a new prompt starts a turn. What an agent sent through the skill is
+    // ended only by the agent itself (`notipet resolve`): a hook cannot tell
+    // whether the user has seen it.
+    public static HookPlan PlanForHookEvent(AgentHookEvent e, string? sourceHint = null)
+    {
+        var request = FromHookEvent(e, sourceHint);
+        var sourceId = request.Source?.Id ?? SourceManual;
+        var eventName = e.HookEventName?.Trim() ?? "";
+        var session = string.IsNullOrWhiteSpace(e.SessionId) ? null : e.SessionId.Trim();
+
+        List<string>? ends = null;
+        if (session is not null)
+        {
+            switch (eventName.ToLowerInvariant())
+            {
+                case "stop":
+                case "stopfailure":
+                    ends = PromptTags(sourceId, session);
+                    break;
+                case "sessionend":
+                    ends = PromptTags(sourceId, session);
+                    ends.AddRange(IdleTags(sourceId, session));
+                    break;
+                // Fires on scheduled tasks, background-agent reports and
+                // messages from other sessions too, not only on what the user
+                // typed - so it ends idleness, which any new turn does, and
+                // nothing that says the user has seen something.
+                case "userpromptsubmit":
+                    ends = IdleTags(sourceId, session);
+                    break;
+            }
+        }
+
+        return new HookPlan
+        {
+            // A new prompt is not news: the user (or their schedule) just did it.
+            Notify = eventName.Equals("UserPromptSubmit", StringComparison.OrdinalIgnoreCase) ? null : request,
+            Resolve = ends is null ? null : new ResolveRequest { Source = sourceId, Session = session, Tags = ends }
+        };
+    }
+
+    // Prompts the agent stops on in the middle of a turn: a permission dialog
+    // (Claude's Notification, Codex's PermissionRequest) or an MCP form.
+    private static List<string> PromptTags(string sourceId, string session) => new()
+    {
+        BuildTag(sourceId, session, "Notification", "permission_prompt"),
+        BuildTag(sourceId, session, "Notification", "elicitation_dialog"),
+        BuildTag(sourceId, session, "Notification", "elicitation_url_dialog"),
+        BuildTag(sourceId, session, "PermissionRequest", null)
+    };
+
+    // Waiting since the turn ended: the turn-finished notice and Claude's
+    // one-minute idle reminder.
+    private static List<string> IdleTags(string sourceId, string session) => new()
+    {
+        BuildTag(sourceId, session, "Stop", null),
+        BuildTag(sourceId, session, "Notification", "idle_prompt")
+    };
+
     public static NotifyRequest FromCodexNotify(CodexNotifyEvent e)
     {
         // `notify` only ever fires agent-turn-complete; anything else is new and
@@ -329,6 +395,61 @@ public static class PayloadMapper
         if (Shorten("abcdef", 3) != "ab\u2026") return false;
 
         if (GenericFallback(SourceCodex, "Codex turn complete").Level != "info") return false;
-        return true;
+
+        return PlansEndOnlyWhatIsOver();
     }
+
+    private static bool PlansEndOnlyWhatIsOver()
+    {
+        const string session = "8f3a1234567890";
+        var permission = FromHookEvent(new AgentHookEvent
+        {
+            SessionId = session, HookEventName = "Notification", NotificationType = "permission_prompt"
+        }, SourceClaude);
+        var idle = FromHookEvent(new AgentHookEvent
+        {
+            SessionId = session, HookEventName = "Notification", NotificationType = "idle_prompt"
+        }, SourceClaude);
+
+        // A prompt raises an alert and ends nothing.
+        var prompted = PlanForHookEvent(new AgentHookEvent
+        {
+            SessionId = session, HookEventName = "Notification", NotificationType = "permission_prompt"
+        }, SourceClaude);
+        if (prompted.Notify is null || prompted.Resolve is not null) return false;
+
+        // The end of the turn ends that prompt - by the exact tag it was
+        // raised with, in that thread - and still announces itself.
+        var stop = PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "Stop" }, SourceClaude);
+        if (stop.Notify is null || stop.Resolve is null) return false;
+        if (stop.Resolve.Session != session || stop.Resolve.Source != SourceClaude) return false;
+        if (!stop.Resolve.Tags!.Contains(permission.Tag!)) return false;
+        // ...but not the idle reminder, and never its own notice.
+        if (stop.Resolve.Tags.Contains(idle.Tag!) || stop.Resolve.Tags.Contains(stop.Notify.Tag!)) return false;
+
+        // A new prompt ends the idle reminder and the last turn's notice, not
+        // a prompt, and is not itself a notification.
+        var next = PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "UserPromptSubmit" }, SourceClaude);
+        if (next.Notify is not null || next.Resolve is null) return false;
+        if (!next.Resolve.Tags!.Contains(idle.Tag!) || !next.Resolve.Tags.Contains(stop.Notify.Tag!)) return false;
+        if (next.Resolve.Tags.Contains(permission.Tag!)) return false;
+
+        // Codex: Stop ends its PermissionRequest.
+        var codexPermission = FromHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PermissionRequest" }, SourceCodex);
+        var codexStop = PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "Stop", TurnId = "t1" }, SourceCodex);
+        if (codexStop.Resolve is null || !codexStop.Resolve.Tags!.Contains(codexPermission.Tag!)) return false;
+
+        // Without a thread there is nothing safe to end.
+        if (PlanForHookEvent(new AgentHookEvent { HookEventName = "Stop" }, SourceClaude).Resolve is not null) return false;
+        // An unknown event still alerts and ends nothing.
+        var unknown = PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "BrandNewEvent" }, SourceClaude);
+        return unknown.Notify is not null && unknown.Resolve is null;
+    }
+}
+
+// See PayloadMapper.PlanForHookEvent.
+public sealed class HookPlan
+{
+    public NotifyRequest? Notify { get; init; }
+    public ResolveRequest? Resolve { get; init; }
 }

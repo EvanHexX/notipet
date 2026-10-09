@@ -21,7 +21,7 @@ namespace Notipet.Cli;
 //      mode: a few hook events inject stdout into the agent's context.
 internal static class Program
 {
-    private const string CliVersion = "1.2.0";
+    private const string CliVersion = "1.3.0";
     private static readonly TimeSpan DefaultBudget = TimeSpan.FromMilliseconds(1500);
 
     private static async Task<int> Main(string[] args)
@@ -70,7 +70,7 @@ internal static class Program
                     if (hooked is not null)
                     {
                         var silent = HasFlag(args, "--verbose") ? args : args.Append("--quiet").ToArray();
-                        return await SendAsync(hooked, silent).ConfigureAwait(false);
+                        return await RunHookPlanAsync(hooked, silent).ConfigureAwait(false);
                     }
                 }
                 return await SendAsync(BuildFromFlags(args), args).ConfigureAwait(false);
@@ -79,6 +79,7 @@ internal static class Program
             case "status": return await StatusAsync(args).ConfigureAwait(false);
             case "doctor": return await DoctorAsync(args).ConfigureAwait(false);
             case "ack": return await AckAsync(args).ConfigureAwait(false);
+            case "resolve": return await ResolveAsync(args).ConfigureAwait(false);
             case "mute": return await MuteAsync(args).ConfigureAwait(false);
             case "unmute": return await MuteAsync(new[] { "mute", "off" }.Concat(args.Skip(1)).ToArray()).ConfigureAwait(false);
             case "desk" or "at-desk": return await DeskAsync(args).ConfigureAwait(false);
@@ -100,8 +101,8 @@ internal static class Program
         }
 
         // No recognised verb: this is a hook invocation. Work out which kind.
-        var request = await ReadHookPayloadAsync(args).ConfigureAwait(false);
-        if (request is null)
+        var plan = await ReadHookPayloadAsync(args).ConfigureAwait(false);
+        if (plan is null)
         {
             Help.Print(null);
             return Fail(args);
@@ -111,7 +112,32 @@ internal static class Program
         // SessionStart hooks inject stdout into the agent's context, and a JSON
         // blob there is noise at best.
         var quietArgs = HasFlag(args, "--verbose") ? args : args.Append("--quiet").ToArray();
-        return await SendAsync(request, quietArgs).ConfigureAwait(false);
+        return await RunHookPlanAsync(plan, quietArgs).ConfigureAwait(false);
+    }
+
+    // Ends what the event says is over, then announces it (see
+    // PayloadMapper.PlanForHookEvent). Ending never starts the daemon: if it
+    // is not running, nothing of its can be ringing.
+    private static async Task<int> RunHookPlanAsync(HookPlan plan, string[] args)
+    {
+        if (plan.Resolve is not null)
+        {
+            try
+            {
+                var running = await RuntimeDiscovery.FindAsync(TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
+                if (running is not null)
+                {
+                    await RuntimeDiscovery.PostAsync(running.Info, "/v1/resolve", plan.Resolve,
+                        NotipetJson.Compact.ResolveRequest, DefaultBudget).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Never in the way of the notification that follows.
+                if (HasFlag(args, "--verbose")) Console.Error.WriteLine("notipet: resolve failed: " + ex.Message);
+            }
+        }
+        return plan.Notify is null ? 0 : await SendAsync(plan.Notify, args).ConfigureAwait(false);
     }
 
     // ----- hook payloads -----
@@ -119,25 +145,25 @@ internal static class Program
     // A hook payload, with what the payload does not carry (Claude Desktop's
     // session id, the repository root) filled in from the hook's environment -
     // the agent passes its own environment to hook commands.
-    private static async Task<NotifyRequest?> ReadHookPayloadAsync(string[] args)
+    private static async Task<HookPlan?> ReadHookPayloadAsync(string[] args)
     {
-        var request = await ReadHookJsonAsync(args).ConfigureAwait(false);
-        if (request is not null)
+        var plan = await ReadHookJsonAsync(args).ConfigureAwait(false);
+        if (plan?.Notify is { } request)
         {
             try { FillIdentity(request, RealEnv, RealGitProbe, RealCeiling()); }
             catch { /* identity is decoration; the notification still goes */ }
         }
-        return request;
+        return plan;
     }
 
     // Detection order matters: an explicit flag wins, then Codex's argv-tail
     // JSON, then stdin.
-    private static async Task<NotifyRequest?> ReadHookJsonAsync(string[] args)
+    private static async Task<HookPlan?> ReadHookJsonAsync(string[] args)
     {
         var sourceHint = OptionValue(args, "--agent") ?? OptionValue(args, "--source");
 
         var explicitJson = OptionValue(args, "--json-payload") ?? OptionValue(args, "--json");
-        if (explicitJson is not null && explicitJson.TrimStart().StartsWith('{')) return ParseHookJson(explicitJson, sourceHint);
+        if (explicitJson is not null && explicitJson.TrimStart().StartsWith('{')) return ParseHookPlan(explicitJson, sourceHint);
 
         // Codex's legacy `notify` spawns the program with the payload as the
         // final argument. That payload can also be missing entirely when it
@@ -148,22 +174,27 @@ internal static class Program
             var last = args[^1].Trim();
             if (last.StartsWith('{'))
             {
-                var parsed = ParseHookJson(last, sourceHint);
-                return parsed ?? PayloadMapper.GenericFallback(
-                    sourceHint ?? PayloadMapper.SourceCodex, "Turn complete (payload unreadable)");
+                var parsed = ParseHookPlan(last, sourceHint);
+                return parsed ?? new HookPlan
+                {
+                    Notify = PayloadMapper.GenericFallback(sourceHint ?? PayloadMapper.SourceCodex, "Turn complete (payload unreadable)")
+                };
             }
         }
 
         if (HasFlag(args, "--stdin") || Console.IsInputRedirected)
         {
             var stdin = await ReadStdinAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(stdin)) return ParseHookJson(stdin, sourceHint);
+            if (!string.IsNullOrWhiteSpace(stdin)) return ParseHookPlan(stdin, sourceHint);
         }
 
         return null;
     }
 
-    private static NotifyRequest? ParseHookJson(string json, string? sourceHint)
+    // The notification half only, for the self-test.
+    private static NotifyRequest? ParseHookJson(string json, string? sourceHint) => ParseHookPlan(json, sourceHint)?.Notify;
+
+    private static HookPlan? ParseHookPlan(string json, string? sourceHint)
     {
         // Claude Code hooks and Codex hooks both use snake_case on stdin; Codex's
         // legacy notify uses kebab-case with a "type" field. Try the kebab shape
@@ -175,11 +206,11 @@ internal static class Program
                 || json.Contains("\"thread-id\"", StringComparison.Ordinal))
             {
                 var codex = JsonSerializer.Deserialize(json, NotipetJson.Compact.CodexNotifyEvent);
-                if (codex is not null) return PayloadMapper.FromCodexNotify(codex);
+                if (codex is not null) return new HookPlan { Notify = PayloadMapper.FromCodexNotify(codex) };
             }
 
             var hook = JsonSerializer.Deserialize(json, NotipetJson.Compact.AgentHookEvent);
-            return hook is null ? null : PayloadMapper.FromHookEvent(hook, sourceHint);
+            return hook is null ? null : PayloadMapper.PlanForHookEvent(hook, sourceHint);
         }
         catch (JsonException)
         {
@@ -639,6 +670,72 @@ internal static class Program
         return ok ? 0 : Fail(args);
     }
 
+    // "The moment I alerted about is over." Never starts the daemon: if it is
+    // not running, nothing of its is ringing, and that is not a failure.
+    private static async Task<int> ResolveAsync(string[] args)
+    {
+        var request = BuildResolve(args, RealEnv);
+        if (!HasResolveSelector(request))
+        {
+            Console.Error.WriteLine("notipet: nothing named - give --tag, --id or --thread, or run it inside Claude Code / Codex");
+            return Fail(args);
+        }
+
+        var daemon = await RuntimeDiscovery.FindAsync(TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
+        if (daemon is null)
+        {
+            if (!HasFlag(args, "--quiet")) Console.WriteLine("nothing to resolve (notipet is not running)");
+            return 0;
+        }
+
+        var (ok, status, body) = await RuntimeDiscovery.PostAsync(
+            daemon.Info, "/v1/resolve", request, NotipetJson.Compact.ResolveRequest, DefaultBudget).ConfigureAwait(false);
+        if (!ok)
+        {
+            Console.Error.WriteLine($"notipet: resolve failed ({status}) {body}");
+            return Fail(args);
+        }
+        if (HasFlag(args, "--quiet")) return 0;
+        if (HasFlag(args, "--json")) { Console.WriteLine(body); return 0; }
+        Console.WriteLine(TryParse(body, NotipetJson.Compact.ResolveResponse) is { } r ? DescribeResolve(r) : body);
+        return 0;
+    }
+
+    // With nothing named, the conversation the CLI runs in: the agent and its
+    // thread, from the agent's environment - the same values `send` fills in,
+    // so they match what this conversation sent.
+    internal static ResolveRequest BuildResolve(string[] args, Func<string, string?> env)
+    {
+        var named = OptionValue(args, "--agent") ?? OptionValue(args, "--source");
+        var agent = named is not null ? AgentIdentity.NormalizeAgent(named) : DetectAgent(env);
+        var probe = new NotifyRequest
+        {
+            Source = new SourceInfo { Id = agent, Session = NonEmpty(OptionValue(args, "--thread") ?? OptionValue(args, "--session")) }
+        };
+        if (agent is not null) FillIdentity(probe, env, null);
+
+        return new ResolveRequest
+        {
+            Id = NonEmpty(OptionValue(args, "--id")),
+            Tag = NonEmpty(OptionValue(args, "--tag")),
+            // An agent with no thread is not a selector; leave it off then.
+            Source = probe.Source.Session is not null ? agent : null,
+            Session = probe.Source.Session
+        };
+    }
+
+    private static bool HasResolveSelector(ResolveRequest r) =>
+        r.Id is not null || r.Tag is not null || r.Tags is { Count: > 0 } || r.Session is not null;
+
+    public static string DescribeResolve(ResolveResponse r)
+    {
+        if (r.Resolved == 0) return "nothing to resolve (already stopped and closed, or never sent)";
+        var parts = new List<string>();
+        if (r.AlarmsStopped > 0) parts.Add($"{r.AlarmsStopped} alarm(s) stopped");
+        if (r.PopupsClosed > 0) parts.Add($"{r.PopupsClosed} pop-up(s) closed");
+        return $"resolved {r.Resolved}: {string.Join(", ", parts)}";
+    }
+
     private static async Task<int> MuteAsync(string[] args)
     {
         var daemon = await RequireDaemon(args).ConfigureAwait(false);
@@ -1022,6 +1119,26 @@ internal static class Program
 
         // Broken JSON is a null, not a crash.
         if (ParseHookJson("{ broken", null) is not null) return false;
+
+        // A Stop ends this thread's permission prompt and still announces; a
+        // new prompt only ends things.
+        var stopPlan = ParseHookPlan("{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}", "claude-code");
+        if (stopPlan?.Notify is null || stopPlan.Resolve?.Session != "s1") return false;
+        var promptPlan = ParseHookPlan("{\"session_id\":\"s1\",\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\"go\"}", "claude-code");
+        if (promptPlan is null || promptPlan.Notify is not null || promptPlan.Resolve is null) return false;
+
+        // `resolve` inside an agent means this conversation; outside one, with
+        // nothing named, it means nothing.
+        var mine = BuildResolve(new[] { "resolve" }, ClaudeEnv);
+        if (mine.Source != PayloadMapper.SourceClaude || mine.Session != "0b7c3a5e-1111-2222-3333-444455556666") return false;
+        var tagged = BuildResolve(new[] { "resolve", "--tag", "api:needs-input" }, CodexEnv);
+        if (tagged.Tag != "api:needs-input" || tagged.Source != PayloadMapper.SourceCodex || tagged.Session is null) return false;
+        if (HasResolveSelector(BuildResolve(new[] { "resolve" }, _ => null))) return false;
+        var elsewhere = BuildResolve(new[] { "resolve", "--tag", "x" }, _ => null);
+        if (elsewhere.Tag != "x" || elsewhere.Source is not null || elsewhere.Session is not null) return false;
+        if (BuildResolve(new[] { "resolve", "--agent", "codex", "--thread", "t9" }, _ => null).Session != "t9") return false;
+        if (DescribeResolve(new ResolveResponse()) != "nothing to resolve (already stopped and closed, or never sent)") return false;
+        if (DescribeResolve(new ResolveResponse { Resolved = 1, AlarmsStopped = 1, PopupsClosed = 1 }) != "resolved 1: 1 alarm(s) stopped, 1 pop-up(s) closed") return false;
 
         if (!TryParseDuration("30", out var m) || m != 30) return false;
         if (!TryParseDuration("30m", out m) || m != 30) return false;

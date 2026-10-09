@@ -395,6 +395,17 @@ internal sealed class HistoryWindow
             }
         }
 
+        // The sender said it was over while it was still ringing or on screen:
+        // the answer to "why did the alarm stop by itself?".
+        if (entry.ResolvedAt is { } resolvedAt)
+        {
+            var resolved = Fluent.Chip(Loc.T("Resolved", "해결됨"), Glyphs.Completed);
+            ToolTipService.SetToolTip(resolved, Loc.T(
+                $"The sender said it was over, so the alarm stopped ({resolvedAt:HH:mm:ss})",
+                $"보낸 쪽에서 끝났다고 알려 와 알람을 멈췄습니다 ({resolvedAt:HH:mm:ss})"));
+            footer.Children.Add(resolved);
+        }
+
         var when = Fluent.Secondary(string.Join("  ·  ", new[]
         {
             UiText.Relative(entry.LastAt, now),
