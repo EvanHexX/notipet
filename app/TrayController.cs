@@ -26,7 +26,7 @@ namespace Notipet;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class TrayController : IDisposable, INotipetHost
 {
-    public const string AppVersion = "1.3.0";
+    public const string AppVersion = "1.3.1";
 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly AppSettings _settings;

@@ -21,7 +21,7 @@ namespace Notipet.Cli;
 //      mode: a few hook events inject stdout into the agent's context.
 internal static class Program
 {
-    private const string CliVersion = "1.3.0";
+    private const string CliVersion = "1.3.1";
     private static readonly TimeSpan DefaultBudget = TimeSpan.FromMilliseconds(1500);
 
     private static async Task<int> Main(string[] args)
@@ -222,9 +222,33 @@ internal static class Program
     // bounded and a timeout just means "no payload".
     private static async Task<string?> ReadStdinAsync(TimeSpan timeout)
     {
-        var read = Task.Run(() => Console.In.ReadToEnd());
+        var read = Task.Run(() =>
+        {
+            using var stdin = Console.OpenStandardInput();
+            using var buffer = new MemoryStream();
+            stdin.CopyTo(buffer);
+            return DecodeStdin(buffer.ToArray(), Console.InputEncoding);
+        });
         var finished = await Task.WhenAny(read, Task.Delay(timeout)).ConfigureAwait(false);
         return finished == read ? await read.ConfigureAwait(false) : null;
+    }
+
+    // Bytes, not Console.In: Console.In decodes with the console code page
+    // (CP949 on Korean Windows), and the hooks write UTF-8 JSON - every Korean
+    // character in a hook payload arrived as mojibake. UTF-8 first, strictly;
+    // only bytes that are not UTF-8 (a legacy program piped into `--body -`)
+    // fall back to the console's code page.
+    internal static string DecodeStdin(byte[] bytes, Encoding fallback)
+    {
+        var start = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+        try
+        {
+            return new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(bytes, start, bytes.Length - start);
+        }
+        catch (DecoderFallbackException)
+        {
+            return fallback.GetString(bytes);
+        }
     }
 
     // ----- send -----
@@ -1119,6 +1143,17 @@ internal static class Program
 
         // Broken JSON is a null, not a crash.
         if (ParseHookJson("{ broken", null) is not null) return false;
+
+        // stdin is UTF-8 whatever the console code page says (hooks), with or
+        // without a BOM; bytes that are not UTF-8 use the fallback instead.
+        const string korean = "한글 본문 → 끝";
+        var utf8 = Encoding.UTF8.GetBytes(korean);
+        if (DecodeStdin(utf8, Encoding.Latin1) != korean) return false;
+        if (DecodeStdin(new byte[] { 0xEF, 0xBB, 0xBF }.Concat(utf8).ToArray(), Encoding.Latin1) != korean) return false;
+        if (DecodeStdin(new byte[] { 0xC7, 0xD1 }, Encoding.Latin1) != "ÇÑ") return false;
+        var hookBody = ParseHookJson(DecodeStdin(Encoding.UTF8.GetBytes(
+            "{\"session_id\":\"s\",\"hook_event_name\":\"Stop\",\"last_assistant_message\":\"" + korean + "\"}"), Encoding.Latin1), "claude-code");
+        if (hookBody?.Body != korean) return false;
 
         // A Stop ends this thread's permission prompt and still announces; a
         // new prompt only ends things.
