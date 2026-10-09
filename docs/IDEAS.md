@@ -72,7 +72,7 @@ Claude Code와 Codex, 또는 저장소마다 다른 소리. 귀로 "아, 그 프
 
 ### 10. 내 소리 파일 관리
 
-옵션 창에서 파일 선택 → `%LOCALAPPDATA%\notipet\sounds`로 복사 → `sound.library`에 등록 → 레벨별 선택지에 나타남. 지금은 JSON을 직접 고쳐야 한다.
+설정 창에서 파일 선택 → `%LOCALAPPDATA%\notipet\sounds`로 복사 → `sound.library`에 등록 → 레벨별 선택지에 나타남. 지금은 JSON을 직접 고쳐야 한다.
 
 ### 11. `install-hooks --write`
 

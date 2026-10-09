@@ -426,7 +426,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         // A window rather than a submenu: a menu item can only show one
         // truncated line, and the body text is the part worth reading.
         items.Add(new TrayMenuItem(Loc.T("Recent notifications...", "최근 알림..."), ShowHistory, Glyph: Glyphs.History));
-        items.Add(new TrayMenuItem(Loc.T("Settings...", "옵션..."), () => ShowSettings(), Glyph: Glyphs.Settings));
+        items.Add(new TrayMenuItem(Loc.T("Settings...", "설정..."), () => ShowSettings(), Glyph: Glyphs.Settings));
         items.Add(new TrayMenuItem(Loc.T("Test notification", "테스트 알림"), SendTestNotification, Glyph: Glyphs.Bell));
         items.Add(TrayMenuItem.Separator);
 

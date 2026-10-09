@@ -42,7 +42,7 @@ notipet send --title T --body B [--level L] [--tag T] [옵션]
 | `--body B` | 본문. **`--body -`면 stdin에서 읽는다** (파이프 입력) |
 | `--level L` | `info` \| `success` \| `attention` \| `warn` \| `error` \| `critical` |
 | `--tag T` | 중복 병합 키. **같은 대화(스레드)에서** 같은 태그가 30초 안에 또 오면 소리는 한 번. 다른 대화는 같은 태그라도 따로 |
-| `--agent A` | `claude-code` \| `codex` \| `manual`. 별칭 `--source`. 카드의 색 띠·배지와 소스별 레이트 리밋에 쓰인다. 없으면 [자동 감지](#에이전트-안에서-부를-때--자동으로-채워지는-것) |
+| `--agent A` | `claude-code` \| `codex` \| `manual`. 별칭 `--source`. 카드의 에이전트 표시와 소스별 레이트 리밋에 쓰인다. 없으면 [자동 감지](#에이전트-안에서-부를-때--자동으로-채워지는-것) |
 | `--project P` | 최근 알림 창의 그룹 이름. 없으면 현재 폴더가 속한 **저장소** 이름 |
 | `--thread-title T` | 이 대화·작업의 짧은 이름 ("결제 리팩터링"). 한 대화에서는 같은 이름을 쓴다 |
 | `--thread ID` | 스레드/세션 ID (별칭 `--session`). 보통은 자동이라 줄 필요 없다 |
@@ -187,9 +187,9 @@ notipet history clear
 | `notipet desk` | 지금 상태 (`at desk` / `away`) |
 | `notipet desk on` / `off` / `toggle` | 자리 착석 스위치. 트레이 메뉴의 "PC 앞에 있음"과 같다 |
 | `notipet open` / `open recent` | 최근 알림 창 |
-| `notipet open settings` | 옵션 창 |
+| `notipet open settings` | 설정 창 |
 
-`desk on`이면 긴 알람이 짧아지고, 옵션에서 켰다면 다른 소리로 대체된다. 자리를 뜰 때 `desk off`를 잊으면 자리를 비운 사이 오는 알림도 짧게 울린다는 점만 기억하면 된다.
+`desk on`이면 긴 알람이 짧아지고, 설정에서 켰다면 다른 소리로 대체된다. 자리를 뜰 때 `desk off`를 잊으면 자리를 비운 사이 오는 알림도 짧게 울린다는 점만 기억하면 된다.
 
 ---
 

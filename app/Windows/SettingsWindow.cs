@@ -59,6 +59,13 @@ internal sealed class SettingsWindow
         {
             Build();
             Fluent.BringToFront(_window);
+
+            // Otherwise the focus lands on the first nav item, which then
+            // opens with a focus rectangle around it. Queued: on a first show,
+            // XAML places its own initial focus after this returns.
+            // Pointer, not Programmatic: no focus rectangle until Tab is pressed.
+            _window.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                () => _content.Focus(FocusState.Pointer));
         }
         catch (Exception ex)
         {
@@ -104,7 +111,8 @@ internal sealed class SettingsWindow
         AddPage("history", Glyphs.History, Loc.T("Recent notifications", "최근 알림"));
         AddPage("about", Glyphs.Info, Loc.T("About", "정보"));
 
-        _content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        // A tab stop, so it can take the focus when the window opens.
+        _content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, IsTabStop = true };
         _nav.Content = _content;
         _nav.SelectionChanged += (_, e) =>
         {
@@ -190,8 +198,8 @@ internal sealed class SettingsWindow
 
         page.Children.Add(Fluent.SettingCard(Glyphs.Power,
             Loc.T("Start with Windows", "Windows 시작 시 실행"),
-            Loc.T("Keep notipet in the tray from sign-in, so the first alert after a reboot is not lost",
-                  "로그인하면 바로 트레이에 올라와 재부팅 뒤 첫 알림을 놓치지 않습니다"),
+            Loc.T("So the first alert after a reboot is not lost",
+                  "재부팅 뒤 첫 알림도 놓치지 않습니다"),
             Fluent.Toggle(_host.AutostartEnabled, on =>
             {
                 if (_host.SetAutostart(on)) Changed();
@@ -215,8 +223,8 @@ internal sealed class SettingsWindow
 
         page.Children.Add(Fluent.SettingCard(Glyphs.FullScreen,
             Loc.T("Show over full-screen apps", "전체화면 앱 위에도 표시"),
-            Loc.T("Games in borderless or windowed mode, full-screen video, presentations. An exclusive full-screen game cannot be drawn over.",
-                  "창 모드·테두리 없는 전체화면 게임, 전체화면 영상, 프레젠테이션 위에도 뜹니다. 독점 전체화면 게임 위에는 어떤 앱도 그릴 수 없습니다."),
+            Loc.T("Video, presentations, borderless games - not exclusive full-screen",
+                  "영상, 발표, 창 모드 게임 위에도 뜹니다 (독점 전체화면 제외)"),
             Fluent.Toggle(Settings.Popup.ShowOverFullscreen, on => { Settings.Popup.ShowOverFullscreen = on; Changed(); })));
 
         page.Children.Add(Fluent.SettingCard(Glyphs.BellOff,
@@ -258,7 +266,7 @@ internal sealed class SettingsWindow
         volumeRow.Children.Add(volumeValue);
         page.Children.Add(Fluent.SettingCard(Glyphs.Speakers,
             Loc.T("Volume", "볼륨"),
-            Loc.T("Scales every level; Windows' own volume still applies on top", "모든 레벨에 곱해지며, Windows 볼륨도 그 위에 적용됩니다"),
+            Loc.T("Every level; the Windows volume applies on top", "모든 레벨에 적용 (Windows 볼륨과 곱해짐)"),
             volumeRow));
 
         var maxDuration = NumberPicker(MaxDurationChoices, Settings.Sound.MaxDurationSec, DurationLabel,
@@ -266,8 +274,8 @@ internal sealed class SettingsWindow
         maxDuration.MinWidth = 140;
         page.Children.Add(Fluent.SettingCard(Glyphs.Clock,
             Loc.T("Longest alarm", "알람 최대 지속 시간"),
-            Loc.T("\"Until acknowledged\" stops at this point even if you never did. \"No limit\" means it rings until you stop it - a tray click, the balloon, or `notipet ack`.",
-                  "\"확인할 때까지\" 알람도 이 시간이 지나면 스스로 멈춥니다. \"무제한\"은 멈출 때까지 계속 울립니다 — 트레이 클릭, 풍선 클릭, `notipet ack`."),
+            Loc.T("\"Until acknowledged\" stops here too, unless set to \"No limit\"",
+                  "\"확인할 때까지\"도 이 시간에 멈춥니다 (\"무제한\" 제외)"),
             maxDuration));
 
         page.Children.Add(Fluent.GroupHeader(Loc.T("Sound per level", "레벨별 사운드")));
@@ -304,8 +312,8 @@ internal sealed class SettingsWindow
         var text = new StackPanel { Spacing = 2 };
         text.Children.Add(Fluent.Text(Loc.T("Keep notifications until clicked", "클릭할 때까지 알림 유지")));
         text.Children.Add(Fluent.Secondary(Loc.T(
-            "For the checked levels the pop-up stays until you click or close it (clicking stops the alarm); the others close after a few seconds.",
-            "체크한 레벨의 알림 창은 클릭하거나 닫을 때까지 남습니다(클릭하면 알람도 멈춤). 나머지는 몇 초 뒤 닫힙니다.")));
+            "Checked levels stay until clicked; the rest close after a few seconds",
+            "체크한 레벨은 클릭할 때까지 남고, 나머지는 몇 초 뒤 닫힙니다")));
         Grid.SetColumn(text, 1);
         header.Children.Add(text);
 
@@ -468,8 +476,8 @@ internal sealed class SettingsWindow
 
         page.Children.Add(Fluent.SettingCard(Glyphs.Bell,
             Loc.T("Use a different sound", "다른 소리로 대체"),
-            Loc.T("Replaces every level's sound - choose \"No sound\" to see notifications silently",
-                  "모든 레벨의 소리를 이것으로 바꿉니다. \"소리 없음\"을 고르면 알림만 조용히 뜹니다"),
+            Loc.T("One sound for every level; \"No sound\" shows notifications silently",
+                  "모든 레벨을 이 소리로. \"소리 없음\"이면 알림만 뜹니다"),
             Fluent.Toggle(Settings.Presence.ReplaceSoundAtDesk, on =>
             {
                 Settings.Presence.ReplaceSoundAtDesk = on;
@@ -534,8 +542,8 @@ internal sealed class SettingsWindow
 
         page.Children.Add(Fluent.SettingCard(Glyphs.Moon,
             Loc.T("Respect Windows Do Not Disturb", "Windows 방해 금지 존중"),
-            Loc.T("Only while quiet hours is on. A full-screen app does not count as away.",
-                  "방해금지 시간대를 켰을 때만 적용됩니다. 전체화면 앱은 자리 비움으로 치지 않습니다."),
+            Loc.T("Only while quiet hours is on",
+                  "방해금지 시간대를 켰을 때만 적용됩니다"),
             Fluent.Toggle(Settings.QuietHours.RespectFocusAssist, on => { Settings.QuietHours.RespectFocusAssist = on; Changed(); })));
 
         page.Children.Add(Fluent.GroupHeader(Loc.T("Mute", "음소거")));
@@ -560,14 +568,14 @@ internal sealed class SettingsWindow
             });
         page.Children.Add(Fluent.SettingCard(Glyphs.History,
             Loc.T("Keep", "보관할 알림 수"),
-            Loc.T("Older ones drop off as new ones arrive. Kept in memory only - cleared when notipet quits.",
-                  "새 알림이 오면 오래된 것부터 빠집니다. 메모리에만 보관되어 notipet을 종료하면 사라집니다."),
+            Loc.T("In memory only - cleared when notipet quits",
+                  "메모리에만 보관되어 notipet을 끄면 사라집니다"),
             keep));
 
         page.Children.Add(Fluent.SettingCard(Glyphs.Thread,
             Loc.T("Show thread names from the agent apps", "에이전트 앱의 스레드 이름 표시"),
-            Loc.T("Each card shows its thread under the name Codex or Claude gives it. Reads their local files (read-only); nothing leaves this PC.",
-                  "카드마다 Codex나 Claude가 붙인 스레드 이름을 보여 줍니다. 각 앱의 로컬 파일을 읽기만 하며, 이 PC 밖으로 나가는 것은 없습니다."),
+            Loc.T("The names Codex and Claude give them. Reads their local files only",
+                  "Codex·Claude가 붙인 이름. 각 앱의 로컬 파일만 읽습니다"),
             Fluent.Toggle(Settings.History.LookupThreadTitles, on => { Settings.History.LookupThreadTitles = on; Changed(); })));
 
         var countText = Fluent.Secondary(Loc.T($"{_host.History.Count} kept now", $"현재 {_host.History.Count}개 보관 중"), "BodyTextBlockStyle");

@@ -8,7 +8,7 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
 
 같은 폴더의 다른 파일: `runtime.json`(포트·토큰), `crash.log`, `sounds\`.
 
-옵션 창(트레이 → 옵션...)에서 대부분을 바꿀 수 있고 바꾸는 즉시 저장된다. 옵션 창에 없는 것(레이트 리밋, 중복 병합 창, 포트, `sound.library` 등)은 직접 편집하고 `notipet restart` 한다 — 실행 중인 데몬은 메모리의 설정을 쓰고, 다음 저장 때 파일을 덮어쓰기 때문이다.
+설정 창(트레이 → 설정...)에서 대부분을 바꿀 수 있고 바꾸는 즉시 저장된다. 설정 창에 없는 것(레이트 리밋, 중복 병합 창, 포트, `sound.library` 등)은 직접 편집하고 `notipet restart` 한다 — 실행 중인 데몬은 메모리의 설정을 쓰고, 다음 저장 때 파일을 덮어쓰기 때문이다.
 
 설정은 **불러온 경로로만 저장된다**(`SourcePath`). 테스트가 만든 설정 인스턴스는 저장 자체가 되지 않는다 — self-test가 실제 설정을 덮어쓴 사고 이후의 규칙이다([regression.md](regression.md)).
 
@@ -19,7 +19,7 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
 ```jsonc
 {
   "schemaVersion": 1,
-  "language": "System",              // System | EN | KO. 옵션 창에서 바꾸면 즉시 적용
+  "language": "System",              // System | EN | KO. 설정 창에서 바꾸면 즉시 적용
   "autostart": false,                // 트레이 메뉴와 동기화됨
 
   "server": {
@@ -113,7 +113,7 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
   },
 
   "history": {
-    "keepInMemory": 200,             // 옵션 창: 20 50 100 200 500 1000. 줄이면 즉시 잘린다
+    "keepInMemory": 200,             // 설정 창: 20 50 100 200 500 1000. 줄이면 즉시 잘린다
     "lookupThreadTitles": true       // 카드에 에이전트 앱의 스레드 이름 표시 (Codex/Claude 로컬 파일 읽기 전용)
   }
 }
@@ -145,9 +145,9 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
 
 이 선택지는 2분 상한 때문에 `attention` 알람이 사용자가 돌아오기 2분 전에 꺼져 있던 일 때문에 생겼다([regression.md](regression.md)).
 
-### 옵션 창의 "재생 횟수"
+### 설정 창의 "재생 횟수"
 
-옵션 창은 `repeat`와 `repeatCount`를 하나의 선택지로 보여 준다: `1회` = `once`, `2~10회` = `repeat` + `repeatCount`, `확인할 때까지` = `until_ack`. "확인할 때까지"는 트레이 클릭·풍선 클릭·`notipet ack`로 멈추며, **`maxDurationSec`(최대 10분)을 넘으면 스스로 멈춘다.**
+설정 창은 `repeat`와 `repeatCount`를 하나의 선택지로 보여 준다: `1회` = `once`, `2~10회` = `repeat` + `repeatCount`, `확인할 때까지` = `until_ack`. "확인할 때까지"는 트레이 클릭·풍선 클릭·`notipet ack`로 멈추며, **`maxDurationSec`(최대 10분)을 넘으면 스스로 멈춘다.**
 
 ### `intervalMs`는 주기가 아니라 **소리가 끝난 뒤의 공백**이다
 
@@ -171,7 +171,7 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
 
 ### `presence.replaceSoundAtDesk` / `atDeskSound`
 
-`atDesk`가 켜져 있고 `replaceSoundAtDesk`가 true면 **모든 레벨의 소리를 `atDeskSound` 하나로** 바꾼다. 짧게 줄이기와 함께 적용된다. 옵션 창의 "PC 앞에 있음" 페이지에 있다.
+`atDesk`가 켜져 있고 `replaceSoundAtDesk`가 true면 **모든 레벨의 소리를 `atDeskSound` 하나로** 바꾼다. 짧게 줄이기와 함께 적용된다. 설정 창의 "PC 앞에 있음" 페이지에 있다.
 
 | `atDeskSound` | 결과 |
 |---|---|

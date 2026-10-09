@@ -32,6 +32,7 @@ internal sealed class HistoryWindow
     private Grid _titleBar = null!;
     private TextBlock _count = null!;
     private StackPanel _list = null!;
+    private ScrollViewer _scroll = null!;
     private Filter _filter = Filter.All;
     private int _shown = PageSize;
 
@@ -63,6 +64,13 @@ internal sealed class HistoryWindow
         Refresh();
         Fluent.BringToFront(_window);
         _clock.Start();
+
+        // Otherwise the focus lands on the first control, the filter box, and
+        // the window opens with a focus rectangle around it. Queued: on a first
+        // show, XAML places its own initial focus after this returns.
+        // Pointer, not Programmatic: no focus rectangle until Tab is pressed.
+        _window.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+            () => _scroll.Focus(FocusState.Pointer));
     }
 
     // The tray icon's click: close the window when it is up, otherwise bring
@@ -101,32 +109,27 @@ internal sealed class HistoryWindow
         root.Children.Add(header);
 
         _list = new StackPanel { Spacing = 8, Padding = new Thickness(20, 4, 20, 20) };
-        var scroll = new ScrollViewer { Content = _list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Grid.SetRow(scroll, 2);
-        root.Children.Add(scroll);
+        // A tab stop, so it can take the focus when the window opens (see
+        // Activate) - and the arrow keys then scroll the list.
+        _scroll = new ScrollViewer { Content = _list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, IsTabStop = true };
+        Grid.SetRow(_scroll, 2);
+        root.Children.Add(_scroll);
 
         Fluent.HideOnEscape(_window, root);
         _window.Content = root;
         _window.Title = Loc.T("notipet - Recent", "notipet - 최근 알림");
     }
 
+    // One row: filter and count on the left, commands on the right. No page
+    // heading - the title bar already says "Recent notifications", and a
+    // second, bigger copy of it under the title bar only pushed the list down.
     private Grid BuildHeader()
     {
-        var header = new Grid { Padding = new Thickness(20, 4, 20, 12), ColumnSpacing = 8, RowSpacing = 10 };
+        var header = new Grid { Padding = new Thickness(20, 4, 20, 12), ColumnSpacing = 12 };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        titleRow.Children.Add(Fluent.Text(Loc.T("Recent notifications", "최근 알림"), "TitleTextBlockStyle", wrap: false));
-        _count = Fluent.Secondary("", "BodyTextBlockStyle");
-        _count.VerticalAlignment = VerticalAlignment.Bottom;
-        _count.Margin = new Thickness(0, 0, 0, 3);
-        titleRow.Children.Add(_count);
-        header.Children.Add(titleRow);
-
-        // Filter on the left of the second row, commands on the right.
         var filter = new ComboBox { MinWidth = 150 };
         filter.Items.Add(Loc.T("All", "전체"));
         filter.Items.Add(Loc.T("Delivered", "전달됨"));
@@ -138,15 +141,21 @@ internal sealed class HistoryWindow
             _shown = PageSize;
             Refresh();
         };
-        Grid.SetRow(filter, 1);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(filter, Loc.T("Filter", "필터"));
         header.Children.Add(filter);
+
+        _count = Fluent.Secondary("", "BodyTextBlockStyle");
+        _count.VerticalAlignment = VerticalAlignment.Center;
+        _count.TextWrapping = TextWrapping.NoWrap;
+        _count.TextTrimming = TextTrimming.CharacterEllipsis;
+        Grid.SetColumn(_count, 1);
+        header.Children.Add(_count);
 
         var commands = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         commands.Children.Add(IconOnly(Glyphs.Refresh, Loc.T("Refresh", "새로 고침"), Refresh));
-        commands.Children.Add(IconOnly(Glyphs.Settings, Loc.T("Settings", "옵션"), () => _host.ShowSettings("history")));
+        commands.Children.Add(IconOnly(Glyphs.Settings, Loc.T("Settings", "설정"), () => _host.ShowSettings("history")));
         commands.Children.Add(BuildClearButton());
-        Grid.SetRow(commands, 1);
-        Grid.SetColumn(commands, 1);
+        Grid.SetColumn(commands, 2);
         header.Children.Add(commands);
 
         return header;
@@ -316,26 +325,28 @@ internal sealed class HistoryWindow
         return panel;
     }
 
+    // A card is four lines: title, thread, body, and a footer with who sent it
+    // and when. Everything that used to make it six - a "delivered" chip for
+    // every channel, the level spelled out next to its badge, the folder path
+    // that the group header already names - was the same on nearly every card
+    // or said twice, and now lives in tooltips and the card's menu.
     private UIElement BuildCard(HistoryEntry entry, DateTimeOffset now)
     {
         var envelope = entry.Envelope;
         var link = _host.ThreadLink(entry);
 
-        // Columns: agent stripe | level badge | text | actions. A card whose
-        // thread can be opened is itself clickable, with a hand cursor.
+        // Columns: level badge | text | actions. A card whose thread can be
+        // opened is itself clickable, with a hand cursor.
         var grid = link is null ? new Grid { ColumnSpacing = 12 } : new LinkGrid { ColumnSpacing = 12 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var stripe = Fluent.AgentStripe(envelope.SourceId);
-        ToolTipService.SetToolTip(stripe, UiText.Agent(envelope.SourceId));
-        grid.Children.Add(stripe);
-
+        var level = UiText.Level(envelope.Level);
         var badge = Fluent.LevelBadge(envelope.Level);
         badge.VerticalAlignment = VerticalAlignment.Top;
-        Grid.SetColumn(badge, 1);
+        ToolTipService.SetToolTip(badge, level);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(badge, level);
         grid.Children.Add(badge);
 
         var content = new StackPanel { Spacing = 4 };
@@ -353,23 +364,13 @@ internal sealed class HistoryWindow
             content.Children.Add(body);
         }
 
-        // The agent moved from this line to its own chip below.
-        var meta = new[]
-        {
-            UiText.Level(envelope.Level),
-            UiText.Relative(entry.LastAt, now),
-            entry.Count > 1 ? $"×{entry.Count}" : null
-        };
-        var metaText = Fluent.Secondary(string.Join("  ·  ", meta.Where(m => !string.IsNullOrEmpty(m))));
-        ToolTipService.SetToolTip(metaText, entry.LastAt.ToString("yyyy-MM-dd HH:mm:ss"));
-        content.Children.Add(metaText);
-
-        var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 2, 0, 0) };
+        // Footer: the agent, anything that did not go normally, then when.
+        var footer = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 2, 0, 0) };
         var notes = new List<string>();
-        chips.Children.Add(Fluent.AgentChip(envelope.SourceId, UiText.Agent(envelope.SourceId)));
+        footer.Children.Add(Fluent.AgentChip(envelope.SourceId, UiText.Agent(envelope.SourceId)));
         if (!entry.Accepted)
         {
-            chips.Children.Add(Fluent.Chip(
+            footer.Children.Add(Fluent.Chip(
                 Loc.T("Suppressed: ", "차단됨: ") + UiText.Reason(entry.SuppressedReason),
                 Glyphs.BellOff, "SystemFillColorCautionBackgroundBrush"));
         }
@@ -377,63 +378,60 @@ internal sealed class HistoryWindow
         {
             foreach (var delivery in entry.Deliveries)
             {
+                // "Delivered" is what you expect, and "off" is a channel you
+                // turned off yourself: a chip for either was on every card
+                // and told you nothing.
+                if (delivery.Status is "delivered" or "disabled") continue;
                 var glyph = delivery.Channel == "windows_sound" ? Glyphs.Volume : Glyphs.Message;
                 var background = delivery.Status == "failed"
                     ? "SystemFillColorCriticalBackgroundBrush"
                     : "SystemFillColorNeutralBackgroundBrush";
                 var chip = Fluent.Chip($"{UiText.Channel(delivery.Channel)} {UiText.Status(delivery.Status)}", glyph, background);
                 if (!string.IsNullOrWhiteSpace(delivery.Detail)) ToolTipService.SetToolTip(chip, delivery.Detail);
-                chips.Children.Add(chip);
+                footer.Children.Add(chip);
                 // Why, on its own line: in the chip it pushed the next chip
                 // off the card.
                 if (UiText.DeliveryNote(delivery.Detail) is { } note) notes.Add($"{UiText.Channel(delivery.Channel)}: {note}");
             }
         }
-        content.Children.Add(chips);
+
+        var when = Fluent.Secondary(string.Join("  ·  ", new[]
+        {
+            UiText.Relative(entry.LastAt, now),
+            entry.Count > 1 ? $"×{entry.Count}" : null
+        }.Where(m => !string.IsNullOrEmpty(m))));
+        when.VerticalAlignment = VerticalAlignment.Center;
+        when.TextWrapping = TextWrapping.NoWrap;
+        when.Margin = new Thickness(4, 0, 0, 0);
+        ToolTipService.SetToolTip(when, entry.LastAt.ToString("yyyy-MM-dd HH:mm:ss"));
+        footer.Children.Add(when);
+        content.Children.Add(footer);
         if (notes.Count > 0) content.Children.Add(Fluent.Secondary(string.Join("  ·  ", notes)));
 
-        if (!string.IsNullOrWhiteSpace(envelope.SourceCwd))
-        {
-            // A grid so a long path ends in an ellipsis instead of being cut.
-            var cwd = new Grid { ColumnSpacing = 6 };
-            cwd.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            cwd.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            cwd.Children.Add(Fluent.Icon(Glyphs.Folder, 12, "TextFillColorTertiaryBrush"));
-            var path = Fluent.Text(envelope.SourceCwd!, "CaptionTextBlockStyle", "TextFillColorTertiaryBrush", wrap: false);
-            Grid.SetColumn(path, 1);
-            ToolTipService.SetToolTip(path, envelope.SourceCwd);
-            cwd.Children.Add(path);
-            content.Children.Add(cwd);
-        }
-
-        Grid.SetColumn(content, 2);
+        Grid.SetColumn(content, 1);
         grid.Children.Add(content);
 
-        var actions = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Top };
-        if (link is not null)
-        {
-            actions.Children.Add(IconOnly(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () => _host.OpenThread(entry)));
-        }
-        actions.Children.Add(IconOnly(Glyphs.Copy, Loc.T("Copy", "복사"), () => Copy(entry)));
-        if (!string.IsNullOrWhiteSpace(envelope.SourceCwd) && Directory.Exists(envelope.SourceCwd))
-        {
-            actions.Children.Add(IconOnly(Glyphs.Folder, Loc.T("Open folder", "폴더 열기"), () => _host.OpenFolder(envelope.SourceCwd!)));
-        }
-        actions.Children.Add(IconOnly(Glyphs.Cancel, Loc.T("Remove", "삭제"), () =>
-        {
-            _host.RemoveHistoryEntry(envelope.Id);
-            Refresh();
-        }));
-        Grid.SetColumn(actions, 3);
+        // Remove stays one click away; the rest (copy, open folder) is in the
+        // "..." menu, which is also the card's right-click menu.
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        var more = IconOnly(Glyphs.More, Loc.T("More", "더 보기"), () => { });
+        more.Flyout = BuildMenu(entry, link);
+        actions.Children.Add(more);
+        actions.Children.Add(IconOnly(Glyphs.Cancel, Loc.T("Remove", "삭제"), () => Remove(entry)));
+        Grid.SetColumn(actions, 2);
         grid.Children.Add(actions);
+
+        grid.ContextFlyout = BuildMenu(entry, link);
+        // Transparent, not null: the gaps between controls must take clicks
+        // and right-clicks too.
+        grid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
         if (link is not null)
         {
             // Click anywhere on the card to open the thread - except on its
             // buttons, which do their own thing, and on the body, where a
             // click (or the first click of a double-click) is how text gets
-            // selected. A transparent background makes the gaps clickable too.
-            grid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            // selected.
             grid.Tapped += (_, e) =>
             {
                 for (var node = e.OriginalSource as DependencyObject; node is not null && node != grid;
@@ -450,6 +448,43 @@ internal sealed class HistoryWindow
         // did are what you usually came to find.
         if (!entry.Accepted) card.Opacity = 0.78;
         return card;
+    }
+
+    // The card's menu, under "..." and on right-click. Built once per owner:
+    // a flyout cannot be attached to two.
+    private MenuFlyout BuildMenu(HistoryEntry entry, Uri? link)
+    {
+        var envelope = entry.Envelope;
+        var menu = new MenuFlyout();
+        if (link is not null)
+        {
+            menu.Items.Add(MenuItem(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () => _host.OpenThread(entry)));
+        }
+        menu.Items.Add(MenuItem(Glyphs.Copy, Loc.T("Copy", "복사"), () => Copy(entry)));
+        if (!string.IsNullOrWhiteSpace(envelope.SourceCwd))
+        {
+            // The path is the tooltip: it no longer has a line on the card.
+            var folder = MenuItem(Glyphs.Folder, Loc.T("Open folder", "폴더 열기"), () => _host.OpenFolder(envelope.SourceCwd!));
+            folder.IsEnabled = Directory.Exists(envelope.SourceCwd);
+            ToolTipService.SetToolTip(folder, envelope.SourceCwd);
+            menu.Items.Add(folder);
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        menu.Items.Add(MenuItem(Glyphs.Cancel, Loc.T("Remove", "삭제"), () => Remove(entry)));
+        return menu;
+    }
+
+    private static MenuFlyoutItem MenuItem(string glyph, string text, Action onClick)
+    {
+        var item = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+        item.Click += (_, _) => onClick();
+        return item;
+    }
+
+    private void Remove(HistoryEntry entry)
+    {
+        _host.RemoveHistoryEntry(entry.Envelope.Id);
+        Refresh();
     }
 
     // The thread a card belongs to: its name, or a short id when nothing gave

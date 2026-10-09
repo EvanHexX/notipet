@@ -44,7 +44,7 @@ internal sealed class NotificationPopup
 
     public static NotificationPopup ForNotification(NotificationEnvelope envelope, Uri? link, bool stays, Action onClick, Action onOpenThread)
     {
-        var popup = new NotificationPopup(envelope, link is null ? 116 : 148, envelope.Title) { Stays = stays };
+        var popup = new NotificationPopup(envelope, 116, envelope.Title) { Stays = stays };
         popup._window.Content = popup.Build(envelope, link, onClick, onOpenThread);
         return popup;
     }
@@ -203,20 +203,16 @@ internal sealed class NotificationPopup
 
     private UIElement Build(NotificationEnvelope envelope, Uri? link, Action onClick, Action onOpenThread)
     {
-        // stripe | badge | text | close
+        // badge | text | open + close
         var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(14, 12, 8, 12) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         // Transparent, not null: the gaps between controls must take clicks too.
         grid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
-        grid.Children.Add(Fluent.AgentStripe(envelope.SourceId));
-
         var badge = Fluent.LevelBadge(envelope.Level, 28);
         badge.VerticalAlignment = VerticalAlignment.Top;
-        Grid.SetColumn(badge, 1);
         grid.Children.Add(badge);
 
         var content = new StackPanel { Spacing = 2 };
@@ -229,35 +225,37 @@ internal sealed class NotificationPopup
             content.Children.Add(body);
         }
 
-        // Who and where, one line: "Codex · shop · checkout refactor".
+        // Who and where, one line: "• Codex · shop · checkout refactor". The
+        // dot is the agent's colour, as on the Recent notifications card.
+        var metaRow = new Grid { ColumnSpacing = 6, Margin = new Thickness(0, 2, 0, 0) };
+        metaRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        metaRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        metaRow.Children.Add(Fluent.AgentDot(envelope.SourceId, 7));
         var meta = string.Join("  ·  ", new[] { UiText.Agent(envelope.SourceId), envelope.Project, envelope.ThreadTitle }
             .Where(s => !string.IsNullOrWhiteSpace(s)));
-        content.Children.Add(Fluent.Text(meta, "CaptionTextBlockStyle", "TextFillColorSecondaryBrush", wrap: false));
+        var metaText = Fluent.Text(meta, "CaptionTextBlockStyle", "TextFillColorSecondaryBrush", wrap: false);
+        Grid.SetColumn(metaText, 1);
+        metaRow.Children.Add(metaText);
+        content.Children.Add(metaRow);
+        Grid.SetColumn(content, 1);
+        grid.Children.Add(content);
 
+        // Open sits next to close as an icon: as a labelled button on a row of
+        // its own it made every pop-up a third taller, and four of them
+        // stacked reached halfway up the screen.
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
         if (link is not null)
         {
-            var open = Fluent.IconButton(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () =>
+            actions.Children.Add(SmallButton(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () =>
             {
                 onOpenThread();
                 onClick();
                 Close();
-            });
-            open.Margin = new Thickness(0, 6, 0, 0);
-            content.Children.Add(open);
+            }));
         }
-        Grid.SetColumn(content, 2);
-        grid.Children.Add(content);
-
-        var close = Fluent.Xaml<Button>(
-            "<Button $NS Background='Transparent' BorderThickness='0' Padding='6' VerticalAlignment='Top' " +
-            "CornerRadius='{ThemeResource ControlCornerRadius}'/>");
-        close.Content = Fluent.Icon(Glyphs.Cancel, 12);
-        var closeLabel = Loc.T("Close", "닫기");
-        ToolTipService.SetToolTip(close, closeLabel);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, closeLabel);
-        close.Click += (_, _) => Close();
-        Grid.SetColumn(close, 3);
-        grid.Children.Add(close);
+        actions.Children.Add(SmallButton(Glyphs.Cancel, Loc.T("Close", "닫기"), Close));
+        Grid.SetColumn(actions, 2);
+        grid.Children.Add(actions);
 
         // A click on the card (not on a button) is "I've seen it": the alarm
         // stops and the pop-up goes, like clicking the Windows balloon did.
@@ -274,6 +272,18 @@ internal sealed class NotificationPopup
 
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(grid, $"notipet: {envelope.Title}");
         return grid;
+    }
+
+    private static Button SmallButton(string glyph, string label, Action onClick)
+    {
+        var button = Fluent.Xaml<Button>(
+            "<Button $NS Background='Transparent' BorderThickness='0' Padding='6' " +
+            "CornerRadius='{ThemeResource ControlCornerRadius}'/>");
+        button.Content = Fluent.Icon(glyph, 12);
+        ToolTipService.SetToolTip(button, label);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, label);
+        button.Click += (_, _) => onClick();
+        return button;
     }
 
     private static readonly IntPtr HwndTopmost = new(-1);

@@ -59,6 +59,7 @@ internal static class Glyphs
     public const string Thread = "\uE8BD";
     public const string Pin = "\uE718";
     public const string FullScreen = "\uE740";
+    public const string More = "\uE712";
 
     public static string ForLevel(NotificationLevel level) => level switch
     {
@@ -164,7 +165,9 @@ internal static class Fluent
 
     public static TextBlock PageHeader(string text)
     {
-        var header = Text(text, "TitleTextBlockStyle");
+        // Subtitle, not Title: the window's own title bar already names it,
+        // and a 28 px heading under it shouted the page name a second time.
+        var header = Text(text, "SubtitleTextBlockStyle");
         header.Margin = new Thickness(0, 0, 0, 8);
         return header;
     }
@@ -243,8 +246,8 @@ internal static class Fluent
 
     // Which agent sent a card, by colour. Fixed mid-tones that read on light
     // and dark alike, and deliberately none of the status colours the level
-    // badge uses (green, yellow, red, accent blue) - a stripe must never read
-    // as severity. Unknown senders get the neutral stroke colour.
+    // badge uses (green, yellow, red, accent blue) - an agent's colour must
+    // never read as severity. Unknown senders get the neutral stroke colour.
     private static string AgentBrush(string agent) => agent switch
     {
         Notipet.Shared.PayloadMapper.SourceClaude => "#D97757",
@@ -252,25 +255,23 @@ internal static class Fluent
         _ => "{ThemeResource ControlStrongStrokeColorDefaultBrush}"
     };
 
-    // The thin bar down the left edge of a card. Inset inside the card's
-    // padding: a coloured side border on a rounded card looks broken.
-    public static Border AgentStripe(string agent)
+    // A dot in the agent's colour, always next to the agent's name: colour is
+    // never the only carrier. (A stripe down the card's edge said the same
+    // thing a second time, louder.)
+    public static Microsoft.UI.Xaml.Shapes.Ellipse AgentDot(string agent, double size = 8)
     {
-        var stripe = Xaml<Border>($"<Border $NS Width='4' CornerRadius='2' Background='{AgentBrush(agent)}'/>");
-        stripe.VerticalAlignment = VerticalAlignment.Stretch;
-        return stripe;
+        var dot = Xaml<Microsoft.UI.Xaml.Shapes.Ellipse>($"<Ellipse $NS Width='{size}' Height='{size}' Fill='{AgentBrush(agent)}'/>");
+        dot.VerticalAlignment = VerticalAlignment.Center;
+        return dot;
     }
 
-    // The agent's name with a dot in its colour. Colour is never the only
-    // carrier: the name is always written out.
+    // The agent's name with its dot, as a chip.
     public static Border AgentChip(string agent, string label)
     {
         var chip = Xaml<Border>(
             "<Border $NS CornerRadius='4' Padding='8,2,8,3' Background='{ThemeResource SystemFillColorNeutralBackgroundBrush}'/>");
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        var dot = Xaml<Microsoft.UI.Xaml.Shapes.Ellipse>($"<Ellipse $NS Width='8' Height='8' Fill='{AgentBrush(agent)}'/>");
-        dot.VerticalAlignment = VerticalAlignment.Center;
-        row.Children.Add(dot);
+        row.Children.Add(AgentDot(agent));
         row.Children.Add(Text(label, "CaptionTextBlockStyle", wrap: false));
         chip.Child = row;
         return chip;

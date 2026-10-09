@@ -37,7 +37,7 @@ dotnet build app\Notipet.App.csproj -p:BaseOutputPath=$env:TEMP/notipet-build/
 - `--self-test`는 **무음·헤드리스**다. 트레이 아이콘도, 창도, 소리도 없다. CI에서 돌 수 있어야 한다. 소리를 내는 검증은 `--test-sound`뿐이다.
 - 새 규칙·파서·매퍼를 추가하면 그 클래스에 `RunSelfTest()`를 만들고 [SelfTestRunner](../app/SelfTest/SelfTestRunner.cs)의 목록에 넣는다. 검사는 그 클래스 안에 있어야 한다 — 별도 테스트 프로젝트를 만들지 않는다.
 - 트레이·사운드·훅을 바꿨으면 [regression.md](regression.md)의 수동 체크리스트를 보고서에 포함한다. 요청받지 않았으면 GUI를 직접 띄우지 않는다.
-- **창을 고쳤으면 `scripts\ui-check.ps1`을 돌리고 `%TEMP%\notipet-ui`의 스크린샷을 눈으로 본다.** 모든 옵션 페이지, 최근 알림 창, 트레이 메뉴를 실제로 열고 생존·에러 표시·이벤트 로그 크래시를 확인한다. 레이아웃 붕괴(넘치는 콤보, 한 글자씩 세로로 밀린 라벨)는 스크린샷으로만 보인다.
+- **창을 고쳤으면 `scripts\ui-check.ps1`을 돌리고 `%TEMP%\notipet-ui`의 스크린샷을 눈으로 본다.** 모든 설정 페이지, 최근 알림 창, 트레이 메뉴를 실제로 열고 생존·에러 표시·이벤트 로그 크래시를 확인한다. 레이아웃 붕괴(넘치는 콤보, 한 글자씩 세로로 밀린 라벨)는 스크린샷으로만 보인다.
 - **배포 후에는 `bin` 대상으로 `ui-check.ps1`을 한 번 더 돌린다.** 빌드 출력과 게시 폴더는 같지 않다 — `.pri`가 빠져 배포본에서만 창이 안 열린 적이 있다.
 - **테스트는 사용자의 실제 `settings.json`을 절대 쓰지 않는다.** `AppSettings.Save()`는 `Load(path)`로 불러온 경로에만 쓰고, `HttpSelfTest`는 실제 파일의 해시가 바뀌면 실패한다.
 - **창(Window)을 추가하거나 고쳤으면 반드시 실제로 띄워서 확인한다.** WinUI 컨트롤은 렌더 시점에 `0xc000027b`로 프로세스를 죽일 수 있고, 컴파일도 self-test도 그것을 잡지 못한다. `NotipetTray.exe --settings` / 두 번째 실행으로 창을 열 수 있고, 검증은 UI Automation으로 창 이름과 자식 컨트롤을 읽어 확인한다.

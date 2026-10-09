@@ -150,7 +150,7 @@
   3. 덮어쓰인 파일은 `%LOCALAPPDATA%\notipet\settings.clobbered-by-selftest.json`으로 보관하고 네 플래그를 되돌렸다.
 - **재발 방지**: `AppSettings` self-test가 `SourcePath`와 "불러오지 않은 인스턴스는 저장하지 않음"을 고정한다. 위의 해시 가드. [RULES.md](RULES.md)에 "테스트는 실제 설정을 쓰지 않는다".
 
-### 옵션 창 레이아웃이 붕괴했다 (넘치는 콤보, 세로로 밀린 라벨)
+### 설정 창 레이아웃이 붕괴했다 (넘치는 콤보, 세로로 밀린 라벨)
 
 - **원인**: 레벨별 사운드 카드의 콤보 4개를 가로 `StackPanel`에 넣어 카드 폭을 넘었다. 방해금지 시간의 `TimePicker` 두 개는 최소 폭이 커서 같은 줄의 라벨을 폭 0 근처로 밀어냈다.
 - **증상**: 콤보가 카드 밖으로 잘리고, "시간대" 라벨이 한 글자씩 세로로 쌓였다.
@@ -190,7 +190,7 @@
 ### 배포본(bin)에서 모든 창이 열리지 않았다
 
 - **원인**: unpackaged `dotnet publish`가 앱 자신의 리소스 인덱스 `NotipetTray.pri`를 게시 폴더로 복사하지 않는다. 컴파일된 `App.xaml`(`XamlControlsResources`)이 거기 있으므로, 없으면 `{ThemeResource AccentTextFillColorPrimaryBrush}` 같은 테마 리소스가 해석되지 않는다.
-- **증상**: Debug 빌드 출력에서는 ui-check 12/12 통과, `bin\`에서는 옵션·최근 알림 창이 열리지 않고 `crash.log`에 `XamlParseException: Cannot find a Resource with the Name/Key AccentTextFillColorPrimaryBrush`. 데몬은 살아 있다(구성 시점 예외라 잡힘).
+- **증상**: Debug 빌드 출력에서는 ui-check 12/12 통과, `bin\`에서는 설정·최근 알림 창이 열리지 않고 `crash.log`에 `XamlParseException: Cannot find a Resource with the Name/Key AccentTextFillColorPrimaryBrush`. 데몬은 살아 있다(구성 시점 예외라 잡힘).
 - **발견 경위**: 배포 후 `ui-check.ps1`을 `bin\` 대상으로 돌렸을 때. 빌드 출력만 검사했다면 놓쳤다.
 - **해결**: `Notipet.App.csproj`의 `NotipetPublishPri` 타깃이 게시 후 `.pri`를 복사하고, 없으면 게시를 실패시킨다.
 - **재발 방지**: [RULES.md](RULES.md) — 배포 후 `bin\` 대상으로 `ui-check.ps1`을 돌린다.
@@ -200,7 +200,7 @@
 - **증상**: 09-23 20:15에 Codex의 `attention` 알림이 왔고 기록상 정상 전달(`windows_sound: delivered`, 알람 `alm_0092`)이었는데, 사용자가 PC 앞에 왔을 때는 아무 소리도 나지 않았다. 음소거·방해금지·자리 착석 모두 아니었고 오디오 오류도 없었다.
 - **원인**: `sound.maxDurationSec`(기본 120초)이 `until_ack`에도 그대로 적용된다. 알람은 20:15:49~20:17:49 동안만 울리고 스스로 멈췄다.
 - **왜 그렇게 만들었나**: 잘못된 훅이 `until_ack`을 루프로 쏘면 자리를 비운 내내 사이렌이 울리는 것을 막으려는 상한이었다. 그런데 **그 방어가 정작 보호하려던 상황(자리를 비운 사이)에서 알람을 꺼 버렸다.** 사용자가 돌아왔을 때 울리고 있어야 그 알람이 의미가 있다.
-- **해결**: `sound.maxDurationSec = 0`(`AppSettings.UnlimitedAlarmSeconds`) 선택지를 옵션 창에 추가했다. `until_ack` 알람에 한해 마감 시각이 없고, 확인(트레이 클릭·풍선·`ack`) 때만 멈춘다. `repeat`/`once`, 요청이 지정한 지속 시간, 자리 착석 단축(30초)은 그대로 제한된다.
+- **해결**: `sound.maxDurationSec = 0`(`AppSettings.UnlimitedAlarmSeconds`) 선택지를 설정 창에 추가했다. `until_ack` 알람에 한해 마감 시각이 없고, 확인(트레이 클릭·풍선·`ack`) 때만 멈춘다. `repeat`/`once`, 요청이 지정한 지속 시간, 자리 착석 단축(30초)은 그대로 제한된다.
 - **검증**: 볼륨 0으로 무제한 `until_ack` 알람을 띄우고 **2분 33초 뒤에도 `alarms 1`**임을 확인한 뒤 `ack`으로 0이 되는 것까지 확인했다. self-test에 네 가지 고정(무제한+until_ack=0 / repeat는 600 / 요청 45초는 45초 / 착석 시 30초 이하)을 추가했다.
 - **주의**: `AlarmSession.WaitAsync`는 `Task.Delay`가 받을 수 없는 길이를 피하려고 하루 단위로 나눠 기다린다. 즉 실질 한계는 24시간이다.
 
@@ -208,7 +208,7 @@
 
 - **증상**: 최근 알림 창이 이미 열려 있는데 다른 창에 가려져 있으면, 트레이 아이콘을 클릭해도 아무 일도 일어나지 않는다. 창은 떠 있지만 뒤에 있으니 사용자에게는 **프로그램이 죽은 것처럼 보인다.**
 - **원인**: `Activate()`가 `AppWindow.Show(true)` + `Window.Activate()`에만 의존했다. 이미 보이는 창에 `Show(true)`는 아무것도 하지 않고, `Window.Activate()`는 **포그라운드 잠금**(foreground lock)에 걸린다 — 트레이를 클릭한 시점에 포그라운드 프로세스는 다른 앱이라 Windows가 우리의 포그라운드 전환 요청을 거부한다.
-- **해결**: [Fluent.cs](../app/Windows/Fluent.cs)의 `BringToFront(Window)`로 통일했다. 최소화 상태면 `OverlappedPresenter.Restore()`, 그다음 `SetForegroundWindow`, 거부되면 **포그라운드 스레드의 입력 큐에 `AttachThreadInput`으로 붙은 뒤** `BringWindowToTop` + 재시도, 그래도 안 되면 topmost를 잠깐 켰다 끄는 것으로 최소한 위로 올린다. 두 창(최근 알림, 옵션) 모두 이걸 쓴다.
+- **해결**: [Fluent.cs](../app/Windows/Fluent.cs)의 `BringToFront(Window)`로 통일했다. 최소화 상태면 `OverlappedPresenter.Restore()`, 그다음 `SetForegroundWindow`, 거부되면 **포그라운드 스레드의 입력 큐에 `AttachThreadInput`으로 붙은 뒤** `BringWindowToTop` + 재시도, 그래도 안 되면 topmost를 잠깐 켰다 끄는 것으로 최소한 위로 올린다. 두 창(최근 알림, 설정) 모두 이걸 쓴다.
 - **검증**: 메모장을 앞에 띄워 창을 가린 뒤 트레이 좌클릭 메시지를 보내고 포그라운드 창을 확인하는 스크립트로, **고치기 전 FAIL / 고친 뒤 PASS**를 둘 다 확인했다.
 - **교훈**: 트레이 앱의 "창 보이기"는 `Activate()` 한 줄이 아니다. 창이 보이는 상태인지, 최소화인지, 가려져 있는지 세 경우를 모두 확인해야 한다.
 
