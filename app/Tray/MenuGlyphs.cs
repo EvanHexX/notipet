@@ -38,11 +38,32 @@ internal static class MenuGlyphs
         }
     }
 
+    // Settings' theme for the tray menu: System follows Windows, Light and
+    // Dark force it (uxtheme modes 3 and 2). Same undocumented call, same
+    // rule - a failure leaves the menu as it was.
+    private static string _theme = "System";
+
+    public static void SetMenuTheme(string? theme)
+    {
+        _theme = theme is "Light" or "Dark" ? theme : "System";
+        if (!_darkModeRequested) return;
+        try
+        {
+            SetPreferredAppMode(_theme switch { "Dark" => ForceDark, "Light" => ForceLight, _ => AllowDark });
+            FlushMenuThemes();
+        }
+        catch
+        {
+        }
+    }
+
     // Whether menus are currently drawn dark, so icons can be drawn in a colour
     // that reads on them.
     public static bool MenusAreDark()
     {
         if (!_darkModeRequested) return false;
+        if (_theme == "Dark") return true;
+        if (_theme == "Light") return false;
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
@@ -148,6 +169,8 @@ internal static class MenuGlyphs
     }
 
     private const int AllowDark = 1;
+    private const int ForceDark = 2;
+    private const int ForceLight = 3;
 
     [DllImport("uxtheme.dll", EntryPoint = "#135")]
     private static extern int SetPreferredAppMode(int mode);

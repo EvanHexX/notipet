@@ -60,6 +60,7 @@ internal static class Glyphs
     public const string Pin = "\uE718";
     public const string FullScreen = "\uE740";
     public const string More = "\uE712";
+    public const string Theme = "\uE790";
 
     public static string ForLevel(NotificationLevel level) => level switch
     {
@@ -275,6 +276,39 @@ internal static class Fluent
         row.Children.Add(Text(label, "CaptionTextBlockStyle", wrap: false));
         chip.Child = row;
         return chip;
+    }
+
+    // The theme picked in Settings → General. "System" follows Windows (and
+    // follows it live); Light/Dark pin every notipet window to one.
+    private static ElementTheme _theme = ElementTheme.Default;
+
+    public static void SetTheme(string? name) => _theme = name switch
+    {
+        "Light" => ElementTheme.Light,
+        "Dark" => ElementTheme.Dark,
+        _ => ElementTheme.Default
+    };
+
+    // On the window's root, so every {ThemeResource} below re-resolves; and on
+    // the title bar, whose caption buttons are drawn by the system, not XAML.
+    // Called after every rebuild of a window's content.
+    public static void ApplyTheme(Window window)
+    {
+        if (window.Content is FrameworkElement root) root.RequestedTheme = _theme;
+        try
+        {
+            window.AppWindow.TitleBar.PreferredTheme = _theme switch
+            {
+                ElementTheme.Light => TitleBarTheme.Light,
+                ElementTheme.Dark => TitleBarTheme.Dark,
+                _ => TitleBarTheme.UseDefaultAppMode
+            };
+        }
+        catch
+        {
+            // Older runtime without PreferredTheme: the caption buttons keep
+            // following Windows, which is all they did before.
+        }
     }
 
     // Draws our own title bar so the Mica backdrop runs edge to edge, the way

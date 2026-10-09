@@ -21,6 +21,10 @@ internal interface INotipetHost
     // Call after Settings.Language changed; the host re-localises everything.
     void LanguageChanged();
 
+    // Call after Settings.Theme changed; the host re-themes every open window,
+    // the pop-ups and the tray menu.
+    void ThemeChanged();
+
     void PreviewLevel(NotificationLevel level);
     void PreviewAtDeskSound();
     void StopPreview();

@@ -128,6 +128,12 @@ internal sealed class PopupHost
         return closed;
     }
 
+    // The theme changed in Settings: cards already on screen follow it.
+    public void ApplyTheme()
+    {
+        foreach (var card in Cards()) card.ApplyTheme();
+    }
+
     public void CloseAll()
     {
         foreach (var popup in _open.ToArray()) popup.Close();

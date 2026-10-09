@@ -46,6 +46,7 @@ internal sealed class NotificationPopup
     {
         var popup = new NotificationPopup(envelope, 116, envelope.Title) { Stays = stays };
         popup._window.Content = popup.Build(envelope, link, onClick, onOpenThread);
+        popup.Dress();
         return popup;
     }
 
@@ -55,6 +56,7 @@ internal sealed class NotificationPopup
     {
         var popup = new NotificationPopup(null, 60, "notipet");
         popup._window.Content = popup.BuildOverflow(onOpen, onDismiss);
+        popup.Dress();
         popup.SetOverflowCount(count);
         return popup;
     }
@@ -68,7 +70,6 @@ internal sealed class NotificationPopup
         PixelSize = new SizeInt32((int)(WidthDip * scale), (int)(heightDip * scale));
 
         _window.Title = title;
-        try { _window.SystemBackdrop = new DesktopAcrylicBackdrop(); } catch { }
 
         // A small borderless card: no title bar, no taskbar button, no Alt+Tab
         // entry, not resizable.
@@ -115,6 +116,19 @@ internal sealed class NotificationPopup
     {
         if (_closed) return;
         SetWindowPos(_hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+    }
+
+    // Theme, then the backdrop - after the content, because the backdrop
+    // takes its theme from the content's root.
+    private void Dress()
+    {
+        Fluent.ApplyTheme(_window);
+        try { _window.SystemBackdrop = new ThemedAcrylicBackdrop(); } catch { }
+    }
+
+    public void ApplyTheme()
+    {
+        if (!_closed) Fluent.ApplyTheme(_window);
     }
 
     public void MoveTo(PointInt32 position)

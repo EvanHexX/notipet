@@ -155,7 +155,12 @@ HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상�
 `PopupSettings.StayLevels`에 레벨이 하나라도 있거나 `ShowOverFullscreen`이 켜져 있으면 시각 채널(`TrayBalloonChannel`)이 셸 풍선 대신 `PopupHost.Show`를 부른다. 풍선으로는 둘 다 불가능하다 — 표시 시간은 Windows가 정하고, 전체화면 앱 앞에서는 셸이 알림을 보류한다. 채널 ID는 그대로라 켜고 끄기, 기록의 전달 결과, 규칙이 모두 같다.
 
 - **포커스를 뺏지 않는다**: `AppWindow.Show(false)` — 활성화 없이 표시. 입력 중인 창의 커서가 그대로다. 검증: 표시 전후 `GetForegroundWindow`가 같다.
-- **창 모양**: `OverlappedPresenter` + `SetBorderAndTitleBar(true, false)`(제목 표시줄 없는 둥근 카드), `IsShownInSwitchers = false`(작업 표시줄·Alt+Tab에 없음), `DesktopAcrylicBackdrop`.
+- **창 모양**: `OverlappedPresenter` + `SetBorderAndTitleBar(true, false)`(제목 표시줄 없는 둥근 카드), `IsShownInSwitchers = false`(작업 표시줄·Alt+Tab에 없음), `ThemedAcrylicBackdrop`.
+- **배경과 테마**: 기본 `DesktopAcrylicBackdrop`은 창 활성화를 따라가는데, 알림 창은 포커스를 뺏지 않으려고 **한 번도 활성화되지 않는다.** 그래서 늘 비활성 대체색(Windows 테마의 단색)이 그려졌고, notipet을 라이트로 두면 어두운 배경에 어두운 글씨가 됐다. `ThemedAcrylicBackdrop`은 `DesktopAcrylicController`를 직접 쥐고 `IsInputActive = true`, 테마는 창 루트의 `ActualTheme`(= `Fluent.ApplyTheme`)를 따라간다. 배경은 콘텐츠를 넣은 **뒤에** 붙인다(테마를 루트에서 읽으므로).
+
+### 테마 (설정 → 일반)
+
+`AppSettings.Theme`(System/Light/Dark) → `Fluent.SetTheme` → 창마다 `Fluent.ApplyTheme(window)`: 루트 `RequestedTheme`(모든 `{ThemeResource}`가 다시 풀린다)와 `AppWindow.TitleBar.PreferredTheme`(캡션 버튼은 XAML이 아니라 시스템이 그린다). 창을 다시 만들 때마다 부른다. 바꾸면 `INotipetHost.ThemeChanged`가 열린 창, 떠 있는 알림 창, 트레이 메뉴(`MenuGlyphs.SetMenuTheme` — uxtheme `SetPreferredAppMode` 2/3, 메뉴 아이콘 색도 그에 맞춤)를 한 번에 바꾼다. Mica는 루트 테마를 따라가서 따로 할 일이 없다.
 - **전체화면 위**: `IsAlwaysOnTop` + `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE)`로 topmost 띠의 맨 위에. 전체화면 영상 플레이어도 topmost인 경우가 많아서, 열린 창이 있는 동안 2초마다 다시 올린다(나중에 전체화면이 된 창이 덮는 경우). 독점 전체화면 D3D는 불가능.
 - **전체화면 위 끔 + 전체화면 앞**: topmost가 아니고 포그라운드 창 **바로 뒤**에 넣는다(`SetWindowPos(hwnd, foreground)`). 전체화면을 나오면 보인다.
 - **클릭**: 카드 클릭 = 알람 정지 + 닫기(풍선 클릭과 같음). X = 닫기만. X 옆 열기 아이콘("Claude/Codex에서 열기") = 스레드 열기 + 알람 정지 + 닫기. 예전엔 이름이 붙은 버튼이 한 줄을 차지해서 링크가 있는 창이 148px, 4개 쌓이면 화면 절반이었다. 지금은 모두 116px.

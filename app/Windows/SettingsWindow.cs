@@ -81,6 +81,8 @@ internal sealed class SettingsWindow
 
     public void Relocalize() => Build();
 
+    public void ApplyTheme() => Fluent.ApplyTheme(_window);
+
     private void Changed() => _host.SettingsChanged();
 
     // ----- shell -----
@@ -128,6 +130,7 @@ internal sealed class SettingsWindow
 
         Fluent.HideOnEscape(_window, root);
         _window.Content = root;
+        Fluent.ApplyTheme(_window);
         _window.Title = title;
 
         _nav.SelectedItem = _nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => (string)i.Tag == _page)
@@ -195,6 +198,23 @@ internal sealed class SettingsWindow
             Loc.T("Language", "언어"),
             Loc.T("Menus, windows and notifications from notipet itself", "메뉴, 창, notipet 자체 알림에 쓰이는 언어"),
             language));
+
+        var theme = new ComboBox { MinWidth = 180 };
+        theme.Items.Add(Loc.T("Windows default", "Windows 설정 따름"));
+        theme.Items.Add(Loc.T("Light", "라이트"));
+        theme.Items.Add(Loc.T("Dark", "다크"));
+        theme.SelectedIndex = Settings.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
+        theme.SelectionChanged += (_, _) =>
+        {
+            var picked = theme.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" };
+            if (picked == Settings.Theme) return;
+            Settings.Theme = picked;
+            _window.DispatcherQueue.TryEnqueue(() => _host.ThemeChanged());
+        };
+        page.Children.Add(Fluent.SettingCard(Glyphs.Theme,
+            Loc.T("Theme", "테마"),
+            Loc.T("Windows, pop-ups and the tray menu", "창, 알림 창, 트레이 메뉴의 밝기"),
+            theme));
 
         page.Children.Add(Fluent.SettingCard(Glyphs.Power,
             Loc.T("Start with Windows", "Windows 시작 시 실행"),

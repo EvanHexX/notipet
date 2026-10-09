@@ -87,6 +87,8 @@ internal sealed class HistoryWindow
         try { _window.Close(); } catch { }
     }
 
+    public void ApplyTheme() => Fluent.ApplyTheme(_window);
+
     // Called when the language changes: everything with text is rebuilt.
     public void Relocalize()
     {
@@ -117,6 +119,7 @@ internal sealed class HistoryWindow
 
         Fluent.HideOnEscape(_window, root);
         _window.Content = root;
+        Fluent.ApplyTheme(_window);
         _window.Title = Loc.T("notipet - Recent", "notipet - 최근 알림");
     }
 

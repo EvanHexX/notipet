@@ -58,6 +58,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         Paths.EnsureDataDir();
         _settings = AppSettings.Load();
         Loc.SetLanguage(_settings.Language);
+        Fluent.SetTheme(_settings.Theme);
         _lookupThreadTitles = _settings.History.LookupThreadTitles;
 
         // One rendering of the bell serves as the window icon everywhere, so the
@@ -143,6 +144,17 @@ internal sealed class TrayController : IDisposable, INotipetHost
                 CrashLog.Write("ThreadTitleLookup", ex);
             }
         });
+    }
+
+    public void ThemeChanged()
+    {
+        _settings.Save();
+        Fluent.SetTheme(_settings.Theme);
+        MenuGlyphs.SetMenuTheme(_settings.Theme);
+        _settingsWindow?.ApplyTheme();
+        _historyWindow?.ApplyTheme();
+        _popups.ApplyTheme();
+        RefreshTray();
     }
 
     public void LanguageChanged()
@@ -336,6 +348,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
     private void StartTray()
     {
         _trayIcon = new TrayIconHost();
+        MenuGlyphs.SetMenuTheme(_settings.Theme);
         _trayIcon.LeftClicked += OnTrayClicked;
         _trayIcon.BalloonClicked += OnBalloonClicked;
         _trayIcon.SessionLockChanged += locked => _presence.SetLocked(locked);
