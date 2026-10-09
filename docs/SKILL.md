@@ -32,7 +32,23 @@ notipet doctor      # [ok  ] claude skill  ...SKILL.md
 
 에이전트에게 "끝나면 알려줘"라고 말하거나 긴 작업을 시키면 스킬이 쓰인다.
 
-> Codex의 skills 폴더(`~/.codex/skills`)는 Codex 버전에 따라 지원 여부가 다르다. 지원하지 않는 버전이면 아래 [4절](#4-스킬을-지원하지-않는-에이전트)의 AGENTS.md 방식을 쓴다.
+> Codex의 skills 폴더(`~/.codex/skills`)는 Codex 버전에 따라 지원 여부가 다르다. 최신 Codex 문서는 사용자 스킬 위치로 `~/.agents/skills`를 안내하므로, 그쪽을 쓰는 버전이면 `install-skill --codex --path %USERPROFILE%\.agents\skills`. 스킬을 지원하지 않는 버전이면 아래 [4절](#4-스킬을-지원하지-않는-에이전트)의 AGENTS.md 방식을 쓴다.
+
+### Claude용과 Codex용은 다른 파일이다
+
+| | Claude Code | Codex |
+|---|---|---|
+| 원본 | [integrations/claude/skills/notipet/SKILL.md](../integrations/claude/skills/notipet/SKILL.md) | [integrations/codex/skills/notipet/SKILL.md](../integrations/codex/skills/notipet/SKILL.md) |
+| 설치 | `install-skill` | `install-skill --codex` |
+| 차이 | — | **notipet을 샌드박스 밖에서 실행**하라고 가르친다. Codex 샌드박스(`workspace-write`, `network_access = false`)에서는 다른 프로필로 돌아 `runtime.json`이 안 보이고 루프백도 막혀, notipet이 떠 있어도 `not running`이 나온다. 그래서 권한 상승을 요청하고, 사용자 규칙이 맞출 수 있게 **exe를 인수와 함께 직접** 부르라고 한다. 훅 이름도 Codex 것(`Stop`, `PermissionRequest`) |
+
+명령·레벨·태그·`resolve` 규칙은 같다. 둘 다 `--agent`를 박아 두지 않는다 — 에이전트와 스레드는 환경 변수로 감지한다.
+
+Codex에서 매번 승인 창이 뜨는 게 싫으면 `~/.codex/rules/default.rules`에 한 줄을 넣는다(그 exe를 샌드박스 밖에서 묻지 않고 실행한다는 뜻이니, 경로를 정확히):
+
+```python
+prefix_rule(pattern=["C:\\src\\notipet\\bin\\notipet.exe", ["send", "resolve", "ping", "history"]], decision="allow")
+```
 
 ---
 
@@ -76,7 +92,7 @@ notipet send --title "<프로젝트>: <무슨 일>" --body "<한두 줄>" --leve
 
 - 제목은 프로젝트 이름으로 시작 (`quota-scope: 결정 필요`) — 팝업에는 제목과 본문만 보이기 때문
 - `--thread-title`은 한 대화에서 같은 말로. 매번 다르게 쓰면 카드가 같은 스레드로 안 읽힌다
-- 스킬 파일은 Claude용과 Codex용(`install-skill --codex`)이 **같은 파일**이다. 그래서 `--agent`를 박아 두지 않는다 — 박아 두면 Codex가 Claude로 기록된다
+- Claude용과 Codex용 스킬은 1.3부터 **다른 파일**이다(위 표). 그래도 둘 다 `--agent`를 박아 두지 않는다 — 박아 두면 다른 에이전트 안에서 불렸을 때 잘못 기록된다
 - 태그는 `<프로젝트>:<순간>`이면 충분하다. 같은 태그라도 **다른 대화(스레드)면 따로** 울리고, 같은 대화에서 30초 안에 반복되면 한 번으로 합쳐진다
 - 본문은 한두 문장: 무슨 일이 있었고 무엇이 필요한가
 - **비밀·토큰·비밀번호·큰 diff를 본문에 넣지 않는다** — 화면을 보는 누구나 읽을 수 있다
@@ -84,6 +100,20 @@ notipet send --title "<프로젝트>: <무슨 일>" --body "<한두 줄>" --leve
 - 기다리기 **전에** 보낸다, 후가 아니라
 - 실패해도 재시도 루프를 돌지 않는다 (CLI는 어차피 항상 0으로 종료)
 - 사용자가 "조용히 해"라고 하면 그 세션 동안 보내지 않는다
+
+### 끝났으면 끈다 — `resolve`
+
+알린 일이 **끝나면** 에이전트가 직접 알람을 끈다. 사용자가 답했거나(휴대폰에서일 수도 있다) 에이전트가 스스로 막힌 것을 풀었을 때:
+
+```
+notipet resolve                        # 이 대화가 울린 알람 전부
+notipet resolve --tag "api:needs-input" # 그 알림만
+```
+
+- 그 알람과 그 알림 창만 꺼진다. 다른 대화의 알람은 그대로 울린다.
+- 사용자가 이미 껐으면 아무 일도 없고 0으로 끝난다. 그래서 스킬은 "확인하지 말고 부르라"고 가르친다.
+- 아직 답을 기다리는 중이면 부르지 않는다.
+- 훅이 끄는 것(턴이 끝난 뒤의 권한 요청 등)과는 별개다. 훅은 사용자가 스킬 알림을 봤는지 모르므로 대신 끄지 않는다 — [USAGE.md](USAGE.md#알람이-저절로-꺼질-때--resolve).
 
 ---
 

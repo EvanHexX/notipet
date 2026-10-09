@@ -4,9 +4,12 @@ using System.Reflection;
 
 namespace Notipet.Cli;
 
-// Writes the notipet agent skill (integrations/claude/skills/notipet/SKILL.md,
-// embedded in this exe) into an agent's skills folder, with this CLI's real
-// path filled in so the agent does not depend on PATH.
+// Writes the notipet agent skill into an agent's skills folder, with this
+// CLI's real path filled in so the agent does not depend on PATH. Two
+// templates, both embedded in this exe: integrations/claude/skills/notipet and
+// integrations/codex/skills/notipet. They differ where the agents do - Codex
+// runs commands in a sandbox that cannot reach the tray app, so its skill
+// says to run notipet outside it.
 internal static class SkillInstaller
 {
     private const string Placeholder = "{{NOTIPET}}";
@@ -17,9 +20,9 @@ internal static class SkillInstaller
     public static string CodexSkillPath() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "skills", "notipet", "SKILL.md");
 
-    public static string Render(string cliPath)
+    public static string Render(string cliPath, bool codex = false)
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("notipet.SKILL.md")
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(codex ? "notipet.SKILL.codex.md" : "notipet.SKILL.md")
             ?? throw new InvalidOperationException("skill template missing from the build");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd().Replace(Placeholder, cliPath);
@@ -28,7 +31,8 @@ internal static class SkillInstaller
     public static int Run(string[] args)
     {
         var cli = Environment.ProcessPath ?? "notipet";
-        var content = Render(cli);
+        var codex = Program.HasFlag(args, "--codex");
+        var content = Render(cli, codex);
 
         if (Program.HasFlag(args, "--print"))
         {
@@ -38,7 +42,7 @@ internal static class SkillInstaller
 
         var target = Program.OptionValue(args, "--path") is { } dir
             ? Path.Combine(dir, "notipet", "SKILL.md")
-            : Program.HasFlag(args, "--codex") ? CodexSkillPath() : ClaudeSkillPath();
+            : codex ? CodexSkillPath() : ClaudeSkillPath();
 
         // Our own previous install can be replaced freely; a file the user has
         // edited is theirs and needs --force.
@@ -50,7 +54,7 @@ internal static class SkillInstaller
                 Console.WriteLine($"already up to date: {target}");
                 return 0;
             }
-            if (!Program.HasFlag(args, "--force") && !LooksLikeOurs(existing))
+            if (!Program.HasFlag(args, "--force") && !LooksLikeOurs(existing, codex))
             {
                 Console.Error.WriteLine($"notipet: {target} exists and has been edited. Use --force to overwrite.");
                 return Program.HasFlag(args, "--strict") ? 1 : 0;
@@ -66,9 +70,9 @@ internal static class SkillInstaller
     }
 
     // A previous install of ours differs only in the CLI path it names.
-    private static bool LooksLikeOurs(string existing)
+    private static bool LooksLikeOurs(string existing, bool codex)
     {
-        var template = Render(Placeholder);
+        var template = Render(Placeholder, codex);
         var firstLine = template.Split('\n', 2)[0];
         return existing.StartsWith(firstLine, StringComparison.Ordinal)
                && existing.Contains("name: notipet", StringComparison.Ordinal)
@@ -82,6 +86,14 @@ internal static class SkillInstaller
         if (!rendered.Contains(@"C:\x\notipet.exe send", StringComparison.Ordinal)) return false;
         if (!rendered.StartsWith("---", StringComparison.Ordinal)) return false;
         if (!rendered.Contains("name: notipet", StringComparison.Ordinal)) return false;
+        if (!rendered.Contains(@"C:\x\notipet.exe resolve", StringComparison.Ordinal)) return false;
+
+        // The Codex skill is its own: same commands, plus running them outside
+        // the sandbox - which the Claude one must not tell Claude to do.
+        var codex = Render(@"C:\x\notipet.exe", codex: true);
+        if (codex.Contains(Placeholder, StringComparison.Ordinal) || !codex.Contains("name: notipet", StringComparison.Ordinal)) return false;
+        if (!codex.Contains(@"C:\x\notipet.exe resolve", StringComparison.Ordinal)) return false;
+        if (!codex.Contains("outside the sandbox", StringComparison.Ordinal) || rendered.Contains("outside the sandbox", StringComparison.Ordinal)) return false;
 
         // Installing into a scratch folder writes the file, and re-running is
         // idempotent.
@@ -94,13 +106,15 @@ internal static class SkillInstaller
             {
                 Run(new[] { "install-skill", "--path", dir });
                 Run(new[] { "install-skill", "--path", dir });
+                // Our own Claude install is replaced by the Codex one without --force.
+                Run(new[] { "install-skill", "--path", dir, "--codex" });
             }
             finally
             {
                 Console.SetOut(outWriter);
             }
             var file = Path.Combine(dir, "notipet", "SKILL.md");
-            return File.Exists(file) && File.ReadAllText(file).Contains("name: notipet", StringComparison.Ordinal);
+            return File.Exists(file) && File.ReadAllText(file).Contains("outside the sandbox", StringComparison.Ordinal);
         }
         finally
         {
