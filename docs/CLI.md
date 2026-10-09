@@ -52,6 +52,7 @@ notipet send --title T --body B [--level L] [--tag T] [옵션]
 | `--silent` | 소리 없이 알림만 |
 | `--channels LIST` | `sound,notification` — 범위를 **좁히기만** 한다. 꺼 둔 채널을 켤 수는 없다 |
 | `--ttl SEC` | 그 시간 안에 전달 못 하면 버린다 |
+| `--open URI` | 카드를 클릭하면 스레드 대신 이 URI를 연다. 이 PC의 http(s), 또는 settings.json `links.allowedSchemes`에 등록된 스킴만. 아니면 알림은 가고 링크만 버려진다(`warnings`). 명령은 받지 않는다 — [api.md](api.md#post-v1notify) |
 | `--cwd PATH` | 카드에 표시할 폴더. 기본은 현재 폴더 |
 | `--fire-and-forget` | 응답을 기다리지 않고 바로 반환 |
 
@@ -257,6 +258,13 @@ notipet alert --source codex '{...}'  ← 마지막 인자가 JSON (Codex 레거
 - `Stop`·`UserPromptSubmit`·`SessionEnd`는 알림을 보내기 전에 **같은 세션의 끝난 알림**을 먼저 해제한다(`/v1/resolve`). 무엇이 해제되는지는 [api.md](api.md#post-hooksclaude-code). `UserPromptSubmit`은 알림을 보내지 않는다. 해제는 데몬이 떠 있을 때만 — 꺼져 있으면 울리는 것도 없다.
 
 ---
+
+## 버전 1.4에서 바뀐 것
+
+| 전 | 후 | 이유 |
+|---|---|---|
+| 카드 클릭은 에이전트 스레드만 연다 | `send --open URI` — 보낸 쪽이 정한 URI를 연다(허용 목록) | 다른 로컬 도구(예: 승인 창이 있는 브리지)가 알림을 notipet에 맡기면서 클릭은 자기 창으로 받기 위해 |
+| `resolve --id`도 에이전트 안에서는 현재 대화를 조건으로 붙였다 | `--id`는 그것만으로 찾는다 | 에이전트 세션에서 실행된 도구가 보낸 thread 없는 알림을 못 끄고 조용히 0을 냈다 |
 
 ## 버전 1.3에서 바뀐 것
 

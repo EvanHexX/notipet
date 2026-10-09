@@ -112,6 +112,12 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
     "timeoutSec": 8                  // 유지하지 않을 때 스스로 닫히기까지 (3~120)
   },
 
+  "links": {                         // `send --open`으로 카드가 열 수 있는 것
+    "allowedSchemes": []             // 이 PC의 http(s)는 항상 허용. 그 밖의 URI 스킴은 여기 적은 것만, 예: ["codexbridge"]
+                                     // file, ms-*, search-ms, shell, javascript, vbscript, data, http/https 는 적어도 무시된다
+                                     // API로는 바꿀 수 없다 — notipet stop → 이 파일 수정 → notipet start
+  },
+
   "history": {
     "keepInMemory": 200,             // 설정 창: 20 50 100 200 500 1000. 줄이면 즉시 잘린다
     "lookupThreadTitles": true       // 카드에 에이전트 앱의 스레드 이름 표시 (Codex/Claude 로컬 파일 읽기 전용)

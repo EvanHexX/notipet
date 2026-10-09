@@ -21,7 +21,7 @@ namespace Notipet.Cli;
 //      mode: a few hook events inject stdout into the agent's context.
 internal static class Program
 {
-    private const string CliVersion = "1.3.1";
+    private const string CliVersion = "1.4.0";
     private static readonly TimeSpan DefaultBudget = TimeSpan.FromMilliseconds(1500);
 
     private static async Task<int> Main(string[] args)
@@ -394,7 +394,9 @@ internal static class Program
             },
             Sound = BuildSound(args),
             Channels = channels is { Count: > 0 } ? channels : null,
-            TtlSec = int.TryParse(OptionValue(args, "--ttl"), out var ttl) ? ttl : null
+            TtlSec = int.TryParse(OptionValue(args, "--ttl"), out var ttl) ? ttl : null,
+            // Checked by the daemon against its own allow-list; the CLI passes it on as is.
+            Open = NonEmpty(OptionValue(args, "--open"))
         };
         FillIdentity(request, env, gitProbe, ceiling);
         return request;
@@ -730,6 +732,12 @@ internal static class Program
     // so they match what this conversation sent.
     internal static ResolveRequest BuildResolve(string[] args, Func<string, string?> env)
     {
+        // An id names exactly one notification. Adding this conversation's
+        // thread to it (from the environment) could only make it miss: a
+        // manual alert sent from a tool has no thread, and a tool run from
+        // inside an agent session inherits that session's variables.
+        if (NonEmpty(OptionValue(args, "--id")) is { } id) return new ResolveRequest { Id = id };
+
         var named = OptionValue(args, "--agent") ?? OptionValue(args, "--source");
         var agent = named is not null ? AgentIdentity.NormalizeAgent(named) : DetectAgent(env);
         var probe = new NotifyRequest
@@ -1172,6 +1180,12 @@ internal static class Program
         var elsewhere = BuildResolve(new[] { "resolve", "--tag", "x" }, _ => null);
         if (elsewhere.Tag != "x" || elsewhere.Source is not null || elsewhere.Session is not null) return false;
         if (BuildResolve(new[] { "resolve", "--agent", "codex", "--thread", "t9" }, _ => null).Session != "t9") return false;
+        // --id alone, even inside an agent: it must still match a manual alert.
+        var byId = BuildResolve(new[] { "resolve", "--id", "ntp_1" }, ClaudeEnv);
+        if (byId.Id != "ntp_1" || byId.Session is not null || byId.Source is not null) return false;
+        // --open is passed through for the daemon to check.
+        if (Build("send", "--title", "x", "--open", "codexbridge://approve/1").Open != "codexbridge://approve/1") return false;
+        if (Build("send", "--title", "x").Open is not null) return false;
         if (DescribeResolve(new ResolveResponse()) != "nothing to resolve (already stopped and closed, or never sent)") return false;
         if (DescribeResolve(new ResolveResponse { Resolved = 1, AlarmsStopped = 1, PopupsClosed = 1 }) != "resolved 1: 1 alarm(s) stopped, 1 pop-up(s) closed") return false;
 

@@ -244,9 +244,13 @@ internal sealed class NotificationPopup
         // its own it made every pop-up a third taller, and four of them
         // stacked reached halfway up the screen.
         var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        // The sender's own link (send --open) rather than the thread: then a
+        // click on the card opens it too.
+        var opensSenderLink = link is not null && envelope.OpenUri is not null && link.OriginalString == envelope.OpenUri;
         if (link is not null)
         {
-            actions.Children.Add(SmallButton(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () =>
+            var label = opensSenderLink ? UiText.OpenLink() : UiText.OpenThreadIn(envelope.SourceId);
+            actions.Children.Add(SmallButton(Glyphs.OpenInApp, label, () =>
             {
                 onOpenThread();
                 onClick();
@@ -259,7 +263,9 @@ internal sealed class NotificationPopup
 
         // A click on the card (not on a button) is "I've seen it": the alarm
         // stops and the pop-up goes, like clicking the Windows balloon did.
-        ToolTipService.SetToolTip(grid, Loc.T("Click to stop the alarm and close", "클릭하면 알람을 멈추고 닫습니다"));
+        ToolTipService.SetToolTip(grid, opensSenderLink
+            ? Loc.T("Click to stop the alarm and open: ", "클릭하면 알람을 멈추고 엽니다: ") + link!.OriginalString
+            : Loc.T("Click to stop the alarm and close", "클릭하면 알람을 멈추고 닫습니다"));
         grid.Tapped += (_, e) =>
         {
             for (var node = e.OriginalSource as DependencyObject; node is not null && node != grid; node = VisualTreeHelper.GetParent(node))
@@ -267,6 +273,7 @@ internal sealed class NotificationPopup
                 if (node is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase) return;
             }
             onClick();
+            if (opensSenderLink) onOpenThread();
             Close();
         };
 

@@ -182,6 +182,16 @@ internal sealed class PopupSettings
     public bool UseOwnPopup => StayLevels.Count > 0 || ShowOverFullscreen;
 }
 
+// What a notification's card may open (`send --open`). http(s) on this PC
+// is always allowed; any other URI scheme only when listed here - typically
+// your own tool's, e.g. "codexbridge". Set in this file only: the API cannot
+// change it, or any sender could allow itself. See OpenLinks for the schemes
+// that stay refused even when listed.
+internal sealed class LinkSettings
+{
+    public List<string> AllowedSchemes { get; set; } = new();
+}
+
 internal sealed class AppSettings
 {
     public int SchemaVersion { get; set; } = 1;
@@ -198,6 +208,7 @@ internal sealed class AppSettings
     public Dictionary<string, SourceSettings> Sources { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public HistorySettings History { get; set; } = new();
     public PopupSettings Popup { get; set; } = new();
+    public LinkSettings Links { get; set; } = new();
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -272,6 +283,14 @@ internal sealed class AppSettings
         Presence ??= new PresenceSettings();
         History ??= new HistorySettings();
         Popup ??= new PopupSettings();
+        Links ??= new LinkSettings();
+        // Scheme names only, lower case, each once; never one OpenLinks refuses.
+        Links.AllowedSchemes = (Links.AllowedSchemes ?? new List<string>())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim().TrimEnd(':').ToLowerInvariant())
+            .Where(Notipet.Core.OpenLinks.IsListable)
+            .Distinct()
+            .ToList();
         Popup.TimeoutSec = Math.Clamp(Popup.TimeoutSec, 3, 120);
         Popup.StayLevels ??= new List<string>();
         if (Popup.LegacyStayUntilClicked == true && Popup.StayLevels.Count == 0)
@@ -463,6 +482,13 @@ internal sealed class AppSettings
             var none = new AppSettings();
             none.Normalize();
             if (none.Popup.UseOwnPopup || none.Popup.Stays(NotificationLevel.Critical)) return false;
+            if (none.Links.AllowedSchemes.Count != 0) return false;
+
+            // Listed link schemes: one spelling, and never one that stays refused.
+            var links = new AppSettings();
+            links.Links.AllowedSchemes = new List<string> { " CodexBridge: ", "codexbridge", "file", "ms-settings", "https", "bad scheme", "" };
+            links.Normalize();
+            if (!links.Links.AllowedSchemes.SequenceEqual(new[] { "codexbridge" })) return false;
 
             return true;
         }

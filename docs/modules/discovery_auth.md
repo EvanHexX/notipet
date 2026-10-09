@@ -91,6 +91,15 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
 
 이 검사들은 미인증 `/v1/health`에도 적용된다. 웹페이지가 API 존재 여부조차 알아내지 못하게.
 
+### 알림이 여는 링크 (`open`)
+
+토큰을 가진 쪽은 같은 사용자의 프로세스라 스스로 무엇이든 실행할 수 있다. 그러니 `open`이 막는 것은 "더 큰 권한"이 아니라 **사용자가 믿고 누르는 notipet 카드가 엉뚱한 것을 실행하는 일**이다. 그래서:
+
+- URI만 받는다. 명령줄·인수·경로는 받지 않는다(경로는 `file:`로 해석돼 거부).
+- 이 PC의 http(s)와 사용자가 settings.json에 적은 스킴만. 목록은 API로 바꿀 수 없다 — 보낸 쪽이 자기 스킴을 스스로 허용하면 목록이 의미가 없다.
+- `file`, `ms-*`, `search-ms`, `shell`, `javascript` 같은 스킴은 적어도 거부한다. 파일·설정에 닿거나 코드를 실행하고, 핸들러가 바로 이런 링크로 악용된 전례가 있다.
+- 카드에 마우스를 올리면 클릭이 무엇을 여는지 보인다. 클릭 순간 지금 설정으로 다시 검사한다.
+
 ### 그 외
 
 - 미인증 `/v1/health`는 `{ok, name, version, instanceId}`만 준다. CLI가 stale 파일을 판별하기엔 충분하고, 사용자가 무엇을 알림받는지는 새지 않는다.

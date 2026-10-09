@@ -29,6 +29,10 @@ internal static class Help
               --silent           notification only, no sound
               --channels LIST    sound,notification (narrows, never enables)
               --ttl SEC          drop it if it could not be delivered in time
+              --open URI         a click on the card opens this instead of the thread:
+                                 http(s) on this PC, or a scheme listed in
+                                 settings.json links.allowedSchemes (else ignored,
+                                 with a warning). A URI, never a command
               --cwd PATH         shown on the card (default: current directory)
               --json             print the raw response
               --quiet            print nothing
@@ -59,7 +63,8 @@ internal static class Help
             """
               (none)        inside Claude Code / Codex: every alarm this conversation raised
               --tag TAG     only the notification sent with this tag (in this conversation)
-              --id ID       exactly one notification (the id `send --json` printed)
+              --id ID       exactly one notification (the id `send --json` printed);
+                            nothing else is added to it, not even this conversation
               --thread ID   a conversation other than the current one (alias: --session)
               --agent A     claude-code | codex | manual (default: the agent you are in)
 

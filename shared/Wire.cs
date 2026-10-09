@@ -62,6 +62,10 @@ public sealed class NotifyRequest
     [JsonPropertyName("requiresAck")] public bool? RequiresAck { get; set; }
     [JsonPropertyName("ttlSec")] public int? TtlSec { get; set; }
     [JsonPropertyName("idempotencyKey")] public string? IdempotencyKey { get; set; }
+    // A URI the card opens when clicked, instead of the agent's thread. Only
+    // http(s) on this PC or a scheme the user listed in settings; anything
+    // else is dropped with a warning. Never a command line.
+    [JsonPropertyName("open")] public string? Open { get; set; }
 }
 
 public sealed class DeliveryResult
@@ -235,6 +239,8 @@ public sealed class HistoryEntryDto
     // When the sender said it was over (/v1/resolve) while its alarm or
     // pop-up was still live.
     [JsonPropertyName("resolvedAt")] public string? ResolvedAt { get; set; }
+    // What a click on the card opens, when the sender gave one (send --open).
+    [JsonPropertyName("open")] public string? Open { get; set; }
     [JsonPropertyName("deliveries")] public List<DeliveryResult> Deliveries { get; set; } = new();
 }
 

@@ -43,4 +43,10 @@ internal interface INotipetHost
     // the agent has no link format). Built from validated ids only.
     System.Uri? ThreadLink(HistoryEntry entry);
     void OpenThread(HistoryEntry entry);
+
+    // The link the sender asked the card to open (send --open), or null when
+    // it gave none or the scheme is no longer allowed. It wins over the thread
+    // for a click on the card.
+    System.Uri? SenderLink(HistoryEntry entry);
+    void OpenSenderLink(HistoryEntry entry);
 }

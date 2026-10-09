@@ -49,6 +49,7 @@ internal sealed class HistoryEntry
         Accepted = Accepted,
         SuppressedReason = SuppressedReason,
         ResolvedAt = ResolvedAt?.ToString("o"),
+        Open = Envelope.OpenUri,
         Deliveries = Deliveries.ToList()
     };
 }
