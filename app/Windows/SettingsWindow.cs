@@ -93,7 +93,10 @@ internal sealed class SettingsWindow
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var title = Loc.T("notipet Settings", "notipet 설정");
+        // "<what> - <app>", like the Recent window and Windows' own
+        // convention: the part that tells two windows apart comes first, in
+        // the taskbar and Alt+Tab.
+        var title = Loc.T("Settings - Notipet", "설정 - Notipet");
         _titleBar = Fluent.TitleBar(_window, title);
         root.Children.Add(_titleBar);
 
@@ -196,7 +199,7 @@ internal sealed class SettingsWindow
         };
         page.Children.Add(Fluent.SettingCard(Glyphs.Language,
             Loc.T("Language", "언어"),
-            Loc.T("Menus, windows and notifications from notipet itself", "메뉴, 창, notipet 자체 알림에 쓰이는 언어"),
+            Loc.T("Menus, windows and notifications from Notipet itself", "메뉴, 창, Notipet 자체 알림에 쓰이는 언어"),
             language));
 
         var theme = new ComboBox { MinWidth = 180 };
@@ -379,7 +382,9 @@ internal sealed class SettingsWindow
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.Children.Add(Fluent.LevelBadge(level));
+        var levelIcon = Fluent.LevelIcon(level, 20);
+        levelIcon.VerticalAlignment = VerticalAlignment.Center;
+        header.Children.Add(levelIcon);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 2 };
         text.Children.Add(Fluent.Text($"{UiText.Level(level)}  ({key})", "BodyStrongTextBlockStyle"));
         text.Children.Add(Fluent.Secondary(UiText.LevelDescription(level)));
@@ -457,7 +462,7 @@ internal sealed class SettingsWindow
     {
         page.Children.Add(Fluent.PageHeader(Loc.T("At my desk", "자리 착석")));
         var intro = Fluent.Secondary(Loc.T(
-            "A long alarm is for calling you back to the desk. While you are sitting here looking at the screen it is just noise - so tell notipet you are here.",
+            "A long alarm is for calling you back to the desk. While you are sitting here looking at the screen it is just noise - so tell Notipet you are here.",
             "긴 알람은 자리로 불러들이기 위한 것입니다. 이미 화면을 보고 있을 때는 소음일 뿐이니, 자리에 있다고 알려 주세요."), "BodyTextBlockStyle");
         intro.Margin = new Thickness(2, 0, 0, 12);
         page.Children.Add(intro);
@@ -588,8 +593,8 @@ internal sealed class SettingsWindow
             });
         page.Children.Add(Fluent.SettingCard(Glyphs.History,
             Loc.T("Keep", "보관할 알림 수"),
-            Loc.T("In memory only - cleared when notipet quits",
-                  "메모리에만 보관되어 notipet을 끄면 사라집니다"),
+            Loc.T("In memory only - cleared when Notipet quits",
+                  "메모리에만 보관되어 Notipet을 끄면 사라집니다"),
             keep));
 
         page.Children.Add(Fluent.SettingCard(Glyphs.Thread,
@@ -631,7 +636,7 @@ internal sealed class SettingsWindow
         var brand = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
         brand.Children.Add(Fluent.LevelBadge(NotificationLevel.Info, 48));
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 2 };
-        names.Children.Add(Fluent.Text("notipet", "SubtitleTextBlockStyle"));
+        names.Children.Add(Fluent.Text("Notipet", "SubtitleTextBlockStyle"));
         names.Children.Add(Fluent.Secondary(Loc.T(
             $"Version {_host.Version} - makes a noise when an AI coding agent needs you",
             $"버전 {_host.Version} — AI 코딩 에이전트가 나를 찾을 때 소리로 알려 줍니다")));

@@ -22,7 +22,8 @@ public static class PayloadMapper
     {
         SourceClaude => "Claude Code",
         SourceCodex => "Codex",
-        _ => "notipet"
+        // The product's display name; the command and paths stay lower case.
+        _ => "Notipet"
     };
 
     public static NotifyRequest FromHookEvent(AgentHookEvent e, string? sourceHint = null)

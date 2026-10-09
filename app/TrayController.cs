@@ -429,7 +429,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
 
         if (_server.Warnings.Count > 0)
         {
-            _trayIcon?.ShowNotification("notipet", string.Join("; ", _server.Warnings), BalloonLevel.Warning);
+            _trayIcon?.ShowNotification("Notipet", string.Join("; ", _server.Warnings), BalloonLevel.Warning);
         }
     }
 
@@ -464,7 +464,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         items.Add(new TrayMenuItem(Loc.T("Open data folder", "데이터 폴더 열기"), OpenDataFolder, Glyph: Glyphs.Folder));
         items.Add(new TrayMenuItem(Loc.T("Start with Windows", "Windows 시작 시 실행"), ToggleAutostart, Autostart.IsEnabled()));
         items.Add(TrayMenuItem.Separator);
-        items.Add(new TrayMenuItem(Loc.T("Quit notipet", "notipet 종료"), Quit, Glyph: Glyphs.Power));
+        items.Add(new TrayMenuItem(Loc.T("Quit Notipet", "Notipet 종료"), Quit, Glyph: Glyphs.Power));
 
         return items;
     }
@@ -504,8 +504,8 @@ internal sealed class TrayController : IDisposable, INotipetHost
         var lines = new List<string>
         {
             _server is null
-                ? Loc.T("notipet - API not listening", "notipet - API 중지됨")
-                : $"notipet - 127.0.0.1:{_server.Port}"
+                ? Loc.T("Notipet - API not listening", "Notipet - API 중지됨")
+                : $"Notipet - 127.0.0.1:{_server.Port}"
         };
 
         var status = state switch
@@ -601,7 +601,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
     {
         var request = new NotifyRequest
         {
-            Title = "notipet",
+            Title = "Notipet",
             Body = Loc.T("Test notification", "테스트 알림"),
             Level = "attention",
             Tag = "notipet:test:" + Guid.NewGuid().ToString("N")[..8],
@@ -614,7 +614,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
     private void OnThrottleAnnouncement(string sourceId)
     {
         OnUiThread(() => _trayIcon?.ShowNotification(
-            "notipet",
+            "Notipet",
             Loc.T($"Rate-limiting notifications from {sourceId}", $"{sourceId} 알림을 제한하는 중"),
             BalloonLevel.Warning));
     }

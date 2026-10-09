@@ -327,7 +327,7 @@ notipet restart         # 데몬 재시작
 | 테스트 알림 | 소리 확인 |
 | 데이터 폴더 열기 | `settings.json`, `runtime.json`, `crash.log`가 있는 곳 |
 | Windows 시작 시 실행 (체크) | HKCU Run 키 |
-| notipet 종료 | |
+| Notipet 종료 | |
 
 아이콘 **좌클릭**은 순서가 정해져 있다.
 

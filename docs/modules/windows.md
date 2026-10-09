@@ -11,7 +11,7 @@
 - [core/Core/ThreadLinks.cs](../../core/Core/ThreadLinks.cs) — 카드 → 데스크톱 앱 딥링크 (검증된 ID로만 생성)
 - [core/Core/ThreadTitleLookup.cs](../../core/Core/ThreadTitleLookup.cs) — 에이전트 앱이 붙인 스레드 이름 조회
 - [app/Windows/SettingsWindow.cs](../../app/Windows/SettingsWindow.cs) — 설정 창 (NavigationView 페이지)
-- [app/Windows/Fluent.cs](../../app/Windows/Fluent.cs) — 공용 부품(`Card`, `SettingCard`, `ExpandedCard`, `Toggle`, `IconButton`, `LevelBadge`, `Chip`, `TitleBar`, `Chrome`)과 `Glyphs` 표
+- [app/Windows/Fluent.cs](../../app/Windows/Fluent.cs) — 공용 부품(`Card`, `SettingCard`, `ExpandedCard`, `Toggle`, `IconButton`, `LevelIcon`, `TitleRow`, `LevelBadge`, `Chip`, `TitleBar`, `Chrome`)과 `Glyphs` 표
 - [app/Windows/UiText.cs](../../app/Windows/UiText.cs) — 레벨·소리·사유·채널·상대 시간의 EN/KO 이름
 - [app/Windows/INotipetHost.cs](../../app/Windows/INotipetHost.cs) — 창이 트레이 컨트롤러에 요구하는 것
 - [app/App.xaml](../../app/App.xaml) — `XamlControlsResources` (없으면 창이 프로세스를 죽인다)
@@ -157,6 +157,16 @@ HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상�
 - **포커스를 뺏지 않는다**: `AppWindow.Show(false)` — 활성화 없이 표시. 입력 중인 창의 커서가 그대로다. 검증: 표시 전후 `GetForegroundWindow`가 같다.
 - **창 모양**: `OverlappedPresenter` + `SetBorderAndTitleBar(true, false)`(제목 표시줄 없는 둥근 카드), `IsShownInSwitchers = false`(작업 표시줄·Alt+Tab에 없음), `ThemedAcrylicBackdrop`.
 - **배경과 테마**: 기본 `DesktopAcrylicBackdrop`은 창 활성화를 따라가는데, 알림 창은 포커스를 뺏지 않으려고 **한 번도 활성화되지 않는다.** 그래서 늘 비활성 대체색(Windows 테마의 단색)이 그려졌고, notipet을 라이트로 두면 어두운 배경에 어두운 글씨가 됐다. `ThemedAcrylicBackdrop`은 `DesktopAcrylicController`를 직접 쥐고 `IsInputActive = true`, 테마는 창 루트의 `ActualTheme`(= `Fluent.ApplyTheme`)를 따라간다. 배경은 콘텐츠를 넣은 **뒤에** 붙인다(테마를 루트에서 읽으므로).
+
+### 제목 표시줄과 이름
+
+- 창 제목은 **"<무엇> - Notipet"**: "최근 알림 - Notipet", "설정 - Notipet". Windows 관례대로 두 창을 가르는 말이 앞에 와야 작업 표시줄·Alt+Tab에서 구분된다(예전엔 "notipet - 최근 알림"과 "notipet 설정"으로 형식도 달랐다).
+- 화면에 보이는 제품 이름은 **Notipet**(제목, 트레이 툴팁·메뉴, 정보 페이지, 테스트 알림). 명령(`notipet send`), 경로, 저장소, API의 `name` 같은 식별자는 소문자 `notipet` 그대로.
+- `Fluent.TitleBar`는 48px이고 `AppWindow.TitleBar.PreferredHeightOption = Tall`로 캡션 버튼도 48px. 기본(32px)이면 버튼은 위에 붙고 세로 가운데 정렬한 아이콘·제목은 아래로 처져 보였다.
+
+### 레벨 표시와 글자 위계
+
+카드와 알림 창 모두 레벨 아이콘을 **제목 줄 앞에, 원 없이**(`Fluent.TitleRow` → `LevelIcon`, 15px) 그린다. 색은 테마 상태색(`SystemFillColor{Success,Caution,Critical}Brush`, 정보는 강조색)이라 테마마다 맞춰진다. 예전 원 배지(`LevelBadge`)는 다크에서 배경이 올리브·갈색으로 탁했고 왼쪽 한 열(약 40px)을 차지했다 — 이제 정보 페이지 표식에만 쓴다. 글자는 세 단계: 제목 기본색 굵게, 본문 `TextFillColorSecondaryBrush`, 알림 창의 에이전트·프로젝트 줄 `TextFillColorTertiaryBrush`.
 
 ### 테마 (설정 → 일반)
 

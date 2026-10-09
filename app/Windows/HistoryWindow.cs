@@ -103,7 +103,7 @@ internal sealed class HistoryWindow
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        _titleBar = Fluent.TitleBar(_window, Loc.T("notipet - Recent", "notipet - 최근 알림"));
+        _titleBar = Fluent.TitleBar(_window, Loc.T("Recent notifications - Notipet", "최근 알림 - Notipet"));
         root.Children.Add(_titleBar);
 
         var header = BuildHeader();
@@ -120,7 +120,7 @@ internal sealed class HistoryWindow
         Fluent.HideOnEscape(_window, root);
         _window.Content = root;
         Fluent.ApplyTheme(_window);
-        _window.Title = Loc.T("notipet - Recent", "notipet - 최근 알림");
+        _window.Title = Loc.T("Recent notifications - Notipet", "최근 알림 - Notipet");
     }
 
     // One row: filter and count on the left, commands on the right. No page
@@ -342,22 +342,15 @@ internal sealed class HistoryWindow
         var senderLink = _host.SenderLink(entry);
         var target = senderLink ?? link;
 
-        // Columns: level badge | text | actions. A card that can open
-        // something is itself clickable, with a hand cursor.
-        var grid = target is null ? new Grid { ColumnSpacing = 12 } : new LinkGrid { ColumnSpacing = 12 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // Columns: text | actions. The level's icon leads the title line, as
+        // on the pop-ups. A card that can open something is itself
+        // clickable, with a hand cursor.
+        var grid = target is null ? new Grid { ColumnSpacing = 8 } : new LinkGrid { ColumnSpacing = 8 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var level = UiText.Level(envelope.Level);
-        var badge = Fluent.LevelBadge(envelope.Level);
-        badge.VerticalAlignment = VerticalAlignment.Top;
-        ToolTipService.SetToolTip(badge, level);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(badge, level);
-        grid.Children.Add(badge);
-
         var content = new StackPanel { Spacing = 4 };
-        content.Children.Add(Fluent.Text(envelope.Title, "BodyStrongTextBlockStyle"));
+        content.Children.Add(Fluent.TitleRow(envelope.Level, UiText.Level(envelope.Level), envelope.Title, wrap: true));
 
         var thread = BuildThreadLine(entry, link);
         if (thread is not null) content.Children.Add(thread);
@@ -366,7 +359,8 @@ internal sealed class HistoryWindow
         if (!string.IsNullOrWhiteSpace(envelope.Body))
         {
             // Wrapped and never truncated - the reason this window exists.
-            body = Fluent.Text(envelope.Body);
+            // Secondary colour, so the title stands out above it.
+            body = Fluent.Text(envelope.Body, "BodyTextBlockStyle", "TextFillColorSecondaryBrush");
             body.IsTextSelectionEnabled = true;
             content.Children.Add(body);
         }
@@ -426,7 +420,6 @@ internal sealed class HistoryWindow
         content.Children.Add(footer);
         if (notes.Count > 0) content.Children.Add(Fluent.Secondary(string.Join("  ·  ", notes)));
 
-        Grid.SetColumn(content, 1);
         grid.Children.Add(content);
 
         // Remove stays one click away; the rest (copy, open folder) is in the
@@ -436,7 +429,7 @@ internal sealed class HistoryWindow
         more.Flyout = BuildMenu(entry, link, senderLink);
         actions.Children.Add(more);
         actions.Children.Add(IconOnly(Glyphs.Cancel, Loc.T("Remove", "삭제"), () => Remove(entry)));
-        Grid.SetColumn(actions, 2);
+        Grid.SetColumn(actions, 1);
         grid.Children.Add(actions);
 
         grid.ContextFlyout = BuildMenu(entry, link, senderLink);

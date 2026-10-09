@@ -204,19 +204,51 @@ internal static class Fluent
         return button;
     }
 
-    // A circle with the level's icon, tinted with the matching system status
-    // colour so severity reads before the text does.
+    // The level's status colour. Theme brushes, so each theme gets its own
+    // tuning: light green/yellow/pink on dark, deep ones on light.
+    private static (string Fg, string Bg) LevelBrushes(NotificationLevel level) => level switch
+    {
+        NotificationLevel.Success => ("SystemFillColorSuccessBrush", "SystemFillColorSuccessBackgroundBrush"),
+        NotificationLevel.Attention => ("SystemFillColorCautionBrush", "SystemFillColorCautionBackgroundBrush"),
+        NotificationLevel.Warn => ("SystemFillColorCautionBrush", "SystemFillColorCautionBackgroundBrush"),
+        NotificationLevel.Error => ("SystemFillColorCriticalBrush", "SystemFillColorCriticalBackgroundBrush"),
+        NotificationLevel.Critical => ("SystemFillColorCriticalBrush", "SystemFillColorCriticalBackgroundBrush"),
+        _ => ("AccentTextFillColorPrimaryBrush", "SystemFillColorAttentionBackgroundBrush")
+    };
+
+    // The level's icon alone, in its status colour. What cards and pop-ups
+    // use: the tinted circle behind it (LevelBadge) turned olive and brown in
+    // dark mode, and took a column of its own.
+    public static FontIcon LevelIcon(NotificationLevel level, double size = 16)
+    {
+        var icon = Icon(Glyphs.ForLevel(level), size, LevelBrushes(level).Fg);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(icon, NotificationLevelParser.ToWire(level));
+        return icon;
+    }
+
+    // A title with the level's icon in front of it, on one line: the icon
+    // sits on the title's first line instead of in a column beside the card.
+    public static Grid TitleRow(NotificationLevel level, string levelName, string title, bool wrap)
+    {
+        var row = new Grid { ColumnSpacing = 7 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var icon = LevelIcon(level, 15);
+        icon.VerticalAlignment = VerticalAlignment.Top;
+        icon.Margin = new Thickness(0, 3, 0, 0);
+        ToolTipService.SetToolTip(icon, levelName);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(icon, levelName);
+        row.Children.Add(icon);
+        var text = Text(title, "BodyStrongTextBlockStyle", wrap: wrap);
+        Grid.SetColumn(text, 1);
+        row.Children.Add(text);
+        return row;
+    }
+
+    // A circle with the level's icon. Kept for the About page's mark.
     public static Border LevelBadge(NotificationLevel level, double size = 32)
     {
-        var (fg, bg) = level switch
-        {
-            NotificationLevel.Success => ("SystemFillColorSuccessBrush", "SystemFillColorSuccessBackgroundBrush"),
-            NotificationLevel.Attention => ("SystemFillColorCautionBrush", "SystemFillColorCautionBackgroundBrush"),
-            NotificationLevel.Warn => ("SystemFillColorCautionBrush", "SystemFillColorCautionBackgroundBrush"),
-            NotificationLevel.Error => ("SystemFillColorCriticalBrush", "SystemFillColorCriticalBackgroundBrush"),
-            NotificationLevel.Critical => ("SystemFillColorCriticalBrush", "SystemFillColorCriticalBackgroundBrush"),
-            _ => ("AccentTextFillColorPrimaryBrush", "SystemFillColorAttentionBackgroundBrush")
-        };
+        var (fg, bg) = LevelBrushes(level);
 
         var badge = Xaml<Border>(
             $"<Border $NS Width='{size}' Height='{size}' CornerRadius='{size / 2}' " +
@@ -327,6 +359,10 @@ internal static class Fluent
 
         window.ExtendsContentIntoTitleBar = true;
         window.SetTitleBar(bar);
+        // Caption buttons as tall as the bar (48), so the icon and title sit
+        // on their centre line. With the default (32) they hung above our
+        // vertically-centred title.
+        try { window.AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall; } catch { }
         return bar;
     }
 
