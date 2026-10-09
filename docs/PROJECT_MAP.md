@@ -61,6 +61,7 @@
 | 요청+설정+레벨 기본값 → `ResolvedSound`, 경로 허용 검사 | [core/Sound/SoundResolver.cs](../core/Sound/SoundResolver.cs) |
 | 반복 재생 루프, 지속 시간 상한 | [core/Sound/AlarmSession.cs](../core/Sound/AlarmSession.cs) |
 | 울리는 중인 알람 추적, 확인(ack) 수렴 지점 | [core/Sound/AlarmRegistry.cs](../core/Sound/AlarmRegistry.cs) |
+| "그 일은 끝났다" (`/v1/resolve`, 훅의 턴 종료): 그 알림의 알람·알림 창만 끄기 | [core/Core/AlarmResolver.cs](../core/Core/AlarmResolver.cs) |
 | 엔진 선택, 동시 알람 정책 | [app/Sound/SoundService.cs](../app/Sound/SoundService.cs) |
 
 ## 배달 경로

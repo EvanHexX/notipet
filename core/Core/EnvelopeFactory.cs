@@ -51,13 +51,8 @@ internal static class EnvelopeFactory
             warnings.Add("body truncated");
         }
 
-        var tag = request.Tag?.Trim();
-        if (tag is { Length: > MaxTag })
-        {
-            tag = tag[..MaxTag];
-            warnings.Add("tag truncated");
-        }
-        if (string.IsNullOrWhiteSpace(tag)) tag = null;
+        var tag = NormalizeTag(request.Tag);
+        if (request.Tag?.Trim() is { Length: > MaxTag }) warnings.Add("tag truncated");
 
         var level = NotificationLevelParser.Parse(request.Level, out var recognized);
         if (!recognized) warnings.Add($"unknown level '{request.Level}', treated as info");
@@ -130,6 +125,15 @@ internal static class EnvelopeFactory
 
     // One line of display text, shortened with an ellipsis (and a warning) when
     // it is over the limit. Null when there is nothing left to show.
+    // A tag as the envelope keeps it. Also what a resolve request is matched
+    // with, so a tag that was trimmed or cut on the way in still matches.
+    public static string? NormalizeTag(string? tag)
+    {
+        var trimmed = tag?.Trim();
+        if (string.IsNullOrEmpty(trimmed)) return null;
+        return trimmed.Length > MaxTag ? trimmed[..MaxTag] : trimmed;
+    }
+
     private static string? CleanBounded(string? value, int max, string name, List<string> warnings)
     {
         var flat = AgentIdentity.Clean(value, int.MaxValue);

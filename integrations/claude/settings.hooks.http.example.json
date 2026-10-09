@@ -27,6 +27,17 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:47811/hooks/claude-code",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

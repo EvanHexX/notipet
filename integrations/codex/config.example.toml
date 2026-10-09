@@ -38,6 +38,17 @@ command = 'C:\src\notipet\bin\notipet.exe'
 args = ["--source", "codex"]
 timeout = 10
 
+# Ends alarms that are over: the last turn's "finished" once a new prompt
+# starts. (Stop above already ends this thread's PermissionRequest alarm.)
+# async: the prompt never waits for notipet.
+[[hooks.UserPromptSubmit]]
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = 'C:\src\notipet\bin\notipet.exe'
+args = ["--source", "codex"]
+timeout = 10
+async = true
+
 # Optional: the terminal's own bell, independent of notipet. No program runs,
 # so notipet cannot hook it - listed only so the two are not confused.
 # [tui]

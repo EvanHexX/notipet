@@ -9,7 +9,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#설치)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![WinUI 3](https://img.shields.io/badge/UI-WinUI%203-0063B1)](https://learn.microsoft.com/windows/apps/winui/winui3/)
-[![Version](https://img.shields.io/badge/version-1.2.0-blue)](#)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 <br>
 [![Claude Code](https://img.shields.io/badge/works%20with-Claude%20Code-D97757)](#에이전트-연결)
@@ -33,6 +33,7 @@ Claude Code나 Codex에 긴 작업을 맡기고 다른 일을 하다 보면, 에
 - **프로젝트별 최근 알림** — 카드마다 보낸 에이전트, 앱에서 쓰는 스레드 이름, 막혔다면 그 이유까지 보입니다.
 - **스레드로 바로 이동** — 카드를 누르면 그 대화가 **Codex**나 **Claude** 데스크톱 앱에서 열립니다.
 - **클릭할 때까지 남는 알림 창**(레벨별 선택), **전체화면 앱 위에도 뜨는 알림 창**(선택). 누르면 알람이 멈추고, 입력 중인 창의 포커스는 뺏지 않습니다. 너무 많이 쌓이면 오래된 것은 사라지지 않고 "외 N개" 카드로 모입니다.
+- **저절로 꺼지는 알람** — 휴대폰에서 승인했거나 에이전트가 스스로 해결했으면, 에이전트가 그렇다고 알리고 **그 알람과 그 알림 창만** 꺼집니다. 이미 껐다면 아무 일도 없습니다.
 - **PC 앞에 있음** — 자리에 있을 때는 긴 알람을 짧게, 또는 조용한 소리로 바꿉니다.
 - **방해금지, 음소거, 레이트 리밋, 중복 병합** — 툴 호출마다 훅이 터져도 트레이가 기관총이 되지 않습니다.
 - **English / 한국어** UI, Fluent 디자인, 라이트·다크.
@@ -104,7 +105,7 @@ notipet send --title "api: 결정 필요" --body "키를 지금 바꿀까요, �
 | `error` | 3회 반복 | 실패, 진행 불가 |
 | `critical` | 확인할 때까지 | 놓치면 안 되는 것 |
 
-울리는 알람은 트레이 아이콘이나 알림 클릭, `notipet ack`로 멈춥니다. 반복 방식은 설정 → 사운드에서 레벨마다 바꿀 수 있고, "확인할 때까지"는 최대 지속 시간을 **무제한**으로 두지 않는 한 그 시간에 멈춥니다.
+울리는 알람은 트레이 아이콘이나 알림 클릭, `notipet ack`로 멈춥니다. 보낸 쪽도 끌 수 있습니다 — 턴이 끝나면 그 권한 요청 알람이, `notipet resolve`를 부르면 에이전트가 알린 알람이 꺼집니다. 반복 방식은 설정 → 사운드에서 레벨마다 바꿀 수 있고, "확인할 때까지"는 최대 지속 시간을 **무제한**으로 두지 않는 한 그 시간에 멈춥니다.
 
 ## CLI
 
@@ -112,7 +113,7 @@ notipet send --title "api: 결정 필요" --body "키를 지금 바꿀까요, �
 notipet send --title T --body B [--level L] [--tag T] [--project P] [--thread-title T]
 notipet status | ping | version | doctor
 notipet history [--limit N] | history clear
-notipet ack | mute [30m|off] | desk [on|off]
+notipet ack | resolve [--tag T] | mute [30m|off] | desk [on|off]
 notipet open [recent|settings]
 notipet start | stop | restart
 notipet install-hooks | install-skill

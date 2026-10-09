@@ -99,6 +99,12 @@ CLI가 그 파일을 읽어서 알아서 찾아간다. **그래서 훅 설정에
                      "command": "C:\\src\\notipet\\bin\\notipet.exe",
                      "args": ["--source", "claude-code"],
                      "timeout": 10, "async": true } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command",
+                     "command": "C:\\src\\notipet\\bin\\notipet.exe",
+                     "args": ["--source", "claude-code"],
+                     "timeout": 10, "async": true } ] }
     ]
   }
 }
@@ -108,7 +114,8 @@ CLI가 그 파일을 읽어서 알아서 찾아간다. **그래서 훅 설정에
 
 - JSON이라 윈도우 경로에 `\\`를 쓴다.
 - **`async: true`가 중요하다.** 타임아웃이 적용되지 않고 훅이 에이전트의 턴을 붙잡지 않는다.
-- `Notification` / `Stop` / `SubagentStop`은 설계상 에이전트를 블로킹할 수 없다. notipet이 Claude Code의 동작을 바꿀 일은 없다.
+- `Notification` / `Stop` / `SubagentStop`은 설계상 에이전트를 블로킹할 수 없다. notipet이 Claude Code의 동작을 바꿀 일은 없다. `UserPromptSubmit`은 막을 수 있는 이벤트지만 notipet은 아무것도 출력하지 않고 0으로 끝나며, `async`라 프롬프트가 기다리지도 않는다.
+- `UserPromptSubmit`은 알림을 보내지 않는다. 지난 턴의 "완료"와 idle 알림을 끄는 데만 쓴다([알람이 저절로 꺼질 때](#알람이-저절로-꺼질-때--resolve)). 빼도 나머지는 그대로 동작한다.
 - 이미 `hooks` 블록이 있으면 Claude Code가 병합한다. 통째로 덮어쓰지 않아도 된다.
 
 ### 경로 B — Claude Code, CLI 없이 직접 HTTP
@@ -161,6 +168,14 @@ type = "command"
 command = 'C:\src\notipet\bin\notipet.exe'
 args = ["--source", "codex"]
 timeout = 10
+
+[[hooks.UserPromptSubmit]]
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = 'C:\src\notipet\bin\notipet.exe'
+args = ["--source", "codex"]
+timeout = 10
+async = true
 ```
 
 > ### ⚠️ 기존 `notify = [...]` 줄을 건드리지 않는다
@@ -254,6 +269,22 @@ notipet이 만드는 알림:
 `critical`의 반복은 트레이 아이콘 클릭 / 알림 풍선 클릭 / `notipet ack` / 최대 지속 시간(기본 120초)에서 멈춘다. 이 상한은 설정과 무관하게 코드에서 강제된다 — 잘못 구성된 훅이 자리 비운 사이 사이렌을 계속 울리면 안 되기 때문이다.
 
 레벨별 소리는 `settings.json`의 `sound.byLevel`에서 바꾼다. 자세한 건 [settings.md](settings.md).
+
+### 알람이 저절로 꺼질 때 — resolve
+
+알람을 끄는 건 보통 사람이다(트레이 클릭, 알림 창 클릭, `notipet ack`). 그런데 휴대폰에서 승인했거나 에이전트가 스스로 문제를 해결했으면, 아무도 없는 자리에서 알람이 계속 울린다. 그래서 **보낸 쪽이 "그 일은 끝났다"고 알릴 수 있다.** 그러면 **그 알림의 알람과 그 알림 창만** 꺼지고, 최근 알림 카드에 **해결됨** 칩이 붙는다.
+
+| 누가 | 언제 | 무엇을 끄나 |
+|---|---|---|
+| 훅 `Stop` | 턴이 끝났을 때 | 그 세션의 권한 요청 알람 (턴이 끝났으면 이미 답한 것) |
+| 훅 `UserPromptSubmit` | 새 턴이 시작될 때 | 그 세션의 지난 턴 "완료" 알림, idle 알림 |
+| 에이전트 (스킬) | 알린 일이 해결됐을 때 — 사용자가 답했거나 스스로 고쳤을 때 | `notipet resolve`: 이 대화의 알람, `--tag`: 그 알림만 |
+
+- **다른 대화의 알람은 건드리지 않는다.** 같은 태그라도 세션이 다르면 별개다.
+- **이미 꺼졌으면 조용히 통과한다.** 사용자가 먼저 껐어도 오류가 아니고, 카드에 "해결됨"도 붙지 않는다.
+- 스킬로 보낸 알림을 훅이 대신 끄지는 않는다. 훅은 사용자가 그걸 봤는지 알 수 없다.
+- 해제된 알림은 중복 병합에서 빠진다. 같은 일이 다시 생기면 다시 울린다.
+- notipet 자체 알림 창을 쓸 때만 창이 닫힌다. Windows 기본 알림은 닫을 방법이 없다(어차피 몇 초 뒤 사라진다).
 
 ---
 
@@ -508,6 +539,8 @@ curl.exe -s -H "Authorization: Bearer $($rt.token)" "$($rt.baseUrl)/v1/history?l
 ```
 
 트레이 아이콘 클릭이나 풍선 클릭도 같은 일을 한다. 어느 쪽도 안 되면 최대 지속 시간(기본 120초)에 자동으로 멈춘다.
+
+**원격에서 답했는데 계속 울렸다면**: 권한 요청 알람은 그 턴이 끝나야(`Stop`) 꺼진다 — 승인한 뒤 긴 작업이 이어지면 그동안은 울린다. `Stop` 훅이 설치돼 있는지 `notipet doctor`로 확인한다. 스킬로 보낸 알림은 에이전트가 `notipet resolve`를 불러야 꺼진다.
 
 ### 탐색기가 죽은 뒤 트레이 아이콘이 사라졌다
 

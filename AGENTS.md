@@ -76,7 +76,8 @@ These each exist because of a specific failure, and each is commented at its sit
 - Suppression returns **HTTP 200** with `accepted:false`, never a 4xx. Quiet hours are not a client error, and a hook that sees a non-2xx may change the agent's behaviour.
 - The CLI exits **0 even when delivery fails**, unless `--strict`. A notification daemon being down must never alter what Claude Code or Codex does.
 - Local channels are dispatched before remote ones, so a slow or failing push service structurally cannot delay the sound.
-- `PayloadMapper` never throws and never rejects. Agent payload shapes are external contracts; an unknown event becomes an `info` notification carrying the raw event name.
+- `PayloadMapper` never throws and never rejects. Agent payload shapes are external contracts; an unknown event becomes an `info` notification carrying the raw event name. (`UserPromptSubmit` is the one known event that notifies nothing: it only ends what is over.)
+- `/v1/resolve` stops only what it names. No selector, or an agent alone, is a 400 - never "all", which is `/v1/ack`. Hooks end only moments that are over by definition (a turn's permission prompt once the turn has stopped); what an agent sent through the skill is ended only by the agent. Resolving what the user already stopped is a 200 with zeros.
 
 ## Safety
 

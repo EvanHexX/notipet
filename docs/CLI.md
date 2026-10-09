@@ -181,6 +181,8 @@ notipet history clear
 |---|---|
 | `notipet ack` | 울리는 알람 전부 정지 |
 | `notipet ack --tag T` / `--id ID` | 특정 알람만 |
+| `notipet resolve` | 에이전트 안에서: **이 대화가** 울린 알람만 정지 + 그 알림 창만 닫기 |
+| `notipet resolve --tag T` | 이 대화의 그 태그 알림만. `--id ID`(알림 하나), `--thread ID`(다른 대화), `--agent A` |
 | `notipet mute` | 무기한 음소거 (`critical`은 설정에 따라 통과) |
 | `notipet mute 30m` / `mute 2h` | 그 시간 뒤 자동 해제. 출력: `muted until 17:18` |
 | `notipet mute off` / `notipet unmute` | 해제 |
@@ -188,6 +190,8 @@ notipet history clear
 | `notipet desk on` / `off` / `toggle` | 자리 착석 스위치. 트레이 메뉴의 "PC 앞에 있음"과 같다 |
 | `notipet open` / `open recent` | 최근 알림 창 |
 | `notipet open settings` | 설정 창 |
+
+`ack`와 `resolve`의 차이: `ack`는 사람이 "시끄럽다, 꺼"라고 하는 것(선택자가 없으면 전부), `resolve`는 보낸 쪽이 "그 일은 끝났다"고 하는 것(지목한 것만, 아무것도 지목하지 않으면 거부). `resolve`는 데몬을 띄우지 않고, 이미 꺼졌거나 닫혔으면 `nothing to resolve`를 출력하고 0으로 끝난다 — 확인 없이 불러도 된다. 출력: `resolved 1: 1 alarm(s) stopped, 1 pop-up(s) closed`.
 
 `desk on`이면 긴 알람이 짧아지고, 설정에서 켰다면 다른 소리로 대체된다. 자리를 뜰 때 `desk off`를 잊으면 자리를 비운 사이 오는 알림도 짧게 울린다는 점만 기억하면 된다.
 
@@ -228,7 +232,7 @@ notipet install-skill [--claude | --codex | --path DIR] [--print] [--force]
 | 옵션 | 위치 |
 |---|---|
 | (기본) `--claude` | `%USERPROFILE%\.claude\skills\notipet\SKILL.md` |
-| `--codex` | `%USERPROFILE%\.codex\skills\notipet\SKILL.md` |
+| `--codex` | `%USERPROFILE%\.codex\skills\notipet\SKILL.md` — **Codex용 스킬**(샌드박스 밖에서 실행하라는 안내가 들어 있다). `--path`와 함께 쓰면 그 폴더에 Codex용을 쓴다 |
 | `--path DIR` | `DIR\notipet\SKILL.md` (예: 프로젝트의 `.claude\skills`) |
 | `--print` | 파일로 쓰지 않고 출력만 |
 | `--force` | 직접 고친 스킬 파일도 덮어씀 |
@@ -250,8 +254,17 @@ notipet alert --source codex '{...}'  ← 마지막 인자가 JSON (Codex 레거
 - 매핑 규칙(어떤 이벤트가 어떤 레벨이 되는지)은 [USAGE.md 4절](USAGE.md#4-신호가-어떻게-해석되는가).
 - 훅 페이로드에 없는 것(Claude Desktop 세션 ID, 저장소 이름)은 [위의 자동 채우기](#에이전트-안에서-부를-때--자동으로-채워지는-것)로 보충한다. 훅은 에이전트의 환경을 물려받는다.
 - Codex 레거시 `notify`는 `thread-id`만 스레드로 쓴다. `turn-id`는 턴마다 바뀌어서 스레드로 쓰면 카드가 턴마다 갈라진다.
+- `Stop`·`UserPromptSubmit`·`SessionEnd`는 알림을 보내기 전에 **같은 세션의 끝난 알림**을 먼저 해제한다(`/v1/resolve`). 무엇이 해제되는지는 [api.md](api.md#post-hooksclaude-code). `UserPromptSubmit`은 알림을 보내지 않는다. 해제는 데몬이 떠 있을 때만 — 꺼져 있으면 울리는 것도 없다.
 
 ---
+
+## 버전 1.3에서 바뀐 것
+
+| 전 | 후 | 이유 |
+|---|---|---|
+| 알람은 사람만 끌 수 있었다 | `notipet resolve` — 보낸 쪽이 "끝났다"고 알리면 그 알람·창만 꺼진다 | 원격에서 답했거나 에이전트가 스스로 해결해도 빈 자리에서 계속 울렸다 |
+| `Stop`은 알림만 | 같은 세션의 권한 요청 알람을 먼저 해제 | 폰에서 승인하고 작업이 끝나도 권한 알람이 계속 울렸다 |
+| `UserPromptSubmit`은 쓰지 않음 | `install-hooks`에 추가(async). 지난 턴의 "완료"와 idle 알림을 해제, 알림은 없음 | |
 
 ## 버전 1.2에서 바뀐 것
 

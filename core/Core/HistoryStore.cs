@@ -29,6 +29,10 @@ internal sealed class HistoryEntry
     // the way a title an LLM writes each time does.
     public string? DisplayThreadTitle => AppThreadTitle ?? Envelope.ThreadTitle;
 
+    // When the sender said the moment was over (/v1/resolve) while its alarm
+    // or pop-up was still live. Set at most once, under the store's lock.
+    public DateTimeOffset? ResolvedAt { get; set; }
+
     public HistoryEntryDto ToDto() => new()
     {
         Id = Envelope.Id,
@@ -44,6 +48,7 @@ internal sealed class HistoryEntry
         Count = Count,
         Accepted = Accepted,
         SuppressedReason = SuppressedReason,
+        ResolvedAt = ResolvedAt?.ToString("o"),
         Deliveries = Deliveries.ToList()
     };
 }
@@ -86,10 +91,37 @@ internal sealed class HistoryStore
             foreach (var entry in _entries)
             {
                 if (entry.LastAt < cutoff) break;
+                // A resolved moment is over: the same tag again is a new one
+                // and must sound, not collapse into the one that ended.
+                if (entry.ResolvedAt is not null) continue;
                 if (string.Equals(entry.Envelope.DedupeKey, dedupeKey, StringComparison.Ordinal)) return entry;
             }
         }
         return null;
+    }
+
+    // Entries a resolve request names, newest first. Matching is in
+    // AlarmResolver; this only takes the snapshot under the lock.
+    public IReadOnlyList<HistoryEntry> Where(Func<HistoryEntry, bool> match)
+    {
+        lock (_gate) return _entries.Where(match).ToList();
+    }
+
+    // Marks entries resolved, once each. Returns how many were not already.
+    public int MarkResolved(IEnumerable<HistoryEntry> entries, DateTimeOffset at)
+    {
+        var marked = 0;
+        lock (_gate)
+        {
+            foreach (var entry in entries)
+            {
+                if (entry.ResolvedAt is not null || !_entries.Contains(entry)) continue;
+                entry.ResolvedAt = at;
+                marked++;
+            }
+        }
+        if (marked > 0) Changed?.Invoke();
+        return marked;
     }
 
     public void NoteCollapse(HistoryEntry entry)

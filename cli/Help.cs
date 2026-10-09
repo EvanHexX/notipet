@@ -54,6 +54,23 @@ internal static class Help
         new("history", "notipet history [--limit N] [--short] [--json] | notipet history clear",
             "Show recent notifications, including ones that were held back and why.", ""),
         new("ack", "notipet ack [--id ID | --tag TAG | --all]", "Stop sounding alarms (no argument stops all).", ""),
+        new("resolve", "notipet resolve [--tag TAG] [--id ID] [--thread ID] [--agent A]",
+            "Say a moment you alerted about is over: stop its alarm, close its pop-up.",
+            """
+              (none)        inside Claude Code / Codex: every alarm this conversation raised
+              --tag TAG     only the notification sent with this tag (in this conversation)
+              --id ID       exactly one notification (the id `send --json` printed)
+              --thread ID   a conversation other than the current one (alias: --session)
+              --agent A     claude-code | codex | manual (default: the agent you are in)
+
+            Only what is named, never everything (that is `ack`). Whatever the user
+            already stopped or closed is skipped: "nothing to resolve" is not an
+            error, so call it without checking first. Exits 0 unless --strict.
+
+            Examples:
+              notipet resolve
+              notipet resolve --tag "api:needs-input"
+            """),
         new("mute", "notipet mute [30m | 2h | off]", "Mute for a while, until unmuted, or turn mute off.", ""),
         new("unmute", "notipet unmute", "Same as `notipet mute off`.", ""),
         new("desk", "notipet desk [on | off | toggle]",
@@ -121,7 +138,7 @@ internal static class Help
     {
         ("Notify", new[] { "send", "test" }),
         ("Inspect", new[] { "status", "ping", "version", "doctor", "history" }),
-        ("Control", new[] { "ack", "mute", "unmute", "desk", "open" }),
+        ("Control", new[] { "ack", "resolve", "mute", "unmute", "desk", "open" }),
         ("Daemon", new[] { "start", "stop", "restart" }),
         ("Set up", new[] { "install-hooks", "install-skill" }),
     };

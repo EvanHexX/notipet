@@ -56,6 +56,20 @@ Examples:
 {{NOTIPET}} send --title "api: migration failed" --body "Step 3 of 5 failed on a unique constraint; nothing was committed. Stopped and waiting." --level error --tag "api:blocked" --project api --thread-title "orders migration"
 ```
 
+## When it is over: resolve
+
+An `attention`, `error` or `critical` alert can keep ringing until someone stops it - and the user may have answered from somewhere else (their phone, another window), or you may have fixed the problem yourself. When the moment you alerted about **is over**, say so:
+
+```
+{{NOTIPET}} resolve
+{{NOTIPET}} resolve --tag "<the same tag you sent>"
+```
+
+- With no arguments it stops the alarms **this conversation** raised and closes their pop-ups. With `--tag` only that one. Nothing else is touched - other conversations' alarms keep ringing.
+- Do it **as soon as** the moment is over: first thing when the user replies to something you alerted about, or right after you resolved the blocker yourself.
+- It is safe to call blindly. If the user already stopped the alarm and closed the card, it does nothing and still exits 0 - do not check first, and do not retry.
+- Do not resolve a moment that is still open (you are still waiting for their answer).
+
 ## Rules
 
 - **Never put secrets, tokens, passwords, or large diffs in the body.** A notification can be read by anyone looking at the screen.

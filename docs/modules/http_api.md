@@ -10,6 +10,7 @@
 - [core/Http/ApiRoutes.cs](../../core/Http/ApiRoutes.cs) — 라우트 정의와 핸들러
 - [core/Http/HttpJson.cs](../../core/Http/HttpJson.cs) — JSON 읽기/쓰기, `HttpApiException`
 - [core/Http/AuthGuard.cs](../../core/Http/AuthGuard.cs) — [discovery_auth](discovery_auth.md) 참고
+- [core/Core/AlarmResolver.cs](../../core/Core/AlarmResolver.cs) — `/v1/resolve`와 훅의 "끝났다": 매칭, 알람 정지, 알림 창 닫기(심)
 - [app/SelfTest/HttpSelfTest.cs](../../app/SelfTest/HttpSelfTest.cs) — 실제 서버 + 소켓 엔드투엔드 검사
 
 계약 문서는 [../api.md](../api.md).
@@ -45,7 +46,15 @@ Task<T> HttpJson.ReadAsync<T>(ctx, maxBytes, JsonTypeInfo<T>)
                       NotifyRequest ──> EnvelopeFactory ──> Dispatcher ──> 채널
                                                                  │
                                                           NotifyResponse (항상 200)
+
+/v1/resolve, 훅의 PlanForHookEvent.Resolve
+    ──> AlarmResolver ──> HistoryStore.Where (수락된 것, 아직 해제 안 된 것, 선택자 전부 일치)
+                      ├─> AlarmRegistry.Stop(id: 소리 전달의 referenceId)
+                      ├─> ApiContext.ClosePopups(알림 id들)   ── UI 스레드, 2초 상한
+                      └─> HistoryStore.MarkResolved(실제로 멈췄거나 닫힌 것만)
 ```
+
+훅 라우트는 **해제 먼저, 알림 나중**이다. 그래야 `Stop`이 자기 "완료" 알림을 해제하는 일이 없다.
 
 ## Important Constraints
 
@@ -53,6 +62,8 @@ Task<T> HttpJson.ReadAsync<T>(ctx, maxBytes, JsonTypeInfo<T>)
 - **억제는 200이다.** 방해금지는 클라이언트 오류가 아니고, 비-2xx를 본 훅이 에이전트 동작을 바꿀 수 있다. **429는 쓰지 않는다.**
 - 상한 초과는 거부가 아니라 절단 + `warnings[]`. 예외는 본문 크기(413)뿐인데, 그건 읽기 전에 막아야 하는 것이라서.
 - **모르는 최상위 필드는 무시한다.** 신버전 CLI가 구버전 데몬을 깨뜨리면 안 된다.
+- **`/v1/resolve`는 지목한 것만 끈다.** 선택자가 없거나 `source`뿐이면 400이다 — `/v1/ack`처럼 "전부"로 해석하지 않는다. 보낸 쪽이 실수로 남의 알람까지 끄면, 그건 "알람이 울리지 않았다"와 같은 실패다.
+- **`/v1/resolve`는 이미 끝난 것에 200 + 0이다.** 사용자가 먼저 끈 것은 오류가 아니다. 실제로 살아 있던 것만 `resolvedAt`을 받는다.
 - `ContentLength64`를 믿되 그것만 믿지 않는다. 읽는 루프도 독립적으로 상한을 건다.
 - 응답에 `Cache-Control: no-store`와 `X-Content-Type-Options: nosniff`를 붙인다.
 
@@ -74,6 +85,8 @@ Task<T> HttpJson.ReadAsync<T>(ctx, maxBytes, JsonTypeInfo<T>)
 - **레이트 리밋에 429** — 훅이 비-2xx를 보고 오동작할 수 있어 `suppressed`로 표현한다.
 
 ## TODO
+
+- `/v1/resolve`가 Windows 기본 알림(풍선)도 거둘 수 있는지 — `NIM_MODIFY`로 빈 `szInfo`를 보내면 사라지지만, 그 풍선이 이 알림의 것인지 알 방법이 없다
 
 - `PATCH /v1/settings` (허용 목록 방식, `outboundNetworkApproved` 제외) — 2단계
 - bootstrap 서버 이중 생성을 한 번으로 정리

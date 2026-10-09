@@ -190,6 +190,16 @@ internal sealed class AlarmRegistry : IDisposable
         return true;
     }
 
+    // A started until-acknowledged alarm that never touches an audio device,
+    // for other self-tests that need something live to stop.
+    internal static AlarmSession StartSilentForTest(string id, string? tag, NotificationLevel level)
+    {
+        var sound = new ResolvedSound(null, "fake", 1, RepeatMode.UntilAck, 1, 1000, 60);
+        var session = new AlarmSession(id, tag, level, sound, new ISoundEngine[] { new FakeEngine() });
+        session.Start();
+        return session;
+    }
+
     // Reports success without touching an audio device. Its handles complete
     // only when told to, so a test can assert that the repeat loop really does
     // wait for a sound to finish instead of restarting on a timer.

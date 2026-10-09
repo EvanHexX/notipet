@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>notipet</AssemblyName>
     <RootNamespace>Notipet.Cli</RootNamespace>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <!-- Hooks sit on the agent's critical path; startup latency dominates. -->
     <PublishAot>true</PublishAot>
@@ -22,5 +22,6 @@
     <!-- One source of truth for the agent skill: `notipet install-skill` writes
          exactly the file in integrations/, with the CLI path filled in. -->
     <EmbeddedResource Include="../integrations/claude/skills/notipet/SKILL.md" LogicalName="notipet.SKILL.md" />
+    <EmbeddedResource Include="../integrations/codex/skills/notipet/SKILL.md" LogicalName="notipet.SKILL.codex.md" />
   </ItemGroup>
 </Project>
