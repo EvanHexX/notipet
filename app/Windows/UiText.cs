@@ -137,6 +137,9 @@ internal static class UiText
     public static string OtherProject() => Loc.T("Other", "기타");
 
     // Where a card's thread link goes.
+    // A card whose sender gave a link (send --open).
+    public static string OpenLink() => Loc.T("Open link", "링크 열기");
+
     public static string OpenThreadIn(string? source) => source switch
     {
         PayloadMapper.SourceClaude => Loc.T("Open in Claude", "Claude에서 열기"),

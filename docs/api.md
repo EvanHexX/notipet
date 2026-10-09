@@ -52,7 +52,8 @@
              "repeatCount": 3, "intervalMs": 1500, "maxDurationSec": 120,
              "mute": false },
   "channels": ["windows_sound", "tray_balloon"],
-  "ttlSec": 300
+  "ttlSec": 300,
+  "open": "codexbridge://approve/42"
 }
 ```
 
@@ -63,6 +64,13 @@
 - 모르는 `level`은 `info`로 낮추고 경고를 남긴다.
 - `channels`는 범위를 **좁히기만** 한다. 사용자가 끈 채널을 요청으로 켤 수는 없다.
 - `sound.file`은 `settings.sound.allowedRoots` 안으로 해석될 때만 허용된다. 로컬 프로세스가 데몬으로 임의 파일을 열게 해선 안 되기 때문.
+- `open`은 카드(최근 알림 카드, notipet 알림 창)를 클릭하면 **스레드 대신 열 URI**다. 셸에 URI로만 넘기고 명령줄로는 절대 쓰지 않는다. 허용되는 것:
+  - 이 PC의 `http`/`https` (`127.0.0.1`, `localhost`, `[::1]`)
+  - `settings.links.allowedSchemes`에 등록된 스킴 (예: `codexbridge`). 이 목록은 settings.json에서만 바뀌고 API로는 못 바꾼다
+  - 등록해도 항상 거부: `file`, `ms-*`, `search-ms`, `shell`, `javascript`, `vbscript`, `data` 등. 경로(`C:\…`, `\\server\…`)는 `file:`로 해석돼 거부된다
+  - 2048자 이하, 제어 문자 없음
+  - 안 맞으면 **알림은 그대로 보내고 `open`만 버린다** — `warnings`에 `open ignored: <이유>`. 4xx가 아니다
+  - 클릭할 때 지금 설정으로 한 번 더 확인한다. 목록에서 뺀 스킴은 이미 있는 카드에서도 열리지 않는다
 
 ### `source` — 누가, 어디서
 
@@ -247,6 +255,8 @@ CLI가 stale `runtime.json`을 판별하기에는 충분하고, 사용자가 무
 ```
 
 `count`는 중복 병합된 횟수다. 같은 태그로 5번 오면 소리는 1번, `count`는 5.
+
+`open`은 보낸 쪽이 준 링크(받아들여진 경우)다.
 
 `resolvedAt`은 보낸 쪽이 `/v1/resolve`로 끝났다고 알렸을 때(그 시점에 알람이나 창이 아직 살아 있었을 때만) 채워진다.
 

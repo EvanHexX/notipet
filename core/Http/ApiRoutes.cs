@@ -129,7 +129,7 @@ internal static class ApiRoutes
         var request = await HttpJson.ReadAsync(
             ctx, api.Settings().Server.MaxBodyBytes, NotipetJson.Compact.NotifyRequest).ConfigureAwait(false);
 
-        if (!EnvelopeFactory.TryCreate(request, null, out var envelope, out var error))
+        if (!EnvelopeFactory.TryCreate(request, null, out var envelope, out var error, api.Settings().Links.AllowedSchemes))
         {
             throw HttpApiException.Validation(error!, "title");
         }

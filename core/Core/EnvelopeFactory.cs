@@ -18,11 +18,14 @@ internal static class EnvelopeFactory
     public const int MaxTag = 128;
     public const int MaxChannels = 8;
 
+    // allowedSchemes: settings' links.allowedSchemes, for `open`. Without it
+    // only http(s) on this PC is accepted.
     public static bool TryCreate(
         NotifyRequest request,
         string? sourceHintId,
         out NotificationEnvelope? envelope,
-        out string? validationError)
+        out string? validationError,
+        IReadOnlyCollection<string>? allowedSchemes = null)
     {
         envelope = null;
         validationError = null;
@@ -113,6 +116,7 @@ internal static class EnvelopeFactory
             ThreadTitle = threadTitle,
             HostSession = hostSession,
             Client = AgentIdentity.Clean(source?.Client, AgentIdentity.MaxClient),
+            OpenUri = OpenLinks.Accept(request.Open, allowedSchemes, warnings),
             Sound = request.Sound,
             RequestedChannels = channels,
             TtlSec = request.TtlSec

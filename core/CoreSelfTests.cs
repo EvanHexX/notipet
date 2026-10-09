@@ -24,6 +24,7 @@ public static class CoreSelfTests
         ("AgentIdentity", AgentIdentity.RunSelfTest),
         ("EnvelopeFactory", EnvelopeFactory.RunSelfTest),
         ("ThreadLinks", ThreadLinks.RunSelfTest),
+        ("OpenLinks", OpenLinks.RunSelfTest),
         ("ThreadTitleLookup", ThreadTitleLookup.RunSelfTest),
         ("HistoryGrouping", HistoryGrouping.RunSelfTest),
         ("AppSettings", AppSettings.RunSelfTest),

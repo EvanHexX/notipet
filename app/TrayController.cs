@@ -26,7 +26,7 @@ namespace Notipet;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class TrayController : IDisposable, INotipetHost
 {
-    public const string AppVersion = "1.3.1";
+    public const string AppVersion = "1.4.0";
 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly AppSettings _settings;
@@ -71,7 +71,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _channels.Add(new WindowsSoundChannel(_sound, () => _settings, () => _settings.Presence.AtDesk));
         // notipet's own pop-ups (PopupSettings); the visual channel uses them
         // instead of the shell balloon when either pop-up option is on.
-        _popups = new PopupHost(() => _settings, ThreadLinkFor, StopAlarms, OpenThreadFor, ShowHistory);
+        _popups = new PopupHost(() => _settings, CardLinkFor, StopAlarms, OpenCardLinkFor, ShowHistory);
         _channels.Add(new TrayBalloonChannel(() => _trayIcon, () => _settings, OnUiThread, () => _popups));
 
         _dispatcher = new Dispatcher(
@@ -266,11 +266,27 @@ internal sealed class TrayController : IDisposable, INotipetHost
     // foreground process for a moment - the only time Windows lets it hand the
     // foreground on. Without the grant the agent app often just flashes in the
     // taskbar instead of coming up.
-    public void OpenThread(HistoryEntry entry) => OpenThreadFor(entry.Envelope);
+    public void OpenThread(HistoryEntry entry) => Launch(ThreadLinkFor(entry.Envelope), "OpenThread");
 
-    private void OpenThreadFor(NotificationEnvelope envelope)
+    public Uri? SenderLink(HistoryEntry entry) => SenderLinkFor(entry.Envelope);
+
+    public void OpenSenderLink(HistoryEntry entry) => Launch(SenderLinkFor(entry.Envelope), "OpenSenderLink");
+
+    // Checked again now, against today's settings: a scheme taken off
+    // links.allowedSchemes stops working on cards that already exist.
+    private Uri? SenderLinkFor(NotificationEnvelope envelope) =>
+        OpenLinks.IsAllowed(envelope.OpenUri, _settings.Links.AllowedSchemes)
+        && Uri.TryCreate(envelope.OpenUri, UriKind.Absolute, out var link) ? link : null;
+
+    // What a click on a card opens: the sender's link, else the thread.
+    private Uri? CardLinkFor(NotificationEnvelope envelope) => SenderLinkFor(envelope) ?? ThreadLinkFor(envelope);
+
+    private void OpenCardLinkFor(NotificationEnvelope envelope) => Launch(CardLinkFor(envelope), "OpenCardLink");
+
+    // A URI to the shell, as the URI it is - never a command line; OpenLinks
+    // and ThreadLinks are the only sources.
+    private static void Launch(Uri? link, string what)
     {
-        var link = ThreadLinkFor(envelope);
         if (link is null) return;
         try
         {
@@ -279,7 +295,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         }
         catch (Exception ex)
         {
-            CrashLog.Write("OpenThread", ex);
+            CrashLog.Write(what, ex);
         }
     }
 

@@ -59,6 +59,8 @@ XAML 파일 없이 코드로 구성한다. 테마를 따라야 하는 브러시�
 - 레벨 이름은 배지의 툴팁·접근성 이름, 경로는 ⋯ 메뉴 "폴더 열기"의 툴팁에 있다.
 - ⋯ 메뉴와 카드의 `ContextFlyout`(우클릭)은 같은 항목을 `BuildMenu`로 **두 번 만든다** — 플라이아웃 하나를 두 소유자에 붙일 수 없다.
 
+카드 클릭이 여는 것은 **보낸 쪽 링크(`send --open`) → 스레드** 순이다(`INotipetHost.SenderLink` / `ThreadLink`). 보낸 쪽 링크가 있으면 카드 툴팁과 ⋯ 메뉴 "링크 열기"(툴팁에 URI)가 그것을 보여 주고, 알림 창의 열기 아이콘도 "링크 열기"가 되며 카드 클릭이 알람 정지 + 링크 열기 + 닫기가 된다. 링크는 클릭 순간 `OpenLinks.IsAllowed`로 지금 설정에 다시 비춰 본다. 실행은 `TrayController.Launch` 하나 — `AllowSetForegroundWindow` 후 URI를 ShellExecute.
+
 스레드 줄은 링크가 있으면 `HyperlinkButton`, 없으면 회색 글씨다. 링크가 있는 카드는 **카드 아무 곳이나 클릭해도** 스레드가 열린다(`LinkGrid` — `ProtectedCursor`로 손 모양 커서, 투명 배경으로 빈 곳도 클릭됨). 예외 두 가지: 카드 안의 버튼(`ButtonBase` 조상)은 각자 동작하고, **본문**은 클릭이 텍스트 선택의 시작이라 열지 않는다.
 
 창을 열 때 포커스는 목록(`ScrollViewer`, `IsTabStop`)에 준다 — 그냥 두면 첫 컨트롤(필터 콤보, 설정 창은 첫 메뉴 항목)이 포커스 사각형을 단 채로 열린다. 첫 표시 때는 XAML이 초기 포커스를 나중에 정하므로 `DispatcherQueue`에 낮은 우선순위로 넣는다. `FocusState.Pointer`로 준다 — `Programmatic`이면 목록 둘레에 포커스 사각형이 그려진다. Tab을 누르면 그때부터 사각형이 보인다.

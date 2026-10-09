@@ -334,10 +334,14 @@ internal sealed class HistoryWindow
     {
         var envelope = entry.Envelope;
         var link = _host.ThreadLink(entry);
+        // What a click on the card opens: the sender's link (send --open)
+        // first, else the thread.
+        var senderLink = _host.SenderLink(entry);
+        var target = senderLink ?? link;
 
-        // Columns: level badge | text | actions. A card whose thread can be
-        // opened is itself clickable, with a hand cursor.
-        var grid = link is null ? new Grid { ColumnSpacing = 12 } : new LinkGrid { ColumnSpacing = 12 };
+        // Columns: level badge | text | actions. A card that can open
+        // something is itself clickable, with a hand cursor.
+        var grid = target is null ? new Grid { ColumnSpacing = 12 } : new LinkGrid { ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -426,20 +430,23 @@ internal sealed class HistoryWindow
         // "..." menu, which is also the card's right-click menu.
         var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
         var more = IconOnly(Glyphs.More, Loc.T("More", "더 보기"), () => { });
-        more.Flyout = BuildMenu(entry, link);
+        more.Flyout = BuildMenu(entry, link, senderLink);
         actions.Children.Add(more);
         actions.Children.Add(IconOnly(Glyphs.Cancel, Loc.T("Remove", "삭제"), () => Remove(entry)));
         Grid.SetColumn(actions, 2);
         grid.Children.Add(actions);
 
-        grid.ContextFlyout = BuildMenu(entry, link);
+        grid.ContextFlyout = BuildMenu(entry, link, senderLink);
         // Transparent, not null: the gaps between controls must take clicks
         // and right-clicks too.
         grid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
-        if (link is not null)
+        if (target is not null)
         {
-            // Click anywhere on the card to open the thread - except on its
+            // Say where a click goes when it is not the agent's own thread.
+            if (senderLink is not null) ToolTipService.SetToolTip(grid, UiText.OpenLink() + ": " + senderLink.OriginalString);
+
+            // Click anywhere on the card to open it - except on its
             // buttons, which do their own thing, and on the body, where a
             // click (or the first click of a double-click) is how text gets
             // selected.
@@ -450,7 +457,8 @@ internal sealed class HistoryWindow
                 {
                     if (node is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase || node == body) return;
                 }
-                _host.OpenThread(entry);
+                if (senderLink is not null) _host.OpenSenderLink(entry);
+                else _host.OpenThread(entry);
             };
         }
 
@@ -463,10 +471,16 @@ internal sealed class HistoryWindow
 
     // The card's menu, under "..." and on right-click. Built once per owner:
     // a flyout cannot be attached to two.
-    private MenuFlyout BuildMenu(HistoryEntry entry, Uri? link)
+    private MenuFlyout BuildMenu(HistoryEntry entry, Uri? link, Uri? senderLink)
     {
         var envelope = entry.Envelope;
         var menu = new MenuFlyout();
+        if (senderLink is not null)
+        {
+            var open = MenuItem(Glyphs.OpenInApp, UiText.OpenLink(), () => _host.OpenSenderLink(entry));
+            ToolTipService.SetToolTip(open, senderLink.OriginalString);
+            menu.Items.Add(open);
+        }
         if (link is not null)
         {
             menu.Items.Add(MenuItem(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () => _host.OpenThread(entry)));
