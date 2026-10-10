@@ -1,0 +1,16 @@
+{
+  "name": "notipet",
+  "description": "Notipet: a Windows tray app that rings when an AI coding agent needs you.",
+  "owner": {
+    "name": "EvanHexX",
+    "url": "https://github.com/EvanHexX"
+  },
+  "plugins": [
+    {
+      "name": "notipet",
+      "source": "./integrations/claude/plugin",
+      "description": "Hooks and a skill that ring notipet when Claude needs you or finishes.",
+      "category": "productivity"
+    }
+  ]
+}

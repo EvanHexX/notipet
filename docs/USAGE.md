@@ -77,9 +77,11 @@ CLI가 그 파일을 읽어서 알아서 찾아간다. **그래서 훅 설정에
 두 가지 방법이 있고, 같이 쓰는 게 가장 좋다.
 
 - **훅** (이 절) — 에이전트 **프로그램**이 턴 종료·권한 대기 같은 이벤트마다 자동으로 부른다. 놓치는 일이 없다.
-- **스킬** — 에이전트(**LLM**)가 "이건 사용자가 알아야 한다"고 판단할 때 구체적인 내용으로 보낸다. `notipet install-skill` 한 줄. 설명은 **[SKILL.md](SKILL.md)**.
+- **스킬** — 에이전트(**LLM**)가 "이건 사용자가 알아야 한다"고 판단할 때 구체적인 내용으로 보낸다. 설명은 **[SKILL.md](SKILL.md)**.
 
-훅은 스니펫을 출력해서 붙여넣는 게 가장 빠르다:
+**Claude Code는 플러그인 하나로 둘 다** 넣는다(경로 A). Codex는 스킬 플러그인 + `install-hooks --codex --write`(경로 C).
+
+훅만 직접 넣는다면 스니펫을 출력해서 붙여넣거나 `--write`를 쓴다:
 
 ```powershell
 .\bin\notipet.exe install-hooks
@@ -87,9 +89,24 @@ CLI가 그 파일을 읽어서 알아서 찾아간다. **그래서 훅 설정에
 
 아래는 그 내용을 풀어 쓴 것이다. 전체 예시 파일은 [../integrations/](../integrations/)에 있다.
 
-### 경로 A — Claude Code, CLI 경유 (권장)
+### 경로 A — Claude Code 플러그인 (권장)
 
-`%USERPROFILE%\.claude\settings.json`:
+notipet을 설치 파일로 먼저 설치한다(`notipet`이 PATH에 들어간다). 그다음:
+
+```powershell
+claude plugin marketplace add EvanHexX/notipet
+claude plugin install notipet@notipet
+```
+
+Claude Code 안에서는 `/plugin marketplace add EvanHexX/notipet` → `/plugin install notipet@notipet`. 훅 4개(아래와 같은 내용)와 스킬이 함께 들어가고, **새 세션부터** 적용된다. 업데이트는 `claude plugin marketplace update notipet`.
+
+- 아래 settings.json 블록이나 `~/.claude/skills/notipet`이 이미 있으면 **뺀다**: `notipet install-hooks --claude --remove`, 그리고 그 스킬 폴더 삭제. Claude Code는 플러그인 훅과 settings.json 훅을 둘 다 실행하므로 두 번 울린다. `notipet doctor`가 둘 다 있으면 경고한다.
+- 플러그인 훅은 `notipet.exe`를 PATH에서 찾는다. 설치 직후 이미 떠 있던 Claude 앱이 새 PATH를 모르면 앱을 다시 시작한다.
+- 자세한 내용: [modules/claude_plugin.md](modules/claude_plugin.md).
+
+### 경로 A′ — Claude Code, settings.json에 직접
+
+플러그인 없이 쓰려면 `notipet install-hooks --claude --write`가 아래 블록을 `%USERPROFILE%\.claude\settings.json`에 넣는다(백업, notipet 항목만, 반복해도 같음. `--remove`로 뺀다). 손으로 넣는다면 `%USERPROFILE%\.claude\settings.json`:
 
 ```json
 {
@@ -127,6 +144,7 @@ CLI가 그 파일을 읽어서 알아서 찾아간다. **그래서 훅 설정에
 알아둘 것:
 
 - JSON이라 윈도우 경로에 `\\`를 쓴다.
+- `args`가 있으면 Claude Code는 셸 없이 그 exe를 바로 실행한다(exec form). Git Bash가 있든 없든 같다. (Codex에는 `args` 필드가 없다 — 경로 C.)
 - **`async: true`가 중요하다.** 타임아웃이 적용되지 않고 훅이 에이전트의 턴을 붙잡지 않는다.
 - `Notification` / `Stop` / `SubagentStop`은 설계상 에이전트를 블로킹할 수 없다. notipet이 Claude Code의 동작을 바꿀 일은 없다. `UserPromptSubmit`은 막을 수 있는 이벤트지만 notipet은 아무것도 출력하지 않고 0으로 끝나며, `async`라 프롬프트가 기다리지도 않는다.
 - `UserPromptSubmit`은 알림을 보내지 않는다. 지난 턴의 "완료"와 idle 알림을 끄는 데만 쓴다([알람이 저절로 꺼질 때](#알람이-저절로-꺼질-때--resolve)). 빼도 나머지는 그대로 동작한다.

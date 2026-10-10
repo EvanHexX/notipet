@@ -83,19 +83,16 @@ notipet install-hooks --codex --write             # the hooks, in ~/.codex/confi
 
 Or just ask Codex to set notipet up: the skill runs that last command once you say yes. New threads pick everything up; if Codex asks you to review the new hooks (`/hooks`), trust them. Details: [docs/modules/codex_plugin.md](docs/modules/codex_plugin.md).
 
-**Claude Code hooks** (never miss a prompt or a finished turn):
+**Claude Code** - install notipet first, then one plugin brings the hooks and the skill:
 
 ```powershell
-.\bin\notipet.exe install-hooks --claude   # prints the block for ~/.claude/settings.json
+claude plugin marketplace add EvanHexX/notipet
+claude plugin install notipet@notipet
 ```
 
-**Claude Code skill** (the agent decides when and writes what it needs):
+(or `/plugin marketplace add EvanHexX/notipet` and `/plugin install notipet@notipet` inside Claude Code). New sessions pick it up. If you set notipet's hooks up in `~/.claude/settings.json` before, take them out with `notipet install-hooks --claude --remove` - with both, every hook rings twice. Without the plugin: `notipet install-hooks --claude --write` and `notipet install-skill`. Details: [docs/modules/claude_plugin.md](docs/modules/claude_plugin.md).
 
-```powershell
-.\bin\notipet.exe install-skill
-```
-
-Using both works best - see [docs/SKILL.md](docs/SKILL.md). For Codex, notipet uses the hooks system and **never touches your `notify` setting**.
+Hooks never miss a prompt or a finished turn; the skill lets the agent decide when and write what it needs. Using both works best - see [docs/SKILL.md](docs/SKILL.md). For Codex, notipet uses the hooks system and **never touches your `notify` setting**.
 
 An agent (or you) can also send one directly:
 
@@ -174,7 +171,7 @@ The detailed docs are in Korean.
 - [x] Installer with updates
 - [x] Codex plugin (skill) and `install-hooks --codex --write`
 - [x] Per-project and per-thread alerts on/off
-- [ ] Claude Code plugin packaging
+- [x] Claude Code plugin (hooks and skill)
 - [ ] Phone push when you are away (Bark / Pushover)
 - [ ] macOS (the platform-neutral `core/` is the start)
 

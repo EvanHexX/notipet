@@ -676,10 +676,17 @@ internal static class Program
             }
         }
 
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var claudeSettings = Path.Combine(home, ".claude", "settings.json");
-        var claudeHooked = FileMentions(claudeSettings, "notipet");
-        Check(claudeHooked, "claude hooks", claudeHooked ? claudeSettings : "not configured - `notipet install-hooks --claude`", warnOnly: true);
+        // Claude Code: the notipet plugin, or hooks in settings.json - not both,
+        // since Claude Code runs a plugin's hooks and the settings' side by side.
+        var claudeSettings = Path.Combine(ClaudeHooks.ClaudeHome(), "settings.json");
+        var claudeText = ReadOrNull(claudeSettings);
+        var claudePlugin = ClaudeHooks.PluginEnabled(claudeText);
+        var claudeHooked = ClaudeHooks.HasOurs(claudeText);
+        Check(claudePlugin != claudeHooked, "claude hooks",
+            claudePlugin && claudeHooked ? $"set twice (the {ClaudeHooks.PluginId} plugin and settings.json) - `notipet install-hooks --claude --remove`"
+            : claudePlugin ? $"plugin {ClaudeHooks.PluginId}"
+            : claudeHooked ? claudeSettings
+            : "not configured - install the notipet Claude Code plugin, or `notipet install-hooks --claude --write`", warnOnly: true);
 
         // Codex: config.toml is where `install-hooks --codex --write` puts them.
         // An earlier 1.5.1 build used hooks.json, which Codex did not always
@@ -694,8 +701,14 @@ internal static class Program
             : inToml ? codexConfig
             : "not configured - `notipet install-hooks --codex --write`", warnOnly: true);
 
+        // The plugin brings the skill too; a separate copy shows up twice.
         var skill = SkillInstaller.ClaudeSkillPath();
-        Check(File.Exists(skill), "claude skill", File.Exists(skill) ? skill : "not installed - `notipet install-skill`", warnOnly: true);
+        var skillFile = File.Exists(skill);
+        Check(claudePlugin != skillFile, "claude skill",
+            claudePlugin && skillFile ? $"twice (the plugin and {skill}) - delete {Path.GetDirectoryName(skill)}"
+            : claudePlugin ? $"plugin {ClaudeHooks.PluginId}"
+            : skillFile ? skill
+            : "not installed - the notipet Claude Code plugin, or `notipet install-skill`", warnOnly: true);
 
         Check(true, "cli", exe);
         Console.WriteLine(problems == 0 ? "\nno problems found" : $"\n{problems} problem(s) found");
@@ -1088,22 +1101,33 @@ internal static class Program
         var wantsClaude = HasFlag(args, "--claude") || !HasFlag(args, "--codex");
         var wantsCodex = HasFlag(args, "--codex") || !HasFlag(args, "--claude");
 
+        // The Claude plugin's hooks/hooks.json (check-claude-plugin.ps1 -Fix).
+        if (HasFlag(args, "--plugin"))
+        {
+            Console.Write(ClaudeHooks.PluginFile());
+            return 0;
+        }
+
         var write = HasFlag(args, "--write");
         var remove = HasFlag(args, "--remove");
         if (write || remove)
         {
-            if (!HasFlag(args, "--codex") || HasFlag(args, "--claude"))
+            if (HasFlag(args, "--codex") == HasFlag(args, "--claude"))
             {
-                Console.Error.WriteLine("notipet: --write and --remove edit Codex's hooks only for now: `notipet install-hooks --codex --write`.");
+                Console.Error.WriteLine("notipet: say which: `notipet install-hooks --claude --write` or `--codex --write`.");
                 return 1;
             }
-            return CodexHooks.Install(CodexHooks.CodexHome(), exe, remove, CodexHooks.PrefersKorean(), Console.Out);
+            return HasFlag(args, "--claude")
+                ? ClaudeHooks.Install(ClaudeHooks.ClaudeHome(), exe, remove, Console.Out)
+                : CodexHooks.Install(CodexHooks.CodexHome(), exe, remove, CodexHooks.PrefersKorean(), Console.Out);
         }
 
         if (wantsClaude)
         {
-            Console.WriteLine("# Claude Code - add to %USERPROFILE%\\.claude\\settings.json");
-            Console.WriteLine(HookSnippets.ClaudeCommandHook(exe));
+            Console.WriteLine("# Claude Code - the notipet plugin brings these hooks and the skill; use it instead of");
+            Console.WriteLine("# this block (both would ring twice). Without it: %USERPROFILE%\\.claude\\settings.json,");
+            Console.WriteLine("# or `notipet install-hooks --claude --write` to add it for you.");
+            Console.Write(ClaudeHooks.Serialize(new System.Text.Json.Nodes.JsonObject { ["hooks"] = ClaudeHooks.EventMap(exe) }));
             Console.WriteLine();
             Console.WriteLine("# Or, with the daemon's port pinned in settings.json (server.port),");
             Console.WriteLine("# the leaner http hook that skips this CLI entirely:");
@@ -1191,6 +1215,7 @@ internal static class Program
             ("Describe", DescribeSelfTest),
             ("SkillInstaller", SkillInstaller.RunSelfTest),
             ("CodexHooks", CodexHooks.RunSelfTest),
+            ("ClaudeHooks", ClaudeHooks.RunSelfTest),
             ("Alerts", AlertsSelfTest),
             ("Help", Help.RunSelfTest),
         };
