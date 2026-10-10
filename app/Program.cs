@@ -15,10 +15,27 @@ internal static class Program
     private const string ShowSignalEventName = @"Local\Notipet.Show";
     private const string SettingsSignalEventName = @"Local\Notipet.ShowSettings";
 
+    // Set when this instance was started by UiWatchdog to replace a hung one.
+    public static bool RecoveredFromHang { get; private set; }
+
     [STAThread]
     private static int Main(string[] args)
     {
         var verb = args.Length > 0 ? args[0].ToLowerInvariant() : "";
+
+        // Started by UiWatchdog in place of a hung instance: let that one go
+        // first, or the single-instance check below would hand straight back
+        // to it.
+        if (verb == "--restart-after")
+        {
+            if (args.Length > 1 && int.TryParse(args[1], out var hungPid))
+            {
+                try { using var hung = System.Diagnostics.Process.GetProcessById(hungPid); hung.WaitForExit(15000); }
+                catch { /* already gone */ }
+            }
+            RecoveredFromHang = true;
+            verb = "";
+        }
 
         // The core resolves sound names through whatever catalog the platform
         // installs; on Windows that is the user's Sound control panel scheme.

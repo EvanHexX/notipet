@@ -24,7 +24,8 @@
 SoundService(Func<AppSettings> settings)
 SoundPlayOutcome Play(ResolvedSound sound, NotificationLevel level, string? tag)
 SoundEngineInfo Describe()          // /v1/health 와 트레이 아이콘 상태용
-void ProbeEngines()                 // WM_DEVICECHANGE 에서 호출
+void RequestProbe()                 // WM_DEVICECHANGE 에서 호출 - 스레드 풀, 1초 묶음, 한 번에 하나
+void ProbeEngines()                 // 실제 확인 (UI 스레드에서 부르지 않는다)
 AlarmRegistry Alarms { get; }       // Stop(id|tag|all), Count, HasActive, Changed
 
 ResolvedSound SoundResolver.Resolve(SoundSpec?, NotificationLevel, AppSettings, List<string> warnings)
@@ -56,6 +57,8 @@ settings.sound      ─┼─> SoundResolver ─> ResolvedSound ─> AlarmSessio
 `ResolvedSound`는 불변 레코드다. 한번 결정되면 재생 중에 설정이 바뀌어도 그 알람은 원래대로 끝난다.
 
 ## Important Constraints
+
+- **MediaPlayer는 UI 스레드(STA)에서 만들지도, 버리지도 않는다.** STA에서 만든 MediaPlayer는 생성·`Dispose` 중에 메시지 루프를 돌리며 기다리고, 그 틈에 들어온 작업(장치 변경 메시지 등)이 또 MediaPlayer를 만들면 서로를 기다리며 UI 스레드가 영원히 멈춘다 — 실제로 그렇게 멈췄다([regression.md](../regression.md)). 그래서: 장치 변경은 `RequestProbe`(스레드 풀), 미리듣기와 테스트 알림은 `Task.Run`, 그리고 엔진 자체가 STA에서 불리면 스레드 풀로 넘긴다(`MediaPlayerSoundEngine.OnSta` — 마지막 방어선).
 
 - **`MediaPlayer.CommandManager.IsEnabled = false`는 선택이 아니다.** unpackaged 프로세스에서 기본 SMTC 통합이 시스템 미디어 전송 컨트롤 등록을 시도하다 던지거나, 던지지 않으면 사용자의 미디어 키를 가로챈다.
 - `AudioCategory = MediaPlayerAudioCategory.Alerts` — 윈도우가 알림 스트림으로 취급해 음악/통화에 대해 올바르게 더킹한다.

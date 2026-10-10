@@ -10,7 +10,12 @@ internal static class CrashLog
 {
     private static readonly object Gate = new();
 
-    public static string LogPath => Paths.CrashLogPath;
+    // Where Write goes instead, when set. The self-tests point it at a
+    // scratch file: their stub channel throws on purpose, and those entries
+    // filled the user's crash.log and buried the real ones.
+    public static string? OverridePath { get; set; }
+
+    public static string LogPath => OverridePath ?? Paths.CrashLogPath;
 
     public static void Write(string source, Exception? exception)
     {
@@ -18,7 +23,7 @@ internal static class CrashLog
         {
             lock (Gate)
             {
-                Directory.CreateDirectory(Paths.DataDir);
+                Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
                 File.AppendAllText(LogPath,
                     $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}] {source}{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}");
             }

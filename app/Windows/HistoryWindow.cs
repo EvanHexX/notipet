@@ -89,6 +89,14 @@ internal sealed class HistoryWindow
 
     public void ApplyTheme() => Fluent.ApplyTheme(_window);
 
+    // A new notification while the window is hidden: nothing to redraw now -
+    // Activate() rebuilds it when it is shown. Rebuilding every card for every
+    // notification, seen or not, was most of the UI thread's time.
+    public void RefreshIfVisible()
+    {
+        if (_window.AppWindow.IsVisible) Refresh();
+    }
+
     // Called when the language changes: everything with text is rebuilt.
     public void Relocalize()
     {

@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.Versioning;
+using System.Threading;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 
@@ -19,9 +20,17 @@ internal sealed class MediaPlayerSoundEngine : ISoundEngine
     public bool IsAvailable => _available && !_disposed;
     public string? LastError => _lastError;
 
+    // MediaPlayer lives on MTA threads only. Made on the UI thread (STA), its
+    // Dispose and construction wait with the message loop running, and work
+    // that re-enters there can wait on them in turn: the UI thread hung that
+    // way (docs/regression.md). Callers on the UI thread hand their sound work
+    // to the thread pool; this is the last guard if one does not.
+    private static bool OnSta => Thread.CurrentThread.GetApartmentState() == ApartmentState.STA;
+
     public ISoundHandle? Play(ResolvedSound sound)
     {
         if (_disposed) return null;
+        if (OnSta) return System.Threading.Tasks.Task.Run(() => Play(sound)).GetAwaiter().GetResult();
         // MediaPlayer needs a real file; an alias-only sound belongs to the
         // fallback engine.
         if (sound.Path is null) return null;
@@ -69,6 +78,11 @@ internal sealed class MediaPlayerSoundEngine : ISoundEngine
     public void Probe()
     {
         if (_disposed) return;
+        if (OnSta)
+        {
+            _ = System.Threading.Tasks.Task.Run(Probe);
+            return;
+        }
         try
         {
             // Constructing and disposing a player is the cheapest honest test
