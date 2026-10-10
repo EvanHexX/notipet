@@ -68,6 +68,8 @@ internal static class ApiRoutes
         routes.Map("POST", "/v1/ack", ctx => AckAsync(api, ctx));
         routes.Map("POST", "/v1/resolve", ctx => ResolveAsync(api, ctx));
         routes.Map("POST", "/v1/mute", ctx => MuteAsync(api, ctx));
+        routes.Map("GET", "/v1/alerts", ctx => AlertsAsync(api, ctx, read: true));
+        routes.Map("POST", "/v1/alerts", ctx => AlertsAsync(api, ctx, read: false));
         routes.Map("POST", "/v1/test", ctx => TestAsync(api, ctx));
         routes.Map("GET", "/v1/channels", ctx => ChannelsAsync(api, ctx));
         routes.Map("GET", "/v1/history", ctx => HistoryAsync(api, ctx));
@@ -241,6 +243,116 @@ internal static class ApiRoutes
             Until = settings.Mute.Until?.ToString("o")
         }, NotipetJson.Compact.MuteResponse).ConfigureAwait(false);
     }
+
+    // Which projects and threads ring (Rules/AlertScope). GET reads, with
+    // ?agent=&thread=&project= for "does this one ring"; POST changes the mode
+    // and/or one rule. Settable over the API like mute: it only ever makes
+    // notipet quieter or louder for the user's own agents.
+    private static async Task AlertsAsync(ApiContext api, HttpListenerContext ctx, bool read)
+    {
+        api.Guard.Require(ctx.Request);
+        AlertsRequest request;
+        if (read)
+        {
+            request = new AlertsRequest { Agent = QueryValue(ctx, "agent"), Thread = QueryValue(ctx, "thread"), Project = QueryValue(ctx, "project") };
+        }
+        else
+        {
+            AuthGuard.RequireJsonContentType(ctx.Request);
+            request = await HttpJson.ReadAsync(ctx, api.Settings().Server.MaxBodyBytes, NotipetJson.Compact.AlertsRequest).ConfigureAwait(false);
+        }
+
+        // A thread's name and project for the settings list, from what it sent.
+        if (request.Thread is { Length: > 0 } named && (request.Label is null || request.Project is null))
+        {
+            var seen = api.History.Recent(500).FirstOrDefault(h => h.Envelope.SourceSession == named.Trim());
+            if (seen is not null)
+            {
+                request.Label ??= seen.AppThreadTitle ?? seen.Envelope.ThreadTitle;
+                request.Project ??= seen.Envelope.Project;
+            }
+        }
+
+        var settings = api.Settings();
+        var response = ApplyAlerts(settings.Alerts, request, DateTimeOffset.Now);
+        if (response.Changed)
+        {
+            settings.Save();
+            api.SettingsChanged();
+        }
+        await HttpJson.WriteAsync(ctx, 200, response, NotipetJson.Compact.AlertsResponse).ConfigureAwait(false);
+    }
+
+    // The route's logic without HTTP, for the self-test. Throws a 400 for a
+    // request that names something it cannot act on.
+    public static AlertsResponse ApplyAlerts(AlertScopeSettings scope, AlertsRequest request, DateTimeOffset now)
+    {
+        var changed = false;
+        if (request.Mode is { Length: > 0 } mode)
+        {
+            if (AlertScope.NormalizeMode(mode) is null) throw HttpApiException.Validation("mode is all or selected", "mode");
+            changed |= AlertScope.SetMode(scope, mode);
+        }
+
+        var agent = string.IsNullOrWhiteSpace(request.Agent) ? null : AgentIdentity.NormalizeAgent(request.Agent);
+        var thread = string.IsNullOrWhiteSpace(request.Thread) ? null : request.Thread.Trim();
+        var project = string.IsNullOrWhiteSpace(request.Project) ? null : request.Project.Trim();
+        if (thread is not null && !AgentIdentity.IsThreadId(thread)) throw HttpApiException.Validation("not a thread id", "thread");
+        if (project is { Length: > 200 }) throw HttpApiException.Validation("project name too long", "project");
+
+        if (request.State is { Length: > 0 } stateText)
+        {
+            bool? on = stateText.Trim().ToLowerInvariant() switch
+            {
+                "on" => true,
+                "off" => false,
+                "reset" or "default" => null,
+                _ => throw HttpApiException.Validation("state is on, off or reset", "state")
+            };
+            var target = request.Target?.Trim().ToLowerInvariant() ?? (thread is not null ? "thread" : "project");
+            if (target == "thread")
+            {
+                if (thread is null || agent is null || agent == PayloadMapper.SourceManual)
+                    throw HttpApiException.Validation("a thread rule needs the agent and the thread id", "thread");
+                changed |= AlertScope.SetThread(scope, agent, thread, on, request.Label, project, now);
+            }
+            else if (target == "project")
+            {
+                if (project is null) throw HttpApiException.Validation("a project rule needs the project name", "project");
+                changed |= AlertScope.SetProject(scope, project, on, now);
+            }
+            else
+            {
+                throw HttpApiException.Validation("target is thread or project", "target");
+            }
+        }
+
+        var response = new AlertsResponse
+        {
+            Ok = true,
+            Mode = scope.Mode,
+            Changed = changed,
+            Projects = scope.Projects.Select(ToDto).ToList(),
+            Threads = scope.Threads.Select(ToDto).ToList()
+        };
+        if (thread is not null || project is not null)
+        {
+            var verdict = AlertScope.Decide(scope, agent == PayloadMapper.SourceManual ? null : agent, thread, project, NotificationLevel.Success);
+            response.Rings = verdict.Rings;
+            response.Because = verdict.Because;
+        }
+        return response;
+    }
+
+    private static AlertRuleDto ToDto(AlertScopeEntry e) => new()
+    {
+        Key = e.Key,
+        Agent = e.Agent,
+        On = e.On,
+        Label = e.Label,
+        Project = e.Project,
+        Since = e.Since?.ToString("o")
+    };
 
     private static async Task TestAsync(ApiContext api, HttpListenerContext ctx)
     {

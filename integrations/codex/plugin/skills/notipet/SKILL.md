@@ -87,6 +87,14 @@ Codex hooks ring by themselves when a turn ends (`Stop`) and when it waits for t
 - They work from the next new thread. Codex may ask the user to review and trust the new hooks (`/hooks`); tell them.
 - To take them out: `notipet install-hooks --codex --remove`.
 
+## Only some threads or projects ring
+
+The user decides which projects and threads ring: either everything except what they turned off, or only what they turned on. Your sends follow the same rules as the hooks. Run these outside the sandbox, like `send`.
+
+- They ask to be alerted in this conversation ("let me know when this is done"): run `notipet alerts on` once. It turns this thread on and is harmless if it already was.
+- They ask for quiet here ("stop pinging me in this thread"): `notipet alerts off`. For the whole project, add `--project`.
+- `notipet alerts` shows whether this thread rings and why.
+- Change the mode (`alerts mode all|selected`) or other threads' and projects' rules only when the user asks for exactly that.
 ## Rules
 
 - **Never put secrets, tokens, passwords, or large diffs in the body.** A notification can be read by anyone looking at the screen.

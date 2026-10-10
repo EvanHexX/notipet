@@ -75,6 +75,9 @@ internal static class UiText
         "source_disabled" => Loc.T("Source turned off", "소스 꺼짐"),
         "ttl_expired" => Loc.T("Expired", "만료"),
         "all_channels_disabled" => Loc.T("All channels off", "모든 채널 꺼짐"),
+        "thread_off" => Loc.T("Thread turned off", "스레드 알림 꺼짐"),
+        "project_off" => Loc.T("Project turned off", "프로젝트 알림 꺼짐"),
+        "not_selected" => Loc.T("Not turned on", "켠 대상 아님"),
         null or "" => "",
         _ => reason
     };

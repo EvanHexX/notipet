@@ -196,6 +196,25 @@ notipet history clear
 
 `desk on`이면 긴 알람이 짧아지고, 설정에서 켰다면 다른 소리로 대체된다. 자리를 뜰 때 `desk off`를 잊으면 자리를 비운 사이 오는 알림도 짧게 울린다는 점만 기억하면 된다.
 
+### `alerts` — 어떤 프로젝트·스레드가 울릴지
+
+```
+notipet alerts                                   # 이 스레드(또는 프로젝트)가 울리는지, 규칙 목록
+notipet alerts on | off | reset                  # 에이전트 안에서: 이 스레드. 밖에서: 이 프로젝트
+notipet alerts on | off | reset --project [NAME] # 이 프로젝트(또는 NAME)
+notipet alerts on | off | reset --thread ID --agent codex|claude-code
+notipet alerts mode all | selected               # 전부(끈 것만 빼고) | 켠 것만
+```
+
+판정은 **스레드 규칙 → 프로젝트 규칙 → 모드** 순. `reset`은 규칙을 지워 모드를 따르게 한다. 수동 알림과 `critical`은 항상 울린다. 스레드와 프로젝트는 `send`와 같은 방식으로 정한다(에이전트의 환경 변수, cwd를 감싼 저장소 이름). 출력 예:
+
+```
+mode: selected (only what is turned on)
+this thread: rings - this thread is turned on
+```
+
+막힌 알림은 기록에 `thread_off` / `project_off` / `not_selected`로 남는다(`notipet history`). 설정 창 "프로젝트·스레드"와 최근 알림 카드의 ⋯ 메뉴에서도 바꿀 수 있다.
+
 ---
 
 ## 데몬

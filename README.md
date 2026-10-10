@@ -35,6 +35,7 @@ You start a long task in Claude Code or Codex and switch to something else. Fort
 - **Pop-ups that stay until clicked** (you pick the levels) and that show **over full-screen apps** - optional; clicking one stops the alarm, they never steal keyboard focus, and when too many pile up the older ones fold into a "+N more" card instead of vanishing.
 - **Alarms that end themselves** - when the agent finishes what it called you for (you approved from your phone, or it fixed the problem itself), it says so and only that alarm and its pop-up go away. Already stopped? Nothing happens.
 - **At my desk** - shorten long alarms, or swap them for a quieter sound, while you are at the PC.
+- **Pick what rings** - everything except the projects or threads you turned off, or only the ones you turned on (a card's menu, Settings, or `notipet alerts`).
 - **Quiet hours, mute, rate limit, dedupe** - a hook firing on every tool call does not turn the tray into a machine gun.
 - **English / 한국어** UI, Fluent design, light and dark.
 - **Local only** - a loopback HTTP API with a bearer token. No telemetry; the only outbound request is the update check, and only when you ask for it.
@@ -172,7 +173,8 @@ The detailed docs are in Korean.
 - [x] Pop-ups that stay until clicked and show over full-screen apps
 - [x] Installer with updates
 - [x] Codex plugin (skill) and `install-hooks --codex --write`
-- [ ] Per-thread alerts on/off; Claude Code plugin packaging
+- [x] Per-project and per-thread alerts on/off
+- [ ] Claude Code plugin packaging
 - [ ] Phone push when you are away (Bark / Pushover)
 - [ ] macOS (the platform-neutral `core/` is the start)
 

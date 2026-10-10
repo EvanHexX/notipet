@@ -204,6 +204,35 @@ internal sealed class LinkSettings
     public List<string> AllowedSchemes { get; set; } = new();
 }
 
+// Which projects and threads ring (Rules/AlertScope.cs). mode "all": everything
+// rings except what is turned off; "selected": only what is turned on. A
+// thread's own rule beats its project's, and that beats the mode.
+internal sealed class AlertScopeSettings
+{
+    public string Mode { get; set; } = AlertScopeModes.All;
+    public List<AlertScopeEntry> Projects { get; set; } = new();
+    public List<AlertScopeEntry> Threads { get; set; } = new();
+}
+
+internal static class AlertScopeModes
+{
+    public const string All = "all";
+    public const string Selected = "selected";
+}
+
+internal sealed class AlertScopeEntry
+{
+    // The project name (as the recent window groups by), or the thread id.
+    public string Key { get; set; } = "";
+    // Threads only: the agent the id belongs to (claude-code | codex).
+    public string? Agent { get; set; }
+    public bool On { get; set; }
+    // For the settings list: the thread's name and project when it was set.
+    public string? Label { get; set; }
+    public string? Project { get; set; }
+    public DateTimeOffset? Since { get; set; }
+}
+
 internal sealed class AppSettings
 {
     public int SchemaVersion { get; set; } = 1;
@@ -225,6 +254,7 @@ internal sealed class AppSettings
     public UpdateSettings Updates { get; set; } = new();
     public PopupSettings Popup { get; set; } = new();
     public LinkSettings Links { get; set; } = new();
+    public AlertScopeSettings Alerts { get; set; } = new();
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -301,6 +331,8 @@ internal sealed class AppSettings
         Popup ??= new PopupSettings();
         Links ??= new LinkSettings();
         Updates ??= new UpdateSettings();
+        Alerts ??= new AlertScopeSettings();
+        Notipet.Rules.AlertScope.Normalize(Alerts);
         // Scheme names only, lower case, each once; never one OpenLinks refuses.
         Links.AllowedSchemes = (Links.AllowedSchemes ?? new List<string>())
             .Where(name => !string.IsNullOrWhiteSpace(name))

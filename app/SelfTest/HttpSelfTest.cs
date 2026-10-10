@@ -232,6 +232,30 @@ internal static class HttpSelfTest
             if (settings.Presence.AtDesk) return false;
             if (Send(server.Port, "POST /v1/presence HTTP/1.1", host, null, "{}", null).Status != 401) return false;
 
+            // Projects and threads: a thread turned off stays quiet (and says
+            // why), its name and project come from Recent; "selected" mode
+            // silences what was not turned on, but never a manual send.
+            var off = Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token,
+                "{\"target\":\"thread\",\"state\":\"off\",\"agent\":\"claude\",\"thread\":\"s-77\"}", null);
+            if (off.Status != 200 || !off.Body.Contains("\"changed\":true", StringComparison.Ordinal)) return false;
+            if (settings.Alerts.Threads.SingleOrDefault() is not { Key: "s-77", Agent: "claude-code", On: false, Project: "shop" }) return false;
+            var quiet = Send(server.Port, "POST /v1/notify HTTP/1.1", host, token,
+                "{\"title\":\"t\",\"tag\":\"selftest:scope1\",\"source\":{\"id\":\"claude-code\",\"session\":\"s-77\",\"project\":\"shop\"}}", null);
+            if (quiet.Status != 200 || !quiet.Body.Contains("\"suppressedReason\":\"thread_off\"", StringComparison.Ordinal)) return false;
+            var asked = Send(server.Port, "GET /v1/alerts?agent=claude-code&thread=s-77 HTTP/1.1", host, token, null, null);
+            if (asked.Status != 200 || !asked.Body.Contains("\"rings\":false", StringComparison.Ordinal) || !asked.Body.Contains("thread_off", StringComparison.Ordinal)) return false;
+            if (Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token, "{\"mode\":\"selected\"}", null).Status != 200) return false;
+            var other = Send(server.Port, "POST /v1/notify HTTP/1.1", host, token,
+                "{\"title\":\"t\",\"tag\":\"selftest:scope2\",\"source\":{\"id\":\"codex\",\"project\":\"api\"}}", null);
+            if (!other.Body.Contains("\"suppressedReason\":\"not_selected\"", StringComparison.Ordinal)) return false;
+            var manual = Send(server.Port, "POST /v1/notify HTTP/1.1", host, token,
+                "{\"title\":\"t\",\"tag\":\"selftest:scope3\",\"source\":{\"id\":\"manual\",\"project\":\"api\"}}", null);
+            if (!manual.Body.Contains("\"accepted\":true", StringComparison.Ordinal)) return false;
+            if (Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token, "{\"state\":\"maybe\",\"project\":\"api\"}", null).Status != 400) return false;
+            if (Send(server.Port, "POST /v1/alerts HTTP/1.1", host, null, "{\"mode\":\"all\"}", null).Status != 401) return false;
+            Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token, "{\"mode\":\"all\",\"target\":\"thread\",\"state\":\"reset\",\"agent\":\"claude-code\",\"thread\":\"s-77\"}", null);
+            if (settings.Alerts.Mode != "all" || settings.Alerts.Threads.Count != 0) return false;
+
             // Clearing history needs the token, empties the store, and reports
             // how many entries went.
             if (Send(server.Port, "DELETE /v1/history HTTP/1.1", host, null, null, null).Status != 401) return false;

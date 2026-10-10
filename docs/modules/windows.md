@@ -58,6 +58,8 @@ XAML 파일 없이 코드로 구성한다. 테마를 따라야 하는 브러시�
 - **전달 칩은 예외일 때만**: `delivered`와 `disabled`(사용자가 끈 채널)는 칩을 만들지 않는다. `failed`, `skipped`, `pending`과 차단 이유만 보인다.
 - 레벨 이름은 배지의 툴팁·접근성 이름, 경로는 ⋯ 메뉴 "폴더 열기"의 툴팁에 있다.
 - ⋯ 메뉴와 카드의 `ContextFlyout`(우클릭)은 같은 항목을 `BuildMenu`로 **두 번 만든다** — 플라이아웃 하나를 두 소유자에 붙일 수 없다.
+- 에이전트 카드의 ⋯ 메뉴 첫 묶음은 "이 스레드 알림 끄기/켜기", "<프로젝트> 프로젝트 알림 끄기/켜기"(`AddAlertScopeItems`). 항목은 **지금 그 대상이 하는 것의 반대**를 보인다 — 스레드 항목은 스레드의 실제 판정, 프로젝트 항목은 스레드 규칙을 뺀 프로젝트 자체의 판정으로. 누르면 `INotipetHost.SetThreadAlerts/SetProjectAlerts`. `AlertScopeChanged`(CLI·API로 바뀐 것 포함)에 창이 다시 그려진다.
+- 설정 창 "프로젝트·스레드" 페이지(`BuildAlerts`): 모드 콤보, 프로젝트 규칙과 스레드 규칙(켜기 토글 + 삭제), 최근 알림에 나온 규칙 없는 프로젝트를 켜기/끄기로 추가. `AlertScopeChanged`에 그 페이지가 열려 있으면 다시 그린다.
 
 카드 클릭이 여는 것은 **보낸 쪽 링크(`send --open`) → 스레드** 순이다(`INotipetHost.SenderLink` / `ThreadLink`). 보낸 쪽 링크가 있으면 카드 툴팁과 ⋯ 메뉴 "링크 열기"(툴팁에 URI)가 그것을 보여 주고, 알림 창의 열기 아이콘도 "링크 열기"가 되며 카드 클릭이 알람 정지 + 링크 열기 + 닫기가 된다. 링크는 클릭 순간 `OpenLinks.IsAllowed`로 지금 설정에 다시 비춰 본다. 실행은 `TrayController.Launch` 하나 — `AllowSetForegroundWindow` 후 URI를 ShellExecute.
 

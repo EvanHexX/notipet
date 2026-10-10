@@ -76,6 +76,17 @@ internal static class Help
               notipet resolve
               notipet resolve --tag "api:needs-input"
             """),
+        new("alerts", "notipet alerts [on | off | reset | mode all|selected] [--project [NAME] | --thread ID]",
+            "Which projects and threads ring. Without arguments: this thread or project, and the rules.",
+            """
+              on | off          this thread (inside Claude Code / Codex), else this project
+              reset             back to the mode
+              --project [NAME]  the project instead (this one, or NAME)
+              --thread ID       another thread (with --agent codex|claude-code)
+              mode all          everything rings, except what is turned off (default)
+              mode selected     only what is turned on rings
+              Manual sends and critical alerts always ring.
+            """),
         new("mute", "notipet mute [30m | 2h | off]", "Mute for a while, until unmuted, or turn mute off.", ""),
         new("unmute", "notipet unmute", "Same as `notipet mute off`.", ""),
         new("desk", "notipet desk [on | off | toggle]",
@@ -150,7 +161,7 @@ internal static class Help
     {
         ("Notify", new[] { "send", "test" }),
         ("Inspect", new[] { "status", "ping", "version", "doctor", "history" }),
-        ("Control", new[] { "ack", "resolve", "mute", "unmute", "desk", "open" }),
+        ("Control", new[] { "ack", "resolve", "alerts", "mute", "unmute", "desk", "open" }),
         ("Daemon", new[] { "start", "stop", "restart" }),
         ("Set up", new[] { "install-hooks", "install-skill" }),
     };

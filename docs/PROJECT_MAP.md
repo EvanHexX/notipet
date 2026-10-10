@@ -43,7 +43,7 @@
 | notipet 자체 알림 창 (클릭할 때까지 유지, 전체화면 위) | [app/Windows/NotificationPopup.cs](../app/Windows/NotificationPopup.cs) |
 | 알림 창 쌓기·배치·맨 위 유지 | [app/Windows/PopupHost.cs](../app/Windows/PopupHost.cs) |
 | 카드를 프로젝트별로 나누기 (순수 함수) | [core/Core/HistoryGrouping.cs](../core/Core/HistoryGrouping.cs) |
-| 설정 창 (NavigationView: 일반/사운드/PC 앞/방해금지/기록/정보) | [app/Windows/SettingsWindow.cs](../app/Windows/SettingsWindow.cs) |
+| 설정 창 (NavigationView: 일반/사운드/PC 앞/프로젝트·스레드/방해금지/기록/정보) | [app/Windows/SettingsWindow.cs](../app/Windows/SettingsWindow.cs) |
 | 설치·제거 때 하는 일 (PATH, 자동 시작) | [app/Update/Installation.cs](../app/Update/Installation.cs) |
 | 업데이트 확인·적용 (유일한 외부 통신, 누를 때만) | [app/Update/Updater.cs](../app/Update/Updater.cs) |
 | 설치 파일·업데이트 피드 만들기 | [scripts/pack.ps1](../scripts/pack.ps1) — [modules/installer.md](modules/installer.md) |
@@ -89,6 +89,7 @@
 | 기능 | 경로 |
 |---|---|
 | 평가 순서, TTL·소스·음소거·방해금지·중복 규칙 | [core/Rules/RuleEngine.cs](../core/Rules/RuleEngine.cs) |
+| 어떤 프로젝트·스레드가 울릴지 (`alerts`, `/v1/alerts`, `notipet alerts`) | [core/Rules/AlertScope.cs](../core/Rules/AlertScope.cs) |
 | 토큰 버킷 레이트 리밋 | [core/Rules/RateLimitRule.cs](../core/Rules/RateLimitRule.cs) |
 | 부재 감지 (유휴 시간 + 세션 잠금 + Focus Assist) | [app/Presence/PresenceMonitor.cs](../app/Presence/PresenceMonitor.cs) |
 

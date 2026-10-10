@@ -6,6 +6,8 @@ using System.Runtime.Versioning;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Notipet.Core;
+using Notipet.Rules;
+using Notipet.Shared;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace Notipet.Windows;
@@ -47,6 +49,8 @@ internal sealed class HistoryWindow
     {
         _host = host;
         Build();
+        // The cards' "turn alerts on/off" items say what a click would do.
+        _host.AlertScopeChanged += RefreshIfVisible;
         Fluent.Chrome(_window, 600, 720, nearTray: true, host.AppIcon);
 
         // Relative times ("3 min ago") go stale while the window is open.
@@ -489,6 +493,7 @@ internal sealed class HistoryWindow
         {
             menu.Items.Add(MenuItem(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () => _host.OpenThread(entry)));
         }
+        AddAlertScopeItems(menu, entry);
         menu.Items.Add(MenuItem(Glyphs.Copy, Loc.T("Copy", "복사"), () => Copy(entry)));
         if (!string.IsNullOrWhiteSpace(envelope.SourceCwd))
         {
@@ -501,6 +506,39 @@ internal sealed class HistoryWindow
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(MenuItem(Glyphs.Cancel, Loc.T("Remove", "삭제"), () => Remove(entry)));
         return menu;
+    }
+
+    // "Turn alerts off/on for this thread / project": each item offers the
+    // opposite of what that thread or project does now, so in "all" mode it
+    // reads "off" and in "selected" mode "on". Agent notifications only.
+    private void AddAlertScopeItems(MenuFlyout menu, HistoryEntry entry)
+    {
+        var e = entry.Envelope;
+        if (e.SourceId == PayloadMapper.SourceManual) return;
+        var scope = _host.Settings.Alerts;
+        var added = false;
+
+        if (e.SourceSession is not null)
+        {
+            var rings = AlertScope.Decide(scope, e.SourceId, e.SourceSession, e.Project, NotificationLevel.Success).Rings;
+            menu.Items.Add(MenuItem(rings ? Glyphs.BellOff : Glyphs.Bell,
+                rings ? Loc.T("Turn off alerts for this thread", "이 스레드 알림 끄기") : Loc.T("Turn on alerts for this thread", "이 스레드 알림 켜기"),
+                () => { _host.SetThreadAlerts(entry, !rings); Refresh(); }));
+            added = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(e.Project))
+        {
+            // The project's own state, not this thread's: a thread rule does
+            // not change what the project item does.
+            var rings = AlertScope.Decide(scope, e.SourceId, null, e.Project, NotificationLevel.Success).Rings;
+            menu.Items.Add(MenuItem(rings ? Glyphs.BellOff : Glyphs.Bell,
+                rings ? Loc.T($"Turn off alerts for {e.Project}", $"{e.Project} 프로젝트 알림 끄기") : Loc.T($"Turn on alerts for {e.Project}", $"{e.Project} 프로젝트 알림 켜기"),
+                () => { _host.SetProjectAlerts(e.Project!, !rings); Refresh(); }));
+            added = true;
+        }
+
+        if (added) menu.Items.Add(new MenuFlyoutSeparator());
     }
 
     private static MenuFlyoutItem MenuItem(string glyph, string text, Action onClick)
