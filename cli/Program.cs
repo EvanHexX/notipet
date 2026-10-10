@@ -102,6 +102,7 @@ internal static class Program
             case "doctor": return await DoctorAsync(args).ConfigureAwait(false);
             case "ack": return await AckAsync(args).ConfigureAwait(false);
             case "resolve": return await ResolveAsync(args).ConfigureAwait(false);
+            case "alerts" or "alert": return await AlertsAsync(args).ConfigureAwait(false);
             case "mute": return await MuteAsync(args).ConfigureAwait(false);
             case "unmute": return await MuteAsync(new[] { "mute", "off" }.Concat(args.Skip(1)).ToArray()).ConfigureAwait(false);
             case "desk" or "at-desk": return await DeskAsync(args).ConfigureAwait(false);
@@ -792,6 +793,134 @@ internal static class Program
         };
     }
 
+    // ----- alerts: which projects and threads ring -----
+
+    //   notipet alerts                              this thread/project, and the rules
+    //   notipet alerts on|off|reset                 this thread (or, outside an agent, this project)
+    //   notipet alerts on|off|reset --project [NAME]
+    //   notipet alerts on|off|reset --thread ID [--agent A]
+    //   notipet alerts mode all|selected
+    private static async Task<int> AlertsAsync(string[] args)
+    {
+        AlertsRequest request;
+        try { request = BuildAlerts(args, RealEnv, RealGitProbe, RealCeiling(), Environment.CurrentDirectory); }
+        catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine("notipet: " + ex.Message);
+            return 1;
+        }
+
+        var daemon = await RequireDaemon(args).ConfigureAwait(false);
+        if (daemon is null) return 1;
+
+        bool ok; int status; string body;
+        if (request.State is null && request.Mode is null)
+        {
+            var query = string.Join("&", new[] { ("agent", request.Agent), ("thread", request.Thread), ("project", request.Project) }
+                .Where(p => p.Item2 is not null)
+                .Select(p => p.Item1 + "=" + Uri.EscapeDataString(p.Item2!)));
+            (ok, status, body) = await RuntimeDiscovery.SendAsync(daemon.Info, HttpMethod.Get,
+                "/v1/alerts" + (query.Length > 0 ? "?" + query : ""), null, DefaultBudget).ConfigureAwait(false);
+        }
+        else
+        {
+            (ok, status, body) = await RuntimeDiscovery.PostAsync(daemon.Info, "/v1/alerts", request,
+                NotipetJson.Compact.AlertsRequest, DefaultBudget).ConfigureAwait(false);
+        }
+        if (!ok)
+        {
+            Console.Error.WriteLine($"notipet: alerts failed ({status}) {body}");
+            return 1;
+        }
+        if (HasFlag(args, "--json")) { Console.WriteLine(body); return 0; }
+        if (TryParse(body, NotipetJson.Compact.AlertsResponse) is not { } response) { Console.WriteLine(body); return 0; }
+        Console.WriteLine(DescribeAlerts(response, request, listRules: request.State is null && request.Mode is null));
+        return 0;
+    }
+
+    internal static AlertsRequest BuildAlerts(string[] args, Func<string, string?> env, Func<string, string?>? gitProbe, string? ceiling, string cwd)
+    {
+        // `notipet alerts --json` / `--project api`: options only, so a read.
+        var verb = args.Length > 1 && !args[1].StartsWith("--", StringComparison.Ordinal) ? args[1].ToLowerInvariant() : "";
+        if (verb == "mode")
+        {
+            var mode = args.Length > 2 ? args[2] : "";
+            if (mode.ToLowerInvariant() is not ("all" or "selected")) throw new ArgumentException("usage: notipet alerts mode all|selected");
+            return new AlertsRequest { Mode = mode.ToLowerInvariant() };
+        }
+
+        string? state = verb switch
+        {
+            "on" or "off" or "reset" => verb,
+            "" or "status" or "list" => null,
+            _ => throw new ArgumentException($"unknown '{args[1]}' - try `notipet alerts on|off|reset` or `notipet alerts mode all|selected`")
+        };
+
+        // Who and where, the way `send` works it out: the agent and thread from
+        // its environment, the project from the repository around cwd.
+        var named = OptionValue(args, "--agent") ?? OptionValue(args, "--source");
+        var agent = named is not null ? AgentIdentity.NormalizeAgent(named) : DetectAgent(env);
+        var probe = new NotifyRequest
+        {
+            Source = new SourceInfo { Id = agent, Session = NonEmpty(OptionValue(args, "--thread")), Cwd = cwd }
+        };
+        FillIdentity(probe, env, gitProbe, ceiling);
+        var thread = agent is null || agent == PayloadMapper.SourceManual ? NonEmpty(OptionValue(args, "--thread")) : probe.Source.Session;
+
+        // --project alone means this one; --project NAME names another.
+        var projectIndex = Array.FindIndex(args, a => a.Equals("--project", StringComparison.OrdinalIgnoreCase));
+        var projectNamed = projectIndex >= 0 && projectIndex + 1 < args.Length && !args[projectIndex + 1].StartsWith("--", StringComparison.Ordinal)
+            ? NonEmpty(args[projectIndex + 1])
+            : null;
+        var project = projectNamed ?? probe.Source.Project;
+        var wantsProject = projectIndex >= 0;
+
+        var request = new AlertsRequest
+        {
+            State = state,
+            Agent = agent is null || agent == PayloadMapper.SourceManual ? null : agent,
+            Thread = wantsProject ? null : thread,
+            Project = project,
+            Label = NonEmpty(OptionValue(args, "--label"))
+        };
+        if (state is not null)
+        {
+            request.Target = !wantsProject && thread is not null ? "thread" : "project";
+            if (request.Target == "thread" && request.Agent is null) throw new ArgumentException("which agent's thread? add --agent codex|claude-code");
+            if (request.Target == "project" && project is null) throw new ArgumentException("no thread or project here - use --project NAME or --thread ID");
+        }
+        return request;
+    }
+
+    internal static string DescribeAlerts(AlertsResponse r, AlertsRequest request, bool listRules)
+    {
+        var lines = new List<string>();
+        var mode = r.Mode == "selected" ? "only what is turned on" : "everything except what is turned off";
+        lines.Add($"mode: {r.Mode} ({mode})");
+        if (r.Rings is { } rings)
+        {
+            var what = request.Target == "project" || request.Thread is null ? $"project {request.Project}" : "this thread";
+            var because = r.Because switch
+            {
+                "thread_on" => "this thread is turned on",
+                "thread_off" => "this thread is turned off",
+                "project_on" => $"project {request.Project} is turned on",
+                "project_off" => $"project {request.Project} is turned off",
+                "mode_all" => "everything rings unless turned off",
+                "not_selected" => "only what is turned on rings",
+                _ => r.Because
+            };
+            lines.Add($"{what}: {(rings ? "rings" : "silent")} - {because}");
+        }
+        if (listRules)
+        {
+            foreach (var p in r.Projects) lines.Add($"  project {p.Key}: {(p.On ? "on" : "off")}");
+            foreach (var t in r.Threads) lines.Add($"  thread  {t.Label ?? t.Key} ({t.Agent}{(t.Project is { } tp ? ", " + tp : "")}): {(t.On ? "on" : "off")}");
+            if (r.Projects.Count == 0 && r.Threads.Count == 0) lines.Add("  no project or thread rules");
+        }
+        return string.Join(Environment.NewLine, lines);
+    }
+
     private static bool HasResolveSelector(ResolveRequest r) =>
         r.Id is not null || r.Tag is not null || r.Tags is { Count: > 0 } || r.Session is not null;
 
@@ -1062,6 +1191,7 @@ internal static class Program
             ("Describe", DescribeSelfTest),
             ("SkillInstaller", SkillInstaller.RunSelfTest),
             ("CodexHooks", CodexHooks.RunSelfTest),
+            ("Alerts", AlertsSelfTest),
             ("Help", Help.RunSelfTest),
         };
 
@@ -1079,6 +1209,41 @@ internal static class Program
             ? $"notipet cli self-test: all {checks.Length} checks passed"
             : $"notipet cli self-test: {failures} of {checks.Length} checks FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    // `notipet alerts`: what each form names. No daemon involved.
+    private static bool AlertsSelfTest()
+    {
+        const string thread = "019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b";
+        string? Codex(string n) => n == "CODEX_SESSION_ID" ? thread : null;
+        string? Nobody(string n) => null;
+        string? Git(string dir) => dir.Equals(@"C:\src\shop", StringComparison.OrdinalIgnoreCase) ? "" : null;
+        const string cwd = @"C:\src\shop\web";
+
+        // Inside Codex: this thread, with its project for the list.
+        var mine = BuildAlerts(new[] { "alerts", "off" }, Codex, Git, null, cwd);
+        if (mine.Target != "thread" || mine.State != "off" || mine.Agent != PayloadMapper.SourceCodex || mine.Thread != thread || mine.Project != "shop") return false;
+
+        // --project: this project, or the one named.
+        var here = BuildAlerts(new[] { "alerts", "on", "--project" }, Codex, Git, null, cwd);
+        if (here.Target != "project" || here.Thread is not null || here.Project != "shop") return false;
+        if (BuildAlerts(new[] { "alerts", "on", "--project", "api" }, Codex, Git, null, cwd).Project != "api") return false;
+
+        // Outside an agent: the project.
+        var outside = BuildAlerts(new[] { "alerts", "off" }, Nobody, Git, null, cwd);
+        if (outside.Target != "project" || outside.Agent is not null || outside.Project != "shop") return false;
+
+        // No argument reads; mode sets the mode; nonsense is refused.
+        if (BuildAlerts(new[] { "alerts" }, Codex, Git, null, cwd) is not { State: null, Mode: null, Thread: thread }) return false;
+        if (BuildAlerts(new[] { "alerts", "--json" }, Codex, Git, null, cwd).State is not null) return false;
+        if (BuildAlerts(new[] { "alerts", "--project", "api" }, Codex, Git, null, cwd) is not { State: null, Thread: null, Project: "api" }) return false;
+        if (BuildAlerts(new[] { "alerts", "mode", "Selected" }, Nobody, Git, null, cwd).Mode != "selected") return false;
+        foreach (var bad in new[] { new[] { "alerts", "mode", "loud" }, new[] { "alerts", "maybe" }, new[] { "alerts", "on", "--thread", thread } })
+        {
+            try { BuildAlerts(bad, Nobody, Git, null, cwd); return false; }
+            catch (ArgumentException) { }
+        }
+        return true;
     }
 
     private static bool ArgParsingSelfTest()

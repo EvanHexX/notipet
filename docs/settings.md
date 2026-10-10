@@ -119,6 +119,16 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
                                      // API로는 바꿀 수 없다 — notipet stop → 이 파일 수정 → notipet start
   },
 
+  "alerts": {                        // 어떤 프로젝트·스레드의 에이전트 알림이 울릴지 (설정 → 프로젝트·스레드)
+    "mode": "all",                   // all: 끈 것만 빼고 전부 | selected: 켠 것만
+    "projects": [                    // 프로젝트 이름(최근 알림 창의 묶음 이름)별 규칙
+      { "key": "shop", "on": false, "since": "2026-10-11T09:00:00+09:00" }
+    ],
+    "threads": [                     // 스레드 id별 규칙. 프로젝트 규칙보다 우선. 최대 200개(오래된 것부터 빠짐)
+      { "key": "019a2b3c-...", "agent": "codex", "on": true, "label": "checkout", "project": "shop", "since": "..." }
+    ]
+  },                                 // 수동 알림과 critical은 항상 울린다. API·CLI(`notipet alerts`)로도 바꿀 수 있다
+
   "updates": {                       // 설치판에서만 쓰인다
     "autoCheck": false,              // 하루 한 번 GitHub에 새 버전이 있는지만 묻는다. 설정 창에서만 켠다 (API 불가)
     "lastAutoCheck": null,           // 마지막 자동 확인 시각 (자동)

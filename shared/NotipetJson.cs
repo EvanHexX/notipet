@@ -15,6 +15,8 @@ namespace Notipet.Shared;
 [JsonSerializable(typeof(NotifyRequest))]
 [JsonSerializable(typeof(NotifyResponse))]
 [JsonSerializable(typeof(ErrorResponse))]
+[JsonSerializable(typeof(AlertsRequest))]
+[JsonSerializable(typeof(AlertsResponse))]
 [JsonSerializable(typeof(AckRequest))]
 [JsonSerializable(typeof(AckResponse))]
 [JsonSerializable(typeof(ResolveRequest))]

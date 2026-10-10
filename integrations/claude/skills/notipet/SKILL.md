@@ -70,6 +70,14 @@ An `attention`, `error` or `critical` alert can keep ringing until someone stops
 - It is safe to call blindly. If the user already stopped the alarm and closed the card, it does nothing and still exits 0 - do not check first, and do not retry.
 - Do not resolve a moment that is still open (you are still waiting for their answer).
 
+## Only some threads or projects ring
+
+The user decides which projects and threads ring: either everything except what they turned off, or only what they turned on. Your sends follow the same rules as the hooks.
+
+- They ask to be alerted in this conversation ("let me know when this is done"): run `{{NOTIPET}} alerts on` once. It turns this thread on and is harmless if it already was.
+- They ask for quiet here ("stop pinging me in this thread"): `{{NOTIPET}} alerts off`. For the whole project, add `--project`.
+- `{{NOTIPET}} alerts` shows whether this thread rings and why.
+- Change the mode (`alerts mode all|selected`) or other threads' and projects' rules only when the user asks for exactly that.
 ## Rules
 
 - **Never put secrets, tokens, passwords, or large diffs in the body.** A notification can be read by anyone looking at the screen.

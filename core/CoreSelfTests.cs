@@ -30,6 +30,7 @@ public static class CoreSelfTests
         ("AppSettings", AppSettings.RunSelfTest),
         ("HistoryStore", HistoryStore.RunSelfTest),
         ("QuietHoursRule", QuietHoursRule.RunSelfTest),
+        ("AlertScope", AlertScope.RunSelfTest),
         ("RateLimitRule", RateLimitRule.RunSelfTest),
         ("SoundResolver", SoundResolver.RunSelfTest),
         ("AlarmRegistry", AlarmRegistry.RunSelfTest),

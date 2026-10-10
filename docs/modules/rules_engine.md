@@ -10,6 +10,7 @@
 
 - [core/Rules/RuleEngine.cs](../../core/Rules/RuleEngine.cs) — 순서, TTL/소스/음소거/방해금지/중복
 - [core/Rules/RateLimitRule.cs](../../core/Rules/RateLimitRule.cs) — 토큰 버킷
+- [core/Rules/AlertScope.cs](../../core/Rules/AlertScope.cs) — 어떤 프로젝트·스레드가 울릴지(판정·규칙 변경·자체 테스트)
 - [core/Core/HistoryStore.cs](../../core/Core/HistoryStore.cs) — 중복 판정의 조회 대상
 - [app/Presence/PresenceMonitor.cs](../../app/Presence/PresenceMonitor.cs) — Focus Assist 조회
 
@@ -29,15 +30,16 @@ bool RateLimitRule.ShouldAnnounceThrottle(DateTimeOffset now)
 
 1. `TtlRule` — 큐에 앉아 있다 기한이 지난 알림은 낡은 소식이다
 2. `SourceRule` — `sources[id].enabled`
-3. `MuteRule` — 전역 음소거와 `mute.until`. `allowCritical`이면 critical은 통과
-4. `QuietHoursRule` — 시간대 + Focus Assist
-5. `DedupeRule` — `tag`(없으면 내용 해시) 기준 윈도우 내 중복
-6. `RateLimitRule` — 소스별 + 전역 토큰 버킷
+3. `AlertScopeRule` — 어떤 프로젝트·스레드가 울릴지(`alerts`, [core/Rules/AlertScope.cs](../../core/Rules/AlertScope.cs)). 스레드 규칙 → 프로젝트 규칙 → 모드(`all` | `selected`). `manual`과 `critical`은 제외. 억제 이유 `thread_off` | `project_off` | `not_selected`
+4. `MuteRule` — 전역 음소거와 `mute.until`. `allowCritical`이면 critical은 통과
+5. `QuietHoursRule` — 시간대 + Focus Assist
+6. `DedupeRule` — `tag`(없으면 내용 해시) 기준 윈도우 내 중복
+7. `RateLimitRule` — 소스별 + 전역 토큰 버킷
 
 ## State-Data Flow
 
 ```
-NotificationEnvelope ──> [6개 규칙 순차] ──> RuleDecision
+NotificationEnvelope ──> [7개 규칙 순차] ──> RuleDecision
                               │                    │
                        HistoryStore 조회      Dispatcher가 해석
                                               ├─ Continue: 채널로
@@ -55,6 +57,7 @@ NotificationEnvelope ──> [6개 규칙 순차] ──> RuleDecision
 - 차단으로 치는 윈도우 상태는 **사용자가 명시적으로 고른** `QUNS_QUIET_TIME`과 `QUNS_PRESENTATION_MODE` 둘뿐이다. 전체화면 여부(`QUNS_BUSY`, `QUNS_RUNNING_D3D_FULL_SCREEN`)는 제외한다 — 전체화면 터미널로 빌드를 보는 사람은 자리에 있다.
 - `critical`은 소스별 버킷을 우회하지만 **전역 버킷은 우회하지 못한다.** 한 소스가 전부 critical로 라벨링해서 머신의 주의를 독점할 수 없어야 한다.
 - 레이트 리밋 안내 풍선은 10분에 최대 1회. 억제한 홍수를 "억제했습니다" 홍수로 바꾸면 의미가 없다.
+- **알림 범위(`AlertScopeRule`)는 소스 다음, 음소거 앞이다.** 사용자가 "이 프로젝트·스레드는 울리지 마"라고 한 것이라 레이트 리밋 토큰도 쓰지 않는다. 가장 구체적인 규칙이 이긴다(스레드 → 프로젝트 → 모드). 수동 알림(`manual`, 트레이 테스트 포함)은 지금 그 소리를 원하는 사람이 보낸 것이고, `critical`은 놓치면 안 되는 것이라 둘 다 범위 밖이다. 스레드는 에이전트+id로, 프로젝트는 이름(대소문자 무시)으로 찾는다. 규칙은 종류별 최대 200개, 넘으면 오래된 것부터 빠진다.
 - 규칙은 `Continue`가 아닌 첫 결정에서 멈춘다. 따라서 응답의 `suppressedReason`은 항상 **가장 먼저 걸린** 이유다.
 
 ## Known Problems
@@ -68,6 +71,7 @@ NotificationEnvelope ──> [6개 규칙 순차] ──> RuleDecision
 - 같은 태그로 5회 → 소리 1번, 히스토리 `count` 5.
 - 1.2부터 병합 키는 `NotificationEnvelope.DedupeKey` = 태그 + 스레드(있을 때). 두 대화가 같은 태그를 써도 각각 울린다. 스레드가 없으면 태그만 — 예전과 같다.
 - 30건 연속 → 대부분 `rate_limited`로 억제되고 안내 풍선은 1번.
+- 알림 범위: 스레드를 끄면 `thread_off`, `selected` 모드에서 켜지 않은 프로젝트는 `not_selected`, 같은 프로젝트의 수동 알림은 통과 — `AlertScope` 자체 테스트와 HTTP 자체 테스트(`/v1/alerts`)가 고정한다.
 - 방해금지 중 `info`는 억제, `critical`은 통과.
 - 잘못된 시간 문자열(`"not-a-time"`)이 **아무것도 침묵시키지 않는지** 확인한다.
 

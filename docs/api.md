@@ -23,6 +23,7 @@
 | POST | `/v1/ack` | 필수 | 울리는 알람 정지 |
 | POST | `/v1/resolve` | 필수 | "그 일은 끝났다" — 지목한 알림의 알람만 정지 + 알림 창만 닫기 |
 | POST | `/v1/mute` | 필수 | 음소거 켜기/끄기 |
+| GET / POST | `/v1/alerts` | 필수 | 어떤 프로젝트·스레드가 울릴지 (모드, 프로젝트·스레드 규칙) |
 | POST | `/v1/test` | 필수 | 테스트 알림 (`?level=`) |
 | GET | `/v1/channels` | 필수 | 채널 상태 |
 | GET | `/v1/history` | 필수 | 최근 기록 (`?limit=`) |
@@ -200,6 +201,34 @@ Claude Code의 네이티브 `http` 훅이 보내는 원본 JSON을 그대로 받
 ```
 
 `minutes`가 있으면 그 시간 뒤 자동 해제(`mute.until`), 없으면 무기한(`mute.enabled`). `{"muted": false}`로 해제.
+
+## `GET /v1/alerts`, `POST /v1/alerts`
+
+어떤 프로젝트·스레드의 **에이전트 알림**이 울릴지(설정의 `alerts`). 판정은 **스레드 규칙 → 프로젝트 규칙 → 모드** 순이고, 수동 알림(`source.id` = `manual`)과 `critical`은 항상 울린다. 막힌 알림은 다른 억제처럼 **200**에 `suppressedReason`: `thread_off` | `project_off` | `not_selected`.
+
+```json
+// POST: 모드 바꾸기와 규칙 하나 바꾸기를 함께 또는 따로. 아무것도 없으면 읽기만.
+{ "mode": "selected" }                                         // all | selected
+{ "target": "thread", "state": "off", "agent": "codex", "thread": "019a2b3c-..." }
+{ "target": "project", "state": "on", "project": "shop" }       // state: on | off | reset
+```
+
+`target`을 빼면 `thread`가 있으면 스레드, 없으면 프로젝트. 스레드 규칙에는 `agent`와 `thread`가 필요하다(`label`·`project`는 목록 표시용이며, 빠지면 최근 알림에서 채운다). 잘못된 값은 `400 validation_failed`.
+
+```
+GET /v1/alerts?agent=codex&thread=019a2b3c-...&project=shop     // 이 스레드는 울리나
+```
+
+```json
+{
+  "ok": true, "mode": "selected", "changed": false,
+  "projects": [ { "key": "shop", "on": true, "since": "..." } ],
+  "threads":  [ { "key": "019a2b3c-...", "agent": "codex", "on": false, "label": "checkout", "project": "shop", "since": "..." } ],
+  "rings": false, "because": "thread_off"
+}
+```
+
+`because`: `thread_on` | `thread_off` | `project_on` | `project_off` | `mode_all` | `not_selected`. 음소거처럼 API로 바꿀 수 있다 — 사용자 자신의 에이전트를 조용하게 또는 시끄럽게 할 뿐이다.
 
 ## `POST /v1/presence`
 

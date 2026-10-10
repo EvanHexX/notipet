@@ -60,4 +60,11 @@ internal interface INotipetHost
     // for a click on the card.
     System.Uri? SenderLink(HistoryEntry entry);
     void OpenSenderLink(HistoryEntry entry);
+
+    // Which projects and threads ring (Settings.Alerts, Rules/AlertScope).
+    // on: true/false sets a rule, null removes it. The host saves, and the
+    // open Settings page follows.
+    void SetThreadAlerts(HistoryEntry entry, bool? on);
+    void SetProjectAlerts(string project, bool? on);
+    event System.Action? AlertScopeChanged;
 }

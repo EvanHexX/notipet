@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.Versioning;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Notipet.Rules;
 using Notipet.Settings;
 using Notipet.Shared;
 using Notipet.Sound;
@@ -50,6 +51,11 @@ internal sealed class SettingsWindow
         _host = host;
         Build();
         Fluent.Chrome(_window, 940, 720, nearTray: false, host.AppIcon);
+        // A card's menu or `notipet alerts` changed a rule: the open page follows.
+        _host.AlertScopeChanged += () =>
+        {
+            if (_page == "alerts") _window.DispatcherQueue.TryEnqueue(ShowPage);
+        };
     }
 
     public void Activate(string? page = null)
@@ -112,6 +118,7 @@ internal sealed class SettingsWindow
         AddPage("general", Glyphs.Settings, Loc.T("General", "일반"));
         AddPage("sound", Glyphs.Volume, Loc.T("Sound", "사운드"));
         AddPage("desk", Glyphs.Person, Loc.T("At my desk", "자리 착석"));
+        AddPage("alerts", Glyphs.Bell, Loc.T("Projects and threads", "프로젝트·스레드"));
         AddPage("quiet", Glyphs.Moon, Loc.T("Quiet hours", "방해금지"));
         AddPage("history", Glyphs.History, Loc.T("Recent notifications", "최근 알림"));
         AddPage("about", Glyphs.Info, Loc.T("About", "정보"));
@@ -160,6 +167,7 @@ internal sealed class SettingsWindow
             {
                 case "sound": BuildSound(page); break;
                 case "desk": BuildDesk(page); break;
+                case "alerts": BuildAlerts(page); break;
                 case "quiet": BuildQuiet(page); break;
                 case "history": BuildHistory(page); break;
                 case "about": BuildAbout(page); break;
@@ -517,6 +525,103 @@ internal sealed class SettingsWindow
         replacementRow.Children.Add(previewWrap);
         page.Children.Add(Fluent.Card(replacementRow));
     }
+
+    // Which projects and threads ring (Rules/AlertScope): the mode, then the
+    // project and thread rules, each switchable and removable.
+    private void BuildAlerts(StackPanel page)
+    {
+        var scope = Settings.Alerts;
+        page.Children.Add(Fluent.PageHeader(Loc.T("Projects and threads", "프로젝트·스레드")));
+
+        var mode = new ComboBox { MinWidth = 220 };
+        mode.Items.Add(Loc.T("All, except those turned off", "전부 (끈 것만 빼고)"));
+        mode.Items.Add(Loc.T("Only those turned on", "켠 것만"));
+        mode.SelectedIndex = scope.Mode == AlertScopeModes.Selected ? 1 : 0;
+        mode.SelectionChanged += (_, _) =>
+        {
+            if (AlertScope.SetMode(scope, mode.SelectedIndex == 1 ? AlertScopeModes.Selected : AlertScopeModes.All)) Changed();
+        };
+        page.Children.Add(Fluent.SettingCard(Glyphs.Bell,
+            Loc.T("Which agent notifications ring", "어떤 에이전트 알림을 울릴지"),
+            Loc.T("A thread's own setting beats its project's. Notifications you send yourself and critical ones always ring",
+                  "스레드 설정이 프로젝트 설정보다 우선합니다. 직접 보낸 알림과 긴급 알림은 항상 울립니다"),
+            mode));
+
+        page.Children.Add(Fluent.Secondary(Loc.T(
+            "Turn a project or thread on or off from a card's ⋯ menu in Recent notifications, or ask the agent (`notipet alerts on` / `off`).",
+            "최근 알림 카드의 ⋯ 메뉴에서 켜고 끄거나, 에이전트에게 부탁하세요(`notipet alerts on` / `off`)."), "CaptionTextBlockStyle"));
+
+        // ----- projects -----
+        page.Children.Add(Fluent.GroupHeader(Loc.T("Projects", "프로젝트")));
+        foreach (var entry in scope.Projects.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase).ToList())
+        {
+            page.Children.Add(Fluent.SettingCard(Glyphs.Folder, entry.Key, null, RuleControls(entry, () => scope.Projects.Remove(entry))));
+        }
+
+        // Projects seen in Recent notifications that have no rule yet.
+        var known = _host.History.Recent(500)
+            .Select(h => h.Envelope.Project)
+            .Where(p => !string.IsNullOrWhiteSpace(p) && AlertScope.FindProject(scope, p) is null)
+            .Select(p => p!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (known.Count > 0)
+        {
+            var pick = new ComboBox { MinWidth = 180, PlaceholderText = Loc.T("Project", "프로젝트") };
+            foreach (var p in known) pick.Items.Add(p);
+            void Add(bool on)
+            {
+                if (pick.SelectedItem is string project && AlertScope.SetProject(scope, project, on, DateTimeOffset.Now))
+                {
+                    Changed();
+                    ShowPage();
+                }
+            }
+            page.Children.Add(Fluent.SettingCard(Glyphs.Folder,
+                Loc.T("Add a project", "프로젝트 추가"),
+                Loc.T("From Recent notifications", "최근 알림에 나온 프로젝트"),
+                Row(pick,
+                    Fluent.IconButton(Glyphs.Bell, Loc.T("On", "켜기"), () => Add(true)),
+                    Fluent.IconButton(Glyphs.BellOff, Loc.T("Off", "끄기"), () => Add(false)))));
+        }
+        else if (scope.Projects.Count == 0)
+        {
+            page.Children.Add(Fluent.Secondary(Loc.T("No project rules yet.", "아직 프로젝트 설정이 없습니다."), "BodyTextBlockStyle"));
+        }
+
+        // ----- threads -----
+        page.Children.Add(Fluent.GroupHeader(Loc.T("Threads", "스레드")));
+        if (scope.Threads.Count == 0)
+        {
+            page.Children.Add(Fluent.Secondary(Loc.T(
+                "No thread rules yet. Use a card's ⋯ menu, or `notipet alerts on` inside the thread.",
+                "아직 스레드 설정이 없습니다. 카드의 ⋯ 메뉴나, 그 스레드에서 `notipet alerts on`을 쓰세요."), "BodyTextBlockStyle"));
+        }
+        foreach (var entry in scope.Threads.OrderByDescending(t => t.Since ?? DateTimeOffset.MinValue).ToList())
+        {
+            var title = entry.Label ?? Loc.T($"Thread {Short(entry.Key)}", $"스레드 {Short(entry.Key)}");
+            var details = string.Join(" · ", new[]
+            {
+                entry.Project,
+                entry.Agent is { } a ? PayloadMapper.LabelFor(a) : null,
+                entry.Since is { } since ? since.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : null
+            }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            page.Children.Add(Fluent.SettingCard(Glyphs.Thread, title, details, RuleControls(entry, () => scope.Threads.Remove(entry))));
+        }
+    }
+
+    private static string Short(string id) => id.Length > 8 ? id[..8] : id;
+
+    // A rule's on/off switch and its remove button (back to the mode).
+    private UIElement RuleControls(AlertScopeEntry entry, Action remove) =>
+        Row(Fluent.Toggle(entry.On, on => { entry.On = on; entry.Since = DateTimeOffset.Now; Changed(); }),
+            Fluent.IconButton(Glyphs.Cancel, Loc.T("Remove", "삭제"), () =>
+            {
+                remove();
+                Changed();
+                ShowPage();
+            }));
 
     private void BuildQuiet(StackPanel page)
     {

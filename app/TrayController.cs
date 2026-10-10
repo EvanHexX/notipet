@@ -404,6 +404,28 @@ internal sealed class TrayController : IDisposable, INotipetHost
 
     public void OpenSenderLink(HistoryEntry entry) => Launch(SenderLinkFor(entry.Envelope), "OpenSenderLink");
 
+    public event Action? AlertScopeChanged;
+
+    public void SetThreadAlerts(HistoryEntry entry, bool? on)
+    {
+        var e = entry.Envelope;
+        if (e.SourceSession is null || e.SourceId == PayloadMapper.SourceManual) return;
+        var label = entry.AppThreadTitle ?? e.ThreadTitle;
+        if (AlertScope.SetThread(_settings.Alerts, e.SourceId, e.SourceSession, on, label, e.Project, DateTimeOffset.Now)) AlertScopeSaved();
+    }
+
+    public void SetProjectAlerts(string project, bool? on)
+    {
+        if (string.IsNullOrWhiteSpace(project)) return;
+        if (AlertScope.SetProject(_settings.Alerts, project, on, DateTimeOffset.Now)) AlertScopeSaved();
+    }
+
+    private void AlertScopeSaved()
+    {
+        SettingsChanged();
+        AlertScopeChanged?.Invoke();
+    }
+
     // Checked again now, against today's settings: a scheme taken off
     // links.allowedSchemes stops working on cards that already exist.
     private Uri? SenderLinkFor(NotificationEnvelope envelope) =>
@@ -517,7 +539,13 @@ internal sealed class TrayController : IDisposable, INotipetHost
             Version = AppVersion,
             Port = () => _server?.Port ?? port,
             Warnings = () => _server?.Warnings ?? (IReadOnlyList<string>)Array.Empty<string>(),
-            SettingsChanged = () => OnUiThread(RefreshTray),
+            SettingsChanged = () => OnUiThread(() =>
+            {
+                RefreshTray();
+                // `notipet alerts ...` from an agent or a terminal: the open
+                // Settings page and the cards' menus follow.
+                AlertScopeChanged?.Invoke();
+            }),
             SetAtDesk = value =>
             {
                 _settings.Presence.AtDesk = value ?? !_settings.Presence.AtDesk;

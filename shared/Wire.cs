@@ -99,6 +99,46 @@ public sealed class ErrorResponse
     [JsonPropertyName("field")] public string? Field { get; set; }
 }
 
+// POST /v1/alerts: which projects and threads ring. Any combination of a mode
+// change and one rule change; nothing at all just reads the state.
+public sealed class AlertsRequest
+{
+    // all | selected
+    [JsonPropertyName("mode")] public string? Mode { get; set; }
+    // thread | project - what `state` applies to.
+    [JsonPropertyName("target")] public string? Target { get; set; }
+    // on | off | reset (back to the mode)
+    [JsonPropertyName("state")] public string? State { get; set; }
+    [JsonPropertyName("agent")] public string? Agent { get; set; }
+    [JsonPropertyName("thread")] public string? Thread { get; set; }
+    [JsonPropertyName("project")] public string? Project { get; set; }
+    // The thread's name, for the settings list.
+    [JsonPropertyName("label")] public string? Label { get; set; }
+}
+
+public sealed class AlertRuleDto
+{
+    [JsonPropertyName("key")] public string Key { get; set; } = "";
+    [JsonPropertyName("agent")] public string? Agent { get; set; }
+    [JsonPropertyName("on")] public bool On { get; set; }
+    [JsonPropertyName("label")] public string? Label { get; set; }
+    [JsonPropertyName("project")] public string? Project { get; set; }
+    [JsonPropertyName("since")] public string? Since { get; set; }
+}
+
+public sealed class AlertsResponse
+{
+    [JsonPropertyName("ok")] public bool Ok { get; set; }
+    [JsonPropertyName("mode")] public string Mode { get; set; } = "all";
+    [JsonPropertyName("changed")] public bool Changed { get; set; }
+    [JsonPropertyName("projects")] public List<AlertRuleDto> Projects { get; set; } = new();
+    [JsonPropertyName("threads")] public List<AlertRuleDto> Threads { get; set; } = new();
+    // For the thread/project the request named: does it ring, and why
+    // (thread_on | thread_off | project_on | project_off | mode_all | not_selected).
+    [JsonPropertyName("rings")] public bool? Rings { get; set; }
+    [JsonPropertyName("because")] public string? Because { get; set; }
+}
+
 public sealed class AckRequest
 {
     [JsonPropertyName("id")] public string? Id { get; set; }

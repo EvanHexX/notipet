@@ -54,6 +54,7 @@ internal sealed class RuleEngine
         {
             new TtlRule(),
             new SourceRule(),
+            new AlertScopeRule(),
             new MuteRule(),
             new QuietHoursRule(),
             new DedupeRule(),
