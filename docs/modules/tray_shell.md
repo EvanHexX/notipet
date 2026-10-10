@@ -53,7 +53,8 @@ HTTP 워커 스레드 ──> 채널 ──> OnUiThread(...) ──> DispatcherQ
 ## Important Constraints
 
 - **WndProc에서 오래 걸리거나 COM을 부르는 일을 하지 않는다.** 숨은 창은 UI 스레드에 있고, 여기서 막히면 트레이·알림 창·모든 창이 함께 멈춘다(HTTP는 살아 있어서 아무도 모른다). `WM_DEVICECHANGE`는 한 번에 수십 개씩 온다 — 이벤트만 올리고 일은 `SoundService.RequestProbe`가 스레드 풀에서 묶어서 한다.
-- **`UiWatchdog`**(app/UiWatchdog.cs): 5초마다 UI 스레드에 빈 작업을 넣고, 12번 연속(1분) 처리되지 않으면 `crash.log`에 남기고 트레이 아이콘을 내린 뒤 `--restart-after <pid>`로 새 인스턴스를 띄우고 스스로 끝낸다. 새 인스턴스는 옛 프로세스가 끝나길 기다렸다가(단일 인스턴스 뮤텍스) 뜨고 "다시 시작했다" 풍선을 띄운다. 최근 알림 기록(메모리)은 잃는다. 원인이 무엇이든 "조용히 먹통"으로 남지 않게 하는 그물이다.
+- **`UiWatchdog`**(app/UiWatchdog.cs): 5초마다 UI 스레드에 빈 작업을 넣고, 12번 연속(1분) 처리되지 않으면 `crash.log`에 남기고 트레이 아이콘을 내린 뒤 `--restart-after <pid>`로 새 인스턴스를 띄우고 스스로 끝낸다. 새 인스턴스는 옛 프로세스가 끝나길 기다렸다가(단일 인스턴스 뮤텍스) 뜨고 "다시 시작했다" 풍선을 띄운다. 최근 알림은 history.json으로 넘어간다(`history.persist`). 원인이 무엇이든 "조용히 먹통"으로 남지 않게 하는 그물이다.
+- **그래픽 어댑터가 바뀌면 재시작한다**(app/GraphicsAdapters.cs): 그래픽 드라이버를 업데이트하는 등 디스플레이 어댑터가 새로 추가되면, 실행 중인 WinUI 3 앱은 글자·이미지·배경이 보이지 않게 되고, 같은 프로세스에서 새로 만든 창도 일부만 그려진다. WinUI의 미해결 버그다([microsoft/microsoft-ui-xaml#10844](https://github.com/microsoft/microsoft-ui-xaml/issues/10844)). notipet과 quota-scope에서 NVIDIA 드라이버 업데이트로 재현됐고, 그래픽 드라이버 재설정(Win+Ctrl+Shift+B)으로는 재현되지 않았다. 시작할 때 만든 DXGI 팩터리가 `IsCurrent() == false`를 돌려주면(30초마다 runtime 파일 점검과 함께 확인) 울리는 알람이 없을 때 `--restart-after <pid> graphics`로 새 인스턴스를 띄우고 끝낸다. 최근 알림은 history.json으로 넘어간다. 시험: `NOTIPET_SIMULATE_ADAPTER_CHANGE=1`로 띄운 데몬은 30초 안에 한 번 재시작한다(새 인스턴스는 이 변수를 무시).
 
 - **`_wndProc`는 인스턴스 필드다.** 네이티브 콜백의 GC 루트이고, 없으면 `FailFast`로 프로세스가 죽는다. quota-scope가 `H.NotifyIcon.WinUI`를 걷어낸 이유가 정확히 이 버그였다.
 - **풍선에 `NIIF_NOSOUND`(0x10)를 세팅한다.** 없으면 셸이 자체 알림음을 얹어 모든 알림이 이중으로 울린다.

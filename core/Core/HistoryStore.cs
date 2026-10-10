@@ -54,8 +54,11 @@ internal sealed class HistoryEntry
     };
 }
 
-// Bounded in-memory ring. Nothing is written to disk: the history can contain
-// prompt text, and notipet keeps that in the process that produced it.
+// Bounded ring, newest first. HistoryPersistence keeps a copy in history.json
+// (unless history.persist is off) so restarts, updates and reboots do not empty
+// Recent. It holds titles and short bodies that can quote prompts - the agents
+// themselves keep whole transcripts under the user's profile, and this file
+// sits in the user-only data folder (Paths.EnsureDataDir).
 internal sealed class HistoryStore
 {
     private readonly LinkedList<HistoryEntry> _entries = new();
@@ -201,6 +204,24 @@ internal sealed class HistoryStore
         }
         if (cleared > 0) Changed?.Invoke();
         return cleared;
+    }
+
+    // Entries read back from history.json, newest first, placed behind
+    // anything that arrived already. Not "Added": they sounded long ago, and
+    // their thread titles came with them.
+    public void Restore(IEnumerable<HistoryEntry> entries)
+    {
+        lock (_gate)
+        {
+            var known = new HashSet<string>(_entries.Select(e => e.Envelope.Id), StringComparer.Ordinal);
+            foreach (var entry in entries)
+            {
+                if (known.Add(entry.Envelope.Id)) _entries.AddLast(entry);
+            }
+            var max = Math.Max(1, _capacity());
+            while (_entries.Count > max) _entries.RemoveLast();
+        }
+        Changed?.Invoke();
     }
 
     public IReadOnlyList<HistoryEntry> Recent(int limit)

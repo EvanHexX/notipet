@@ -32,6 +32,7 @@ internal static class SelfTestRunner
             ("UiText", Notipet.Windows.UiText.RunSelfTest),
             ("MenuGlyphs", Notipet.Tray.MenuGlyphs.RunSelfTest),
             ("Installation", Notipet.Update.Installation.RunSelfTest),
+            ("GraphicsAdapters", GraphicsAdapters.RunSelfTest),
             ("HttpEndToEnd", HttpSelfTest.Run),
         };
 

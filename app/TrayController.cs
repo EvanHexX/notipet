@@ -69,6 +69,12 @@ internal sealed class TrayController : IDisposable, INotipetHost
 
         _sound = new SoundService(() => _settings);
         _history = new HistoryStore(() => _settings.History.KeepInMemory);
+        // Recent survives restarts, updates and reboots (history.json), unless
+        // the user turned that off - then any file left behind goes.
+        if (_settings.History.Persist) _history.Restore(HistoryPersistence.Load(Paths.HistoryPath));
+        _historyFile = new HistoryPersistence(_history, Paths.HistoryPath, () => _settings.History.Persist);
+        if (!_settings.History.Persist) _historyFile.Flush();
+        _persistHistory = _settings.History.Persist;
         _presence = new PresenceMonitor(() => _settings.Presence.IdleThresholdSec);
 
         _channels.Add(new WindowsSoundChannel(_sound, () => _settings, () => _settings.Presence.AtDesk));
@@ -102,9 +108,60 @@ internal sealed class TrayController : IDisposable, INotipetHost
         if (Program.RecoveredFromHang)
         {
             _trayIcon?.ShowNotification("Notipet", Loc.T(
-                "Notipet stopped responding and restarted itself. Notifications from before are no longer in Recent.",
-                "Notipet이 응답하지 않아 스스로 다시 시작했습니다. 그 전 알림은 최근 알림에 남아 있지 않습니다."), BalloonLevel.Warning);
+                "Notipet stopped responding and restarted itself.",
+                "Notipet이 응답하지 않아 스스로 다시 시작했습니다."), BalloonLevel.Warning);
         }
+
+        // Watched from the runtime-file timer; see GraphicsAdapters.
+        _adapters = GraphicsAdapters.TryCreate(allowSimulation: !Program.RestartedForGraphics);
+    }
+
+    // ----- graphics adapters -----
+
+    private readonly HistoryPersistence _historyFile;
+    private bool _persistHistory;
+    private GraphicsAdapters? _adapters;
+    private DateTimeOffset? _adaptersChangedAt;
+    private int _graphicsRestarting;
+
+    // On the runtime-file timer's thread, every 30 s. Once the adapters have
+    // changed, restart as soon as no alarm is ringing: a restart would cut
+    // one short. Recent comes along through history.json.
+    private void CheckGraphicsAdapters()
+    {
+        if (_disposed || _adapters is null) return;
+        try
+        {
+            if (_adaptersChangedAt is null)
+            {
+                if (!_adapters.Changed()) return;
+                _adaptersChangedAt = DateTimeOffset.Now;
+                DaemonLog.Write("graphics adapters changed (a driver update?); restarting once no alarm is ringing, so the windows draw again");
+            }
+            if (_sound.Alarms.HasActive) return;
+            if (System.Threading.Interlocked.Exchange(ref _graphicsRestarting, 1) == 1) return;
+            OnUiThread(RestartForGraphics);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("GraphicsAdapters", ex);
+        }
+    }
+
+    private void RestartForGraphics()
+    {
+        if (_disposed || Environment.ProcessPath is not { } exe) return;
+        _historyFile.Flush();
+        try
+        {
+            Process.Start(new ProcessStartInfo(exe, $"--restart-after {Environment.ProcessId} graphics") { UseShellExecute = false });
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("GraphicsAdapters.Restart", ex);
+            return;
+        }
+        Quit("graphics adapters changed; restarting so the windows draw again");
     }
 
     private UiWatchdog? _watchdog;
@@ -119,6 +176,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         CrashLog.Write("UiWatchdog", new TimeoutException($"UI thread did not answer for {seconds}s; restarting"));
         DaemonLog.Write($"watchdog: UI thread did not answer for {seconds}s; restarting");
         _runtimeHeal?.Dispose();
+        _historyFile.Flush();
         try { _trayIcon?.RemoveIcon(); } catch { }
         try { RuntimeFile.Delete(Process.GetCurrentProcess().SessionId); } catch { }
         try
@@ -146,6 +204,13 @@ internal sealed class TrayController : IDisposable, INotipetHost
     public void SettingsChanged()
     {
         _settings.Save();
+        // Turning "keep across restarts" off deletes history.json now; on
+        // writes it now.
+        if (_settings.History.Persist != _persistHistory)
+        {
+            _persistHistory = _settings.History.Persist;
+            _historyFile.Flush();
+        }
         // A lowered history limit applies now, not as new alerts push old out.
         _history.Trim();
         ApplyThreadTitleSetting();
@@ -305,6 +370,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
     private void PrepareForUpdate()
     {
         DaemonLog.Write($"quit: updating to v{_updater.State.AvailableVersion}");
+        _historyFile.Flush();
         _watchdog?.Dispose();
         _runtimeHeal?.Dispose();
         _runtimeHeal = null;
@@ -605,6 +671,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         if (_disposed || _runtime is not { } runtime) return;
         try
         {
+            CheckGraphicsAdapters();
             if (RuntimeFile.NamesInstance(runtime)) return;
             var found = RuntimeFile.Read(Paths.RuntimePath);
             DaemonLog.Write(found is null
@@ -866,6 +933,9 @@ internal sealed class TrayController : IDisposable, INotipetHost
 
         _watchdog?.Dispose();
         _updateTimer?.Dispose();
+        _historyFile.Flush();
+        _historyFile.Dispose();
+        _adapters?.Dispose();
         // Stop healing before deleting, or the heal would put the file back.
         _runtimeHeal?.Dispose();
         _runtimeHeal = null;

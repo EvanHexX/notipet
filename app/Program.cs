@@ -18,6 +18,10 @@ internal static class Program
     // Set when this instance was started by UiWatchdog to replace a hung one.
     public static bool RecoveredFromHang { get; private set; }
 
+    // Set when the previous instance restarted itself because the graphics
+    // adapters changed (GraphicsAdapters).
+    public static bool RestartedForGraphics { get; private set; }
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -34,17 +38,19 @@ internal static class Program
 
         var verb = args.Length > 0 ? args[0].ToLowerInvariant() : "";
 
-        // Started by UiWatchdog in place of a hung instance: let that one go
-        // first, or the single-instance check below would hand straight back
-        // to it.
+        // Started in place of another instance - one whose UI thread hung
+        // (UiWatchdog), or one that restarted because the graphics adapters
+        // changed (`--restart-after <pid> graphics`): let that one go first,
+        // or the single-instance check below would hand straight back to it.
         if (verb == "--restart-after")
         {
-            if (args.Length > 1 && int.TryParse(args[1], out var hungPid))
+            if (args.Length > 1 && int.TryParse(args[1], out var previousPid))
             {
-                try { using var hung = System.Diagnostics.Process.GetProcessById(hungPid); hung.WaitForExit(15000); }
+                try { using var previous = System.Diagnostics.Process.GetProcessById(previousPid); previous.WaitForExit(15000); }
                 catch { /* already gone */ }
             }
-            RecoveredFromHang = true;
+            if (args.Length > 2 && args[2] == "graphics") RestartedForGraphics = true;
+            else RecoveredFromHang = true;
             verb = "";
         }
 

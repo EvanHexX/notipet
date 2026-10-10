@@ -698,9 +698,14 @@ internal sealed class SettingsWindow
             });
         page.Children.Add(Fluent.SettingCard(Glyphs.History,
             Loc.T("Keep", "보관할 알림 수"),
-            Loc.T("In memory only - cleared when Notipet quits",
-                  "메모리에만 보관되어 Notipet을 끄면 사라집니다"),
+            Loc.T("The newest ones; older ones drop off", "최근 것부터, 넘으면 오래된 것이 빠집니다"),
             keep));
+
+        page.Children.Add(Fluent.SettingCard(Glyphs.Save,
+            Loc.T("Keep across restarts", "재시작해도 유지"),
+            Loc.T(@"Saved in %LOCALAPPDATA%\notipet\history.json (your account only), so updates and reboots keep them. Off: memory only",
+                  @"%LOCALAPPDATA%\notipet\history.json(본인 계정만 접근)에 저장해 업데이트·재부팅 뒤에도 남습니다. 끄면 메모리에만 둡니다"),
+            Fluent.Toggle(Settings.History.Persist, on => { Settings.History.Persist = on; Changed(); })));
 
         page.Children.Add(Fluent.SettingCard(Glyphs.Thread,
             Loc.T("Show thread names from the agent apps", "에이전트 앱의 스레드 이름 표시"),

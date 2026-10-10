@@ -29,6 +29,7 @@ public static class CoreSelfTests
         ("HistoryGrouping", HistoryGrouping.RunSelfTest),
         ("AppSettings", AppSettings.RunSelfTest),
         ("HistoryStore", HistoryStore.RunSelfTest),
+        ("HistoryPersistence", HistoryPersistence.RunSelfTest),
         ("QuietHoursRule", QuietHoursRule.RunSelfTest),
         ("AlertScope", AlertScope.RunSelfTest),
         ("RateLimitRule", RateLimitRule.RunSelfTest),

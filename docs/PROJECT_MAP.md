@@ -68,6 +68,7 @@
 | 카드가 여는 보낸 쪽 링크(`send --open`)의 허용 규칙 | [core/Core/OpenLinks.cs](../core/Core/OpenLinks.cs) |
 | 시작·종료 이유 기록 (`daemon.log`) | [core/DaemonLog.cs](../core/DaemonLog.cs) |
 | UI 스레드 감시 (1분 무응답이면 재시작) | [app/UiWatchdog.cs](../app/UiWatchdog.cs) |
+| 그래픽 어댑터 변경 감지 (드라이버 업데이트 → 재시작, WinUI #10844) | [app/GraphicsAdapters.cs](../app/GraphicsAdapters.cs) |
 | 엔진 선택, 동시 알람 정책 | [app/Sound/SoundService.cs](../app/Sound/SoundService.cs) |
 
 ## 배달 경로
@@ -78,6 +79,7 @@
 | 와이어 요청 → 봉투 (절단·경고·레벨 파싱) | [core/Core/EnvelopeFactory.cs](../core/Core/EnvelopeFactory.cs) |
 | 규칙 평가 → 채널 선택 → 채널별 격리 실행 | [core/Core/Dispatcher.cs](../core/Core/Dispatcher.cs) |
 | 히스토리 링 버퍼, 중복 병합, 앱 스레드 이름 | [core/Core/HistoryStore.cs](../core/Core/HistoryStore.cs) |
+| 최근 알림 저장·복원 (history.json) | [core/Core/HistoryPersistence.cs](../core/Core/HistoryPersistence.cs) |
 | 카드 → Claude/Codex 데스크톱 앱 딥링크 | [core/Core/ThreadLinks.cs](../core/Core/ThreadLinks.cs) |
 | 에이전트 앱이 붙인 스레드 이름 조회 (Codex session_index, Claude sessions) | [core/Core/ThreadTitleLookup.cs](../core/Core/ThreadTitleLookup.cs) |
 | 채널 인터페이스 | [core/Channels/INotificationChannel.cs](../core/Channels/INotificationChannel.cs) |
