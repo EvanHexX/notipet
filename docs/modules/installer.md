@@ -84,4 +84,4 @@ NOTIPET_UPDATE_FEED=<폴더>              → GitHub 대신 그 폴더(vpk pack 
 ## TODO
 
 - 코드 서명
-- Codex 플러그인: 훅과 스킬을 묶어 설치 한 번으로 연결
+- ~~Codex 플러그인~~ → [codex_plugin.md](codex_plugin.md) (1.5.1). 플러그인은 설치된 `current\notipet.exe`를 부르므로 이 경로는 바꾸지 않는다

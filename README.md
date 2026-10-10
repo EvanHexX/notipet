@@ -72,17 +72,26 @@ cd C:\src\notipet
 
 ## Connect your agents
 
+**Codex: the plugin** brings the hooks and the skill in one go (Codex desktop app; install notipet first):
+
+```powershell
+codex plugin marketplace add EvanHexX/notipet
+codex plugin add notipet@notipet
+```
+
+Then start a new thread; if Codex asks you to review the plugin's hooks, trust them. Remove any notipet hooks you added to `~/.codex/config.toml` by hand - with both, every hook runs twice. Details: [docs/modules/codex_plugin.md](docs/modules/codex_plugin.md).
+
 **Hooks** (never miss a prompt or a finished turn):
 
 ```powershell
-.\bin\notipet.exe install-hooks   # prints the blocks for ~/.claude/settings.json and ~/.codex/config.toml
+.\bin\notipet.exe install-hooks   # prints the blocks for ~/.claude/settings.json (and ~/.codex/config.toml, without the plugin)
 ```
 
 **Skill** (the agent decides when and writes what it needs):
 
 ```powershell
 .\bin\notipet.exe install-skill            # Claude Code
-.\bin\notipet.exe install-skill --codex    # Codex
+.\bin\notipet.exe install-skill --codex    # Codex, without the plugin
 ```
 
 Using both works best - see [docs/SKILL.md](docs/SKILL.md). For Codex, notipet uses the hooks system and **never touches your `notify` setting**.
@@ -162,7 +171,8 @@ The detailed docs are in Korean.
 - [x] Settings and recent-notifications windows, English/Korean, project grouping, jump to thread
 - [x] Pop-ups that stay until clicked and show over full-screen apps
 - [x] Installer with updates
-- [ ] Codex/Claude plugin packaging
+- [x] Codex plugin
+- [ ] Claude Code plugin packaging
 - [ ] Phone push when you are away (Bark / Pushover)
 - [ ] macOS (the platform-neutral `core/` is the start)
 

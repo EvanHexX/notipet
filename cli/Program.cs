@@ -659,9 +659,18 @@ internal static class Program
         var claudeHooked = FileMentions(claudeSettings, "notipet");
         Check(claudeHooked, "claude hooks", claudeHooked ? claudeSettings : "not configured - `notipet install-hooks --claude`", warnOnly: true);
 
+        // Codex: the notipet plugin brings the hooks; config.toml hooks are the
+        // older way. Both at once run every hook twice (Codex runs all sources).
         var codexConfig = Path.Combine(home, ".codex", "config.toml");
-        var codexHooked = FileMentions(codexConfig, "notipet");
-        Check(codexHooked, "codex hooks", codexHooked ? codexConfig : "not configured - `notipet install-hooks --codex`", warnOnly: true);
+        var codexConfigHooked = FileMentions(codexConfig, "notipet.exe");
+        var codexPlugin = CodexPluginHooks(home, codexConfig);
+        if (codexPlugin is not null && codexConfigHooked)
+            Check(false, "codex hooks", $"set twice - the notipet plugin and config.toml; remove the notipet [[hooks.*]] blocks from {codexConfig}", warnOnly: true);
+        else
+            Check(codexPlugin is not null || codexConfigHooked, "codex hooks",
+                codexPlugin is not null ? "plugin " + codexPlugin
+                : codexConfigHooked ? codexConfig
+                : "not configured - install the notipet Codex plugin (docs/modules/codex_plugin.md)", warnOnly: true);
 
         var skill = SkillInstaller.ClaudeSkillPath();
         Check(File.Exists(skill), "claude skill", File.Exists(skill) ? skill : "not installed - `notipet install-skill`", warnOnly: true);
@@ -669,6 +678,28 @@ internal static class Program
         Check(true, "cli", exe);
         Console.WriteLine(problems == 0 ? "\nno problems found" : $"\n{problems} problem(s) found");
         return problems == 0 ? 0 : Fail(args);
+    }
+
+    // The installed notipet plugin's hooks.json (Codex copies plugins into
+    // plugins\cache\<marketplace>\<plugin>\<version>), if config.toml has it.
+    private static string? CodexPluginHooks(string home, string codexConfig)
+    {
+        try
+        {
+            if (!FileMentions(codexConfig, "[plugins.\"notipet@")) return null;
+            var cache = Path.Combine(home, ".codex", "plugins", "cache");
+            if (!Directory.Exists(cache)) return null;
+            return Directory.EnumerateDirectories(cache)
+                .Select(marketplace => Path.Combine(marketplace, "notipet"))
+                .Where(Directory.Exists)
+                .SelectMany(Directory.EnumerateDirectories)
+                .Select(version => Path.Combine(version, "hooks", "hooks.json"))
+                .FirstOrDefault(File.Exists);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static bool FileMentions(string path, string needle)
@@ -935,7 +966,9 @@ internal static class Program
 
         if (wantsCodex)
         {
-            Console.WriteLine("# Codex - add to %USERPROFILE%\\.codex\\config.toml");
+            Console.WriteLine("# Codex - the notipet plugin brings these hooks and the skill; use it instead");
+            Console.WriteLine("# (docs/modules/codex_plugin.md), not both - Codex would run every hook twice.");
+            Console.WriteLine("# Without the plugin, add to %USERPROFILE%\\.codex\\config.toml");
             Console.WriteLine("# Leave any existing `notify = [...]` line alone: it is a single slot");
             Console.WriteLine("# and overwriting it would break whatever already owns it.");
             Console.WriteLine(HookSnippets.CodexHooks(exe));

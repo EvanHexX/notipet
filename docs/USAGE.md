@@ -166,31 +166,39 @@ Claude Code는 `http` 훅 타입을 네이티브로 지원한다. 중간 프로�
 
 ### 경로 C — Codex
 
-`%USERPROFILE%\.codex\config.toml`에 **추가**한다:
+**플러그인(권장, Codex 데스크톱 앱)** — 훅 3개와 Codex용 스킬을 한 번에 넣는다. notipet을 설치 파일로 먼저 설치한다.
+
+```powershell
+codex plugin marketplace add EvanHexX/notipet
+codex plugin add notipet@notipet
+```
+
+새 스레드부터 적용된다. Codex가 플러그인 훅 검토를 물으면 신뢰한다(CLI는 `/hooks`). 아래 config.toml 블록이나 `~/.codex/skills/notipet`이 이미 있으면 **지운다** — Codex는 모든 출처의 훅을 다 실행하므로 두 번 울린다. `notipet doctor`가 둘 다 있으면 경고한다. 업데이트는 `codex plugin marketplace upgrade notipet`. 자세한 내용과 제약은 [modules/codex_plugin.md](modules/codex_plugin.md).
+
+**플러그인 없이(또는 `codex exec` 같은 CLI만 쓸 때)** — `%USERPROFILE%\.codex\config.toml`에 **추가**한다. CLI는 플러그인 훅을 실행하지 않는다.
 
 ```toml
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 
 [[hooks.PermissionRequest]]
 [[hooks.PermissionRequest.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 async = true
 ```
+
+`command`는 명령줄 전체다(Windows에서는 `cmd.exe /C`로 실행). Codex 훅에는 `args` 필드가 없어서, 있으면 조용히 버린다.
 
 > ### ⚠️ 기존 `notify = [...]` 줄을 건드리지 않는다
 >

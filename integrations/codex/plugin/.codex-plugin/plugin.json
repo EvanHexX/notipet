@@ -1,0 +1,29 @@
+{
+  "name": "notipet",
+  "version": "1.5.1",
+  "description": "Rings your Windows desktop when a Codex turn finishes or waits for your approval, and lets Codex alert you itself. Needs the notipet tray app.",
+  "author": {
+    "name": "EvanHexX",
+    "url": "https://github.com/EvanHexX"
+  },
+  "homepage": "https://github.com/EvanHexX/notipet",
+  "repository": "https://github.com/EvanHexX/notipet",
+  "license": "MIT",
+  "keywords": ["notification", "alarm", "windows", "tray", "hooks"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Notipet",
+    "shortDescription": "A sound and a pop-up when Codex needs you",
+    "longDescription": "Hooks that ring when a turn finishes (Stop) or waits for approval (PermissionRequest) and stop what is over when you answer (UserPromptSubmit), plus a skill so Codex can alert you - and stop its own alarm - when it needs a decision, is blocked, or finished a long task. Windows only; install the notipet app from GitHub Releases first.",
+    "developerName": "EvanHexX",
+    "category": "Productivity",
+    "capabilities": ["Write"],
+    "websiteURL": "https://github.com/EvanHexX/notipet",
+    "defaultPrompt": [
+      "Alert me through notipet when this task is done"
+    ],
+    "brandColor": "#2F7CF6",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png"
+  }
+}

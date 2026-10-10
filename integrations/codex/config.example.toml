@@ -1,6 +1,14 @@
 # notipet <-> Codex CLI
 #
+# Prefer the notipet Codex plugin (integrations/codex/plugin, see
+# docs/modules/codex_plugin.md): it brings these same hooks and the skill, and
+# needs no edit here. Use this file only without the plugin - never both, or
+# Codex runs every hook twice.
+#
 # Append this to %USERPROFILE%\.codex\config.toml and fix the paths.
+#
+# `command` is a whole command line (cmd.exe /C on Windows). Codex has no
+# `args` field and silently ignores one, so arguments go in `command`.
 #
 # ---------------------------------------------------------------------------
 # Do NOT touch an existing `notify = [...]` line.
@@ -27,15 +35,13 @@
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 
 [[hooks.PermissionRequest]]
 [[hooks.PermissionRequest.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 
 # Ends alarms that are over: the last turn's "finished" once a new prompt
@@ -44,8 +50,7 @@ timeout = 10
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 async = true
 

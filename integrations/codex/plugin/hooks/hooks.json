@@ -1,0 +1,45 @@
+{
+  "description": "notipet: ring when a Codex turn finishes or waits for approval, and stop alarms that are over. Windows only.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "true",
+            "commandWindows": "\"${PLUGIN_ROOT}\\scripts\\notipet-hook.cmd\" --source codex",
+            "timeout": 10,
+            "statusMessage": "Notipet · 턴 완료 알림 및 권한 알람 정리"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "true",
+            "commandWindows": "\"${PLUGIN_ROOT}\\scripts\\notipet-hook.cmd\" --source codex",
+            "timeout": 10,
+            "statusMessage": "Notipet · 권한 승인 대기 알림"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "true",
+            "commandWindows": "\"${PLUGIN_ROOT}\\scripts\\notipet-hook.cmd\" --source codex",
+            "timeout": 10,
+            "async": true,
+            "statusMessage": "Notipet · 새 입력 시 이전 완료 알림 정리"
+          }
+        ]
+      }
+    ]
+  }
+}

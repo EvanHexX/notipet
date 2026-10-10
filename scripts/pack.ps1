@@ -47,6 +47,12 @@ if ($NoAot) { $publishArgs.NoAot = $true }
 & (Join-Path $PSScriptRoot 'publish.ps1') @publishArgs
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "publish failed ($LASTEXITCODE)" }
 
+# The Codex plugin ships from the repository, not in this package, but it is
+# versioned with it: a release must not leave it stale (docs\modules\codex_plugin.md).
+Write-Host '==> Codex plugin check' -ForegroundColor Cyan
+& (Join-Path $PSScriptRoot 'check-codex-plugin.ps1') -Cli (Join-Path $publish 'notipet.exe')
+if ($LASTEXITCODE -ne 0) { throw "Codex plugin check failed ($LASTEXITCODE) - fix it, or run check-codex-plugin.ps1 -Fix" }
+
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 # A delta needs the previous full package next to the new one.

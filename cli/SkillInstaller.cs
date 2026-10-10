@@ -30,7 +30,10 @@ internal static class SkillInstaller
 
     public static int Run(string[] args)
     {
-        var cli = Environment.ProcessPath ?? "notipet";
+        // --command: what the skill tells the agent to run instead of this exe's
+        // path. The Codex plugin's copy says plain `notipet`, because one file
+        // serves every machine (scripts/check-codex-plugin.ps1 regenerates it).
+        var cli = Program.OptionValue(args, "--command") ?? Environment.ProcessPath ?? "notipet";
         var codex = Program.HasFlag(args, "--codex");
         var content = Render(cli, codex);
 
@@ -114,7 +117,19 @@ internal static class SkillInstaller
                 Console.SetOut(outWriter);
             }
             var file = Path.Combine(dir, "notipet", "SKILL.md");
-            return File.Exists(file) && File.ReadAllText(file).Contains("outside the sandbox", StringComparison.Ordinal);
+            if (!File.Exists(file) || !File.ReadAllText(file).Contains("outside the sandbox", StringComparison.Ordinal)) return false;
+
+            // --command names what the skill runs (the plugin's copy: `notipet`).
+            Console.SetOut(TextWriter.Null);
+            try
+            {
+                Run(new[] { "install-skill", "--path", dir, "--codex", "--command", "notipet" });
+            }
+            finally
+            {
+                Console.SetOut(outWriter);
+            }
+            return File.ReadAllText(file) == Render("notipet", codex: true);
         }
         finally
         {

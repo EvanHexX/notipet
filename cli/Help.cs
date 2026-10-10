@@ -86,13 +86,15 @@ internal static class Help
         new("stop", "notipet stop", "Quit the tray daemon and wait for it to exit.", ""),
         new("restart", "notipet restart", "Stop, then start.", ""),
         new("install-hooks", "notipet install-hooks [--claude] [--codex]",
-            "Print hook config for Claude Code and/or Codex. Prints only; edits nothing.", ""),
-        new("install-skill", "notipet install-skill [--claude | --codex | --path DIR] [--print] [--force]",
+            "Print hook config for Claude Code and/or Codex. Prints only; edits nothing.",
+            "  For Codex, the notipet plugin is simpler: it brings the hooks and the skill."),
+        new("install-skill", "notipet install-skill [--claude | --codex | --path DIR] [--command CMD] [--print] [--force]",
             "Install the notipet agent skill so the agent can decide when to alert you.",
             """
               --claude      %USERPROFILE%\.claude\skills\notipet\SKILL.md (default)
               --codex       %USERPROFILE%\.codex\skills\notipet\SKILL.md
               --path DIR    DIR\notipet\SKILL.md, e.g. a project's .claude\skills
+              --command CMD what the skill runs (default: this exe's full path)
               --print       print the skill instead of writing it
               --force       overwrite a skill file you have edited
             """),

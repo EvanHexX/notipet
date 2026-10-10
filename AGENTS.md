@@ -24,6 +24,7 @@ Three projects:
 - Entry point: `app/Program.cs` — hand-written `Main` (`DISABLE_XAML_GENERATED_MAIN`) so `--self-test` and `--test-sound` run before any XAML initialisation.
 - Lifecycle: `app/TrayController.cs` owns the tray icon, the HTTP server, the sound engines and `runtime.json`.
 - Installer and updates: Velopack (`scripts/pack.ps1`, `app/Update/`). Package id `NotipetApp`, installed to `%LOCALAPPDATA%\NotipetApp\current` - a different folder from the app data in `%LOCALAPPDATA%\notipet`, so uninstalling keeps settings. `VelopackApp...Run()` is the first thing in `Main`. See `docs/modules/installer.md`.
+- Codex plugin: `integrations/codex/plugin` (hooks + the Codex skill), listed by `.agents/plugins/marketplace.json`. Its `version` follows the app's; its `SKILL.md` is generated; `scripts/check-codex-plugin.ps1` (run by `pack.ps1`) enforces both. **Read `docs/modules/codex_plugin.md` before touching it.**
 
 ### Shared sources
 
@@ -84,6 +85,7 @@ These each exist because of a specific failure, and each is commented at its sit
 - Local channels are dispatched before remote ones, so a slow or failing push service structurally cannot delay the sound.
 - `PayloadMapper` never throws and never rejects. Agent payload shapes are external contracts; an unknown event becomes an `info` notification carrying the raw event name. (`UserPromptSubmit` is the one known event that notifies nothing: it only ends what is over.)
 - A notification's `open` link is a URI handed to the shell, never a command line, and only http(s) to loopback or a scheme in `settings.links.allowedSchemes`, which the API cannot change; `OpenLinks` refuses file, ms-*, search-ms, shell and script schemes even when listed. A refused link is dropped with a warning; the notification still goes.
+- The Codex plugin's `hooks/hooks.json` does not change lightly. Codex trusts each hook by a hash of its definition, so any edit - even a status message - silences notipet for every user until they trust the hooks again. Logic that may change goes in `scripts/notipet-hook.cmd`, which the hash does not cover. The manifest stays at `.codex-plugin/plugin.json`: a root `plugin.json` switches Codex to a format that loads no hooks.
 - `/v1/resolve` stops only what it names. No selector, or an agent alone, is a 400 - never "all", which is `/v1/ack`. Hooks end only moments that are over by definition (a turn's permission prompt once the turn has stopped); what an agent sent through the skill is ended only by the agent. Resolving what the user already stopped is a 200 with zeros.
 
 ## Safety
