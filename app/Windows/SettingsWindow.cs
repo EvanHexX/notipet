@@ -643,6 +643,14 @@ internal sealed class SettingsWindow
         brand.Children.Add(names);
         page.Children.Add(Fluent.Card(brand, "16"));
 
+        page.Children.Add(Fluent.GroupHeader(Loc.T("Updates", "업데이트")));
+        page.Children.Add(BuildUpdateCard());
+        page.Children.Add(Fluent.SettingCard(Glyphs.Clock,
+            Loc.T("Check for updates automatically", "자동으로 업데이트 확인"),
+            Loc.T("Once a day, asks GitHub whether there is a new version. Installing is still up to you.",
+                  "하루 한 번 GitHub에 새 버전이 있는지만 묻습니다. 설치는 직접 누를 때만 합니다."),
+            Fluent.Toggle(Settings.Updates.AutoCheck, on => { Settings.Updates.AutoCheck = on; Changed(); })));
+
         page.Children.Add(Fluent.GroupHeader(Loc.T("Where things are", "위치")));
 
         page.Children.Add(Fluent.SettingCard(Glyphs.Folder,
@@ -672,6 +680,62 @@ internal sealed class SettingsWindow
                 docs,
                 Fluent.IconButton(Glyphs.Folder, Loc.T("Open", "열기"), () => _host.OpenFolder(docs))));
         }
+    }
+
+    // The update card: what the last check found and the one button that
+    // fits - check, or install. Updated in place when the state changes.
+    private TextBlock? _updateText;
+    private Button? _updateButton;
+    private bool _updateSubscribed;
+
+    private UIElement BuildUpdateCard()
+    {
+        var grid = new Grid { ColumnSpacing = 16, MinHeight = 44 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var icon = Fluent.Icon(Glyphs.Download, 20);
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(icon);
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 2 };
+        text.Children.Add(Fluent.Text(Loc.T($"Notipet {_host.Version}", $"Notipet {_host.Version}")));
+        _updateText = Fluent.Secondary("");
+        text.Children.Add(_updateText);
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        _updateButton = Fluent.IconButton(Glyphs.Refresh, "", () =>
+        {
+            if (_host.UpdateState.Phase == Notipet.Update.UpdatePhase.Available) _host.InstallUpdate();
+            else _host.CheckForUpdates();
+        });
+        _updateButton.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(_updateButton, 2);
+        grid.Children.Add(_updateButton);
+
+        if (!_updateSubscribed)
+        {
+            _updateSubscribed = true;
+            _host.UpdateStateChanged += ShowUpdateState;
+        }
+        ShowUpdateState();
+        return Fluent.Card(grid);
+    }
+
+    private void ShowUpdateState()
+    {
+        if (_updateText is null || _updateButton is null) return;
+        var state = _host.UpdateState;
+        _updateText.Text = UiText.UpdateStatus(state, _host.UpdatesSupported);
+        _updateButton.Visibility = _host.UpdatesSupported ? Visibility.Visible : Visibility.Collapsed;
+        _updateButton.IsEnabled = state.Phase is not (Notipet.Update.UpdatePhase.Checking
+            or Notipet.Update.UpdatePhase.Downloading or Notipet.Update.UpdatePhase.Restarting);
+        var label = state.Phase == Notipet.Update.UpdatePhase.Available
+            ? Loc.T($"Install {state.AvailableVersion}", $"{state.AvailableVersion} 설치")
+            : Loc.T("Check now", "지금 확인");
+        if (_updateButton.Content is StackPanel row && row.Children.Count > 1 && row.Children[1] is TextBlock caption) caption.Text = label;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_updateButton, label);
     }
 
     // ----- helpers -----

@@ -9,7 +9,7 @@ English | [한국어](README.ko.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#install)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![WinUI 3](https://img.shields.io/badge/UI-WinUI%203-0063B1)](https://learn.microsoft.com/windows/apps/winui/winui3/)
-[![Version](https://img.shields.io/badge/version-1.4.2-blue)](#)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 <br>
 [![Claude Code](https://img.shields.io/badge/works%20with-Claude%20Code-D97757)](#connect-your-agents)
@@ -37,7 +37,7 @@ You start a long task in Claude Code or Codex and switch to something else. Fort
 - **At my desk** - shorten long alarms, or swap them for a quieter sound, while you are at the PC.
 - **Quiet hours, mute, rate limit, dedupe** - a hook firing on every tool call does not turn the tray into a machine gun.
 - **English / 한국어** UI, Fluent design, light and dark.
-- **Local only** - a loopback HTTP API with a bearer token. No telemetry, no outbound network.
+- **Local only** - a loopback HTTP API with a bearer token. No telemetry; the only outbound request is the update check, and only when you ask for it.
 
 ## How it works
 
@@ -52,7 +52,13 @@ The CLI fills in who sent it and from where on its own: the agent and thread id 
 
 ## Install
 
-Requires Windows 10 (19041) or 11, x64, and the [.NET 10 SDK](https://dotnet.microsoft.com/download) to build.
+Windows 10 (19041) or 11, x64.
+
+**Installer** - download `NotipetApp-win-Setup.exe` from [Releases](https://github.com/EvanHexX/notipet/releases) and run it. No admin rights needed: it installs to `%LOCALAPPDATA%\NotipetApp`, adds a Start menu entry and puts `notipet` on your PATH. The installer is not code-signed yet, so Windows SmartScreen may ask first ("More info" → "Run anyway"). Uninstall from Settings → Apps; your settings in `%LOCALAPPDATA%\notipet` are kept.
+
+**Updates** - tray menu → *Check for updates*, or Settings → About. Notipet only contacts GitHub when you ask (or once a day if you turn that on in Settings), and installs only when you click.
+
+**From source** - needs the [.NET 10 SDK](https://dotnet.microsoft.com/download):
 
 ```powershell
 git clone https://github.com/EvanHexX/notipet C:\src\notipet
@@ -62,7 +68,7 @@ cd C:\src\notipet
 .\bin\notipet.exe test           # you should hear it and see it
 ```
 
-`C:\src\notipet` is just an example path. `install-hooks` and `install-skill` print the real one.
+`C:\src\notipet` is just an example path. `install-hooks` and `install-skill` print the real one. `.\scripts\pack.ps1` builds the installer.
 
 ## Connect your agents
 
@@ -155,7 +161,8 @@ The detailed docs are in Korean.
 - [x] Tray, local API, sounds by level, agent hooks and skill
 - [x] Settings and recent-notifications windows, English/Korean, project grouping, jump to thread
 - [x] Pop-ups that stay until clicked and show over full-screen apps
-- [ ] Installer with updates, Codex/Claude plugin packaging
+- [x] Installer with updates
+- [ ] Codex/Claude plugin packaging
 - [ ] Phone push when you are away (Bark / Pushover)
 - [ ] macOS (the platform-neutral `core/` is the start)
 

@@ -37,6 +37,13 @@ internal interface INotipetHost
     bool RemoveHistoryEntry(string id);
 
     bool AutostartEnabled { get; }
+
+    // Updates. UpdateStateChanged is raised on the UI thread.
+    Notipet.Update.UpdateState UpdateState { get; }
+    bool UpdatesSupported { get; }
+    void CheckForUpdates();
+    void InstallUpdate();
+    event System.Action? UpdateStateChanged;
     bool SetAutostart(bool enabled);
 
     void OpenDataFolder();

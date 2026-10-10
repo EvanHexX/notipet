@@ -119,6 +119,12 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
                                      // API로는 바꿀 수 없다 — notipet stop → 이 파일 수정 → notipet start
   },
 
+  "updates": {                       // 설치판에서만 쓰인다
+    "autoCheck": false,              // 하루 한 번 GitHub에 새 버전이 있는지만 묻는다. 설정 창에서만 켠다 (API 불가)
+    "lastAutoCheck": null,           // 마지막 자동 확인 시각 (자동)
+    "notifiedVersion": null          // 이미 알린 새 버전 — 같은 버전은 한 번만 알린다 (자동)
+  },
+
   "history": {
     "keepInMemory": 200,             // 설정 창: 20 50 100 200 500 1000. 줄이면 즉시 잘린다
     "lookupThreadTitles": true       // 카드에 에이전트 앱의 스레드 이름 표시 (Codex/Claude 로컬 파일 읽기 전용)

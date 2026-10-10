@@ -21,6 +21,17 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        // First, before anything else: Velopack runs the installed app with
+        // its own arguments to install, update or remove it, handles those
+        // here and exits. A normal start returns at once. Nothing is applied
+        // at startup on its own - installing an update is always a click.
+        Velopack.VelopackApp.Build()
+            .OnAfterInstallFastCallback(v => Notipet.Update.Installation.OnInstalled(v.ToString()))
+            .OnAfterUpdateFastCallback(v => Notipet.Update.Installation.OnUpdated(v.ToString()))
+            .OnBeforeUninstallFastCallback(v => Notipet.Update.Installation.OnUninstalling(v.ToString()))
+            .SetAutoApplyOnStartup(false)
+            .Run();
+
         var verb = args.Length > 0 ? args[0].ToLowerInvariant() : "";
 
         // Started by UiWatchdog in place of a hung instance: let that one go

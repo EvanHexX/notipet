@@ -8,12 +8,26 @@ API 계약 전체는 [api.md](api.md), 설정 스키마 전체는 [settings.md](
 
 ## 1. 설치와 첫 실행
 
+### 설치 파일로 (권장)
+
+[Releases](https://github.com/EvanHexX/notipet/releases)에서 `NotipetApp-win-Setup.exe`를 받아 실행한다. 관리자 권한은 필요 없다.
+
+- `%LOCALAPPDATA%\NotipetApp\current\`에 설치된다. 업데이트해도 이 경로는 같다.
+- 시작 메뉴에 "Notipet"이 생긴다(바탕 화면 바로 가기는 만들지 않는다).
+- `notipet` 명령이 PATH에 들어간다. **새로 연 터미널**부터 된다.
+- 코드 서명을 하지 않아 SmartScreen이 막을 수 있다: "추가 정보" → "실행".
+- 제거: 설정 → 앱 → Notipet. `%LOCALAPPDATA%\notipet`의 설정·로그는 남는다.
+
+**업데이트**: 트레이 메뉴 → "업데이트 확인", 또는 설정 → 정보 → 업데이트 → "지금 확인". 새 버전이 있으면 같은 자리에서 "설치"를 누른다 — 받고, 닫고, 바꾸고, 다시 띄운다(최근 알림 기록은 그때 사라진다). 누르기 전에는 아무것도 보내지 않는다. 설정 → 정보 → "자동으로 업데이트 확인"을 켜면 하루 한 번 새 버전이 있는지만 묻고 알려 준다. 설치는 그래도 누를 때만.
+
+### 소스에서 빌드
+
 ```powershell
 cd C:\src\notipet
 .\scripts\publish.ps1
 ```
 
-`bin\`에 두 개가 생긴다.
+`bin\`에 두 개가 생긴다. (설치 파일은 `.\scripts\pack.ps1` — [modules/installer.md](modules/installer.md).)
 
 | 파일 | 역할 |
 |---|---|
