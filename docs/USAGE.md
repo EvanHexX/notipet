@@ -166,39 +166,28 @@ Claude Code는 `http` 훅 타입을 네이티브로 지원한다. 중간 프로�
 
 ### 경로 C — Codex
 
-**플러그인(권장, Codex 데스크톱 앱)** — 훅 3개와 Codex용 스킬을 한 번에 넣는다. notipet을 설치 파일로 먼저 설치한다.
+notipet을 설치 파일로 먼저 설치한다. 그다음 두 가지:
+
+**스킬 — 플러그인으로.** Codex가 스스로 판단해 알리고, 끝난 알람을 끈다.
 
 ```powershell
 codex plugin marketplace add EvanHexX/notipet
 codex plugin add notipet@notipet
 ```
 
-새 스레드부터 적용된다. Codex가 플러그인 훅 검토를 물으면 신뢰한다(CLI는 `/hooks`). 아래 config.toml 블록이나 `~/.codex/skills/notipet`이 이미 있으면 **지운다** — Codex는 모든 출처의 훅을 다 실행하므로 두 번 울린다. `notipet doctor`가 둘 다 있으면 경고한다. 업데이트는 `codex plugin marketplace upgrade notipet`. 자세한 내용과 제약은 [modules/codex_plugin.md](modules/codex_plugin.md).
+업데이트는 `codex plugin marketplace upgrade notipet`. 예전에 `install-skill --codex`로 깐 `~/.codex/skills/notipet`이 있으면 지운다(같은 스킬이 두 번 보인다).
 
-**플러그인 없이(또는 `codex exec` 같은 CLI만 쓸 때)** — `%USERPROFILE%\.codex\config.toml`에 **추가**한다. CLI는 플러그인 훅을 실행하지 않는다.
+**훅 — 명령 한 줄로.** 턴 완료·승인 대기는 에이전트가 멈춰 있는 순간이라 훅만 잡는다.
 
-```toml
-[[hooks.Stop]]
-[[hooks.Stop.hooks]]
-type = "command"
-command = '"C:\src\notipet\bin\notipet.exe" --source codex'
-timeout = 10
-
-[[hooks.PermissionRequest]]
-[[hooks.PermissionRequest.hooks]]
-type = "command"
-command = '"C:\src\notipet\bin\notipet.exe" --source codex'
-timeout = 10
-
-[[hooks.UserPromptSubmit]]
-[[hooks.UserPromptSubmit.hooks]]
-type = "command"
-command = '"C:\src\notipet\bin\notipet.exe" --source codex'
-timeout = 10
-async = true
+```powershell
+notipet install-hooks --codex --write
 ```
 
-`command`는 명령줄 전체다(Windows에서는 `cmd.exe /C`로 실행). Codex 훅에는 `args` 필드가 없어서, 있으면 조용히 버린다.
+`%USERPROFILE%\.codex\config.toml`에 notipet 블록(`[[hooks.Stop]]`, `[[hooks.PermissionRequest]]`, `[[hooks.UserPromptSubmit]]`)을 넣는다. 먼저 `config.toml.bak-notipet-<시각>`으로 백업하고, notipet 블록만 다루며, 다시 실행해도 같다. 예전 버전이 넣은 블록은 새 것으로 바꾼다. 빼려면 `--remove`, 넣을 내용만 보려면 `--write` 없이. Codex에게 "notipet 설정해 줘"라고 하면 스킬이 동의를 받고 이 명령을 실행한다.
+
+새 스레드부터 적용된다. Codex가 새 훅 검토(`/hooks`)를 물으면 신뢰한다. `notipet doctor`의 `codex hooks` 줄로 확인한다. 자세한 내용과 제약은 [modules/codex_plugin.md](modules/codex_plugin.md).
+
+손으로 넣는다면: `command`는 명령줄 전체다(Windows에서는 `cmd.exe /C`로 실행). Codex 훅에는 `args` 필드가 없어서, 있으면 조용히 버린다 — `command = '"C:\src\notipet\bin\notipet.exe" --source codex'`처럼 인수를 안에 쓴다.
 
 > ### ⚠️ 기존 `notify = [...]` 줄을 건드리지 않는다
 >

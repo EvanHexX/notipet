@@ -19,6 +19,7 @@
 ```powershell
 notipet install-skill                 # Claude Code (사용자 전체)
 notipet install-skill --codex         # Codex — 플러그인을 쓰면 필요 없다(아래)
+notipet install-hooks --codex --write # Codex 훅 (스킬이 동의를 받아 대신 실행할 수도 있다)
 notipet install-skill --path E:\my-repo\.claude\skills   # 특정 프로젝트에만
 ```
 
@@ -32,7 +33,7 @@ notipet doctor      # [ok  ] claude skill  ...SKILL.md
 
 에이전트에게 "끝나면 알려줘"라고 말하거나 긴 작업을 시키면 스킬이 쓰인다.
 
-> **Codex는 [플러그인](modules/codex_plugin.md)이 이 스킬을 함께 넣는다.** 플러그인 스킬은 PC마다 다른 절대 경로 대신 `notipet`(PATH)을 부른다(`install-skill --codex --command notipet`으로 만든 생성물). 플러그인을 쓰면 `~/.codex/skills/notipet`은 지운다 — 같은 스킬이 두 번 보인다.
+> **Codex는 [플러그인](modules/codex_plugin.md)으로 이 스킬을 넣는다**(스킬만 든 플러그인). 플러그인 스킬은 PC마다 다른 절대 경로 대신 `notipet`(PATH)을 부른다(`install-skill --codex --command notipet`으로 만든 생성물). 플러그인을 쓰면 `~/.codex/skills/notipet`은 지운다 — 같은 스킬이 두 번 보인다. Codex 스킬에는 훅 안내 절이 있다: 사용자가 턴 완료·승인 대기 알림을 원하면 `notipet doctor`로 확인하고, **동의를 받아** `notipet install-hooks --codex --write`를 실행한다. 설정 파일을 직접 고치지 않는다.
 >
 > Codex의 skills 폴더(`~/.codex/skills`)는 Codex 버전에 따라 지원 여부가 다르다. 최신 Codex 문서는 사용자 스킬 위치로 `~/.agents/skills`를 안내하므로, 그쪽을 쓰는 버전이면 `install-skill --codex --path %USERPROFILE%\.agents\skills`. 스킬을 지원하지 않는 버전이면 아래 [4절](#4-스킬을-지원하지-않는-에이전트)의 AGENTS.md 방식을 쓴다.
 

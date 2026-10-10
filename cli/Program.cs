@@ -30,6 +30,7 @@ internal static class Program
         // Titles and bodies are often Korean; the default console code page
         // would print them as question marks.
         try { Console.OutputEncoding = Encoding.UTF8; } catch { }
+        RestoreSystemRoot();
 
         try
         {
@@ -43,6 +44,26 @@ internal static class Program
     }
 
     private static int Fail(string[] args) => HasFlag(args, "--strict") ? 1 : 0;
+
+    // Codex can run a hook with an empty environment (`codex exec` did, on
+    // 0.162.0-alpha.17.2). Without SystemRoot, Winsock cannot load its
+    // providers, every socket fails, and the CLI reported the daemon as not
+    // running. The Windows folder comes from the shell, not the environment.
+    private static void RestoreSystemRoot()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        try
+        {
+            var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if (windows.Length == 0) return;
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SystemRoot"))) Environment.SetEnvironmentVariable("SystemRoot", windows);
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("windir"))) Environment.SetEnvironmentVariable("windir", windows);
+        }
+        catch
+        {
+            // Best effort; the send reports its own failure.
+        }
+    }
 
     private static async Task<int> RunAsync(string[] args)
     {
@@ -659,18 +680,18 @@ internal static class Program
         var claudeHooked = FileMentions(claudeSettings, "notipet");
         Check(claudeHooked, "claude hooks", claudeHooked ? claudeSettings : "not configured - `notipet install-hooks --claude`", warnOnly: true);
 
-        // Codex: the notipet plugin brings the hooks; config.toml hooks are the
-        // older way. Both at once run every hook twice (Codex runs all sources).
-        var codexConfig = Path.Combine(home, ".codex", "config.toml");
-        var codexConfigHooked = FileMentions(codexConfig, "notipet.exe");
-        var codexPlugin = CodexPluginHooks(home, codexConfig);
-        if (codexPlugin is not null && codexConfigHooked)
-            Check(false, "codex hooks", $"set twice - the notipet plugin and config.toml; remove the notipet [[hooks.*]] blocks from {codexConfig}", warnOnly: true);
-        else
-            Check(codexPlugin is not null || codexConfigHooked, "codex hooks",
-                codexPlugin is not null ? "plugin " + codexPlugin
-                : codexConfigHooked ? codexConfig
-                : "not configured - install the notipet Codex plugin (docs/modules/codex_plugin.md)", warnOnly: true);
+        // Codex: config.toml is where `install-hooks --codex --write` puts them.
+        // An earlier 1.5.1 build used hooks.json, which Codex did not always
+        // run; and a copy in both rings twice.
+        var codexHome = CodexHooks.CodexHome();
+        var codexConfig = Path.Combine(codexHome, "config.toml");
+        var codexHooksJson = Path.Combine(codexHome, "hooks.json");
+        var inToml = File.Exists(codexConfig) && CodexHooks.MentionsNotipetHook(ReadOrNull(codexConfig) ?? "");
+        var inJson = File.Exists(codexHooksJson) && CodexHooks.HooksJsonHasOurs(ReadOrNull(codexHooksJson));
+        Check(inToml && !inJson, "codex hooks",
+            inJson ? $"in {codexHooksJson}, which Codex does not run everywhere - `notipet install-hooks --codex --write` moves them to config.toml"
+            : inToml ? codexConfig
+            : "not configured - `notipet install-hooks --codex --write`", warnOnly: true);
 
         var skill = SkillInstaller.ClaudeSkillPath();
         Check(File.Exists(skill), "claude skill", File.Exists(skill) ? skill : "not installed - `notipet install-skill`", warnOnly: true);
@@ -680,26 +701,9 @@ internal static class Program
         return problems == 0 ? 0 : Fail(args);
     }
 
-    // The installed notipet plugin's hooks.json (Codex copies plugins into
-    // plugins\cache\<marketplace>\<plugin>\<version>), if config.toml has it.
-    private static string? CodexPluginHooks(string home, string codexConfig)
+    private static string? ReadOrNull(string path)
     {
-        try
-        {
-            if (!FileMentions(codexConfig, "[plugins.\"notipet@")) return null;
-            var cache = Path.Combine(home, ".codex", "plugins", "cache");
-            if (!Directory.Exists(cache)) return null;
-            return Directory.EnumerateDirectories(cache)
-                .Select(marketplace => Path.Combine(marketplace, "notipet"))
-                .Where(Directory.Exists)
-                .SelectMany(Directory.EnumerateDirectories)
-                .Select(version => Path.Combine(version, "hooks", "hooks.json"))
-                .FirstOrDefault(File.Exists);
-        }
-        catch
-        {
-            return null;
-        }
+        try { return File.ReadAllText(path); } catch { return null; }
     }
 
     private static bool FileMentions(string path, string needle)
@@ -949,9 +953,23 @@ internal static class Program
 
     private static int InstallHooks(string[] args)
     {
-        var exe = Environment.ProcessPath ?? "notipet.exe";
+        // --command: the notipet.exe the hooks should run, when it is not this
+        // one (e.g. setting up the installed copy from a dev build).
+        var exe = OptionValue(args, "--command") ?? Environment.ProcessPath ?? "notipet.exe";
         var wantsClaude = HasFlag(args, "--claude") || !HasFlag(args, "--codex");
         var wantsCodex = HasFlag(args, "--codex") || !HasFlag(args, "--claude");
+
+        var write = HasFlag(args, "--write");
+        var remove = HasFlag(args, "--remove");
+        if (write || remove)
+        {
+            if (!HasFlag(args, "--codex") || HasFlag(args, "--claude"))
+            {
+                Console.Error.WriteLine("notipet: --write and --remove edit Codex's hooks only for now: `notipet install-hooks --codex --write`.");
+                return 1;
+            }
+            return CodexHooks.Install(CodexHooks.CodexHome(), exe, remove, CodexHooks.PrefersKorean(), Console.Out);
+        }
 
         if (wantsClaude)
         {
@@ -966,16 +984,14 @@ internal static class Program
 
         if (wantsCodex)
         {
-            Console.WriteLine("# Codex - the notipet plugin brings these hooks and the skill; use it instead");
-            Console.WriteLine("# (docs/modules/codex_plugin.md), not both - Codex would run every hook twice.");
-            Console.WriteLine("# Without the plugin, add to %USERPROFILE%\\.codex\\config.toml");
-            Console.WriteLine("# Leave any existing `notify = [...]` line alone: it is a single slot");
-            Console.WriteLine("# and overwriting it would break whatever already owns it.");
-            Console.WriteLine(HookSnippets.CodexHooks(exe));
+            Console.WriteLine("# Codex - %USERPROFILE%\\.codex\\config.toml. `notipet install-hooks --codex --write`");
+            Console.WriteLine("# adds it for you (backup, only notipet's block, safe to repeat). Leave any");
+            Console.WriteLine("# `notify = [...]` alone: it is a single slot something else may own.");
+            foreach (var line in CodexHooks.Block(exe, CodexHooks.PrefersKorean())) Console.WriteLine(line);
         }
 
         Console.WriteLine();
-        Console.WriteLine("Printed only. Paste these in yourself, or see integrations/ for full files.");
+        Console.WriteLine("Printed only. Paste these in yourself, or for Codex use --write.");
         return 0;
     }
 
@@ -1045,6 +1061,7 @@ internal static class Program
             ("ArgParsing", ArgParsingSelfTest),
             ("Describe", DescribeSelfTest),
             ("SkillInstaller", SkillInstaller.RunSelfTest),
+            ("CodexHooks", CodexHooks.RunSelfTest),
             ("Help", Help.RunSelfTest),
         };
 

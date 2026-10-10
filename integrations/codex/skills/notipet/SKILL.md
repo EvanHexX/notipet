@@ -36,7 +36,7 @@ Do **not** notify:
 
 - for short tasks the user is plainly watching,
 - after every step, file, or tool call,
-- twice for the same moment. If notipet's Codex hooks are installed (the notipet plugin brings them), they already announce "turn finished" (`Stop`) and "waiting for approval" (`PermissionRequest`) - only add a notification when you have something more specific to say.
+- twice for the same moment. If notipet's Codex hooks are installed (below), they already announce "turn finished" (`Stop`) and "waiting for approval" (`PermissionRequest`) - only add a notification when you have something more specific to say.
 
 ## How
 
@@ -76,6 +76,16 @@ An `attention`, `error` or `critical` alert can keep ringing until someone stops
 - It is safe to call blindly. If the user already stopped the alarm and closed the card, it does nothing and still exits 0 - do not check first, and do not retry.
 - Do not resolve a moment that is still open (you are still waiting for their answer).
 - A `PermissionRequest` alarm from the hooks ends by itself when your turn stops; you do not need to resolve it.
+
+## Alerts at every turn end and approval prompt: notipet's hooks
+
+Codex hooks ring by themselves when a turn ends (`Stop`) and when it waits for the user's approval (`PermissionRequest`) - a moment you cannot announce yourself, because you are blocked. They are not part of this skill; they live in the user's `~/.codex/hooks.json`.
+
+- Only when the user asks for alerts like these, or asks to set notipet up: run `{{NOTIPET}} doctor` (outside the sandbox) and look at its `codex hooks` line. If it is a warning, **ask the user first**, and only with their yes run `{{NOTIPET}} install-hooks --codex --write`. It backs up the file, touches only notipet's own entries, and is safe to run again.
+- Never set them up without the user's yes, and do not check on every task.
+- Do not edit `hooks.json` or `config.toml` yourself for this - the command knows the format Codex reads. Never touch a `notify` setting.
+- They work from the next new thread. Codex may ask the user to review and trust the new hooks (`/hooks`); tell them.
+- To take them out: `{{NOTIPET}} install-hooks --codex --remove`.
 
 ## Rules
 

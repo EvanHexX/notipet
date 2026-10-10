@@ -2,137 +2,152 @@
 
 ## Purpose
 
-Codex에 notipet을 붙이는 플러그인. 훅 3개(턴 완료·권한 대기·새 입력)와 Codex용 스킬을 한 번에 설치한다. 사용자가 `~/.codex/config.toml`에 훅을 손으로 넣고, 스킬을 따로 설치하던 일을 대신한다.
+Codex에 notipet을 붙이는 두 부분을 다룬다.
 
-**플러그인을 쓰면 config.toml의 notipet 훅은 필요 없다 — 지워야 한다.** Codex는 같은 이벤트의 훅을 출처(사용자 설정, 프로젝트 설정, 플러그인)와 상관없이 전부 실행하고 중복을 거르지 않는다. 둘 다 있으면 notipet이 두 번 불린다(태그가 같아 소리는 중복 병합으로 한 번이지만, 기록이 두 배가 되고 resolve도 두 번 돈다). 따로 설치한 `~/.codex/skills/notipet`도 같은 이유로 지운다.
+1. **플러그인 (스킬만)** — `integrations/codex/plugin`. Codex가 스스로 판단해 알리고(`send`), 끝난 알람을 끄게(`resolve`) 하는 스킬. 공개 플러그인 목록에 올릴 수 있는 형태(훅·앱·MCP 없음)를 유지한다.
+2. **훅** — `notipet install-hooks --codex --write`가 `~/.codex/config.toml`에 notipet 블록을 넣는다. 턴 완료(`Stop`)와 승인 대기(`PermissionRequest`)는 에이전트가 멈춰 있는 순간이라 스킬로는 알릴 수 없고 훅만 잡는다. 스킬은 사용자가 이런 알림을 원할 때 **동의를 받아** 이 명령을 실행하라고 안내한다.
 
-플러그인은 notipet 앱을 포함하지 않는다. 앱은 설치 파일([installer.md](installer.md))로 깔고, 플러그인은 그 앱을 부른다.
+플러그인도 훅도 notipet 앱을 포함하지 않는다. 앱은 설치 파일([installer.md](installer.md))로 깔고, 둘 다 그 앱의 CLI(`notipet.exe`)를 부른다.
 
 ## Related Files
 
 - [integrations/codex/plugin/.codex-plugin/plugin.json](../../integrations/codex/plugin/.codex-plugin/plugin.json) — 매니페스트. `version`은 앱 버전과 같다
-- [integrations/codex/plugin/hooks/hooks.json](../../integrations/codex/plugin/hooks/hooks.json) — 훅 정의. **고치면 모든 사용자가 훅을 다시 신뢰해야 한다** (아래 Important Constraints)
-- [integrations/codex/plugin/scripts/notipet-hook.cmd](../../integrations/codex/plugin/scripts/notipet-hook.cmd) — 훅이 부르는 스크립트. notipet.exe를 찾아 그대로 넘긴다
 - [integrations/codex/plugin/skills/notipet/SKILL.md](../../integrations/codex/plugin/skills/notipet/SKILL.md) — **생성물.** 원본은 [integrations/codex/skills/notipet/SKILL.md](../../integrations/codex/skills/notipet/SKILL.md)
 - [.agents/plugins/marketplace.json](../../.agents/plugins/marketplace.json) — 이 저장소를 Codex 마켓플레이스로 만든다
-- [scripts/check-codex-plugin.ps1](../../scripts/check-codex-plugin.ps1) — 아래 제약을 기계로 확인한다. `pack.ps1`이 릴리스마다 부른다
+- [cli/CodexHooks.cs](../../cli/CodexHooks.cs) — 훅 블록, config.toml 넣기·빼기, 예전 위치 정리, 자체 테스트
+- [cli/Program.cs](../../cli/Program.cs) — `install-hooks`, `doctor`의 `codex hooks` 줄, `RestoreSystemRoot`
 - [cli/SkillInstaller.cs](../../cli/SkillInstaller.cs) — `install-skill --command notipet`이 플러그인 스킬을 만든다
-- [cli/Program.cs](../../cli/Program.cs) `DoctorAsync` — 플러그인과 config.toml 훅이 둘 다 있으면 경고
+- [scripts/check-codex-plugin.ps1](../../scripts/check-codex-plugin.ps1) — 아래 제약을 기계로 확인한다. `pack.ps1`이 릴리스마다 부른다
 
 ## Public APIs
 
 ```
-# 사용자
+# 플러그인 (사용자)
 codex plugin marketplace add EvanHexX/notipet        # 이 저장소(GitHub)를 마켓플레이스로
-codex plugin add notipet@notipet                      # 설치 → ~/.codex/plugins/cache/notipet/notipet/<version>/
-codex plugin marketplace upgrade notipet              # 새 버전 받기
-codex plugin remove notipet@notipet                   # 제거
+codex plugin add notipet@notipet                      # → ~/.codex/plugins/cache/notipet/notipet/<version>/
+codex plugin marketplace upgrade notipet              # 새 버전
+codex plugin remove notipet@notipet
 
-# 유지보수 (저장소 작업 폴더를 그대로 마켓플레이스로)
-codex plugin marketplace add C:\src\notipet
+# 훅
+notipet install-hooks --codex --write [--command EXE]   # config.toml에 notipet 블록 (백업, 반복해도 같음)
+notipet install-hooks --codex --remove                  # 다시 뺀다
+notipet install-hooks --codex                           # 넣을 블록을 출력만
+notipet doctor                                          # [ok] codex hooks ...config.toml
+
+# 유지보수
+codex plugin marketplace add C:\src\notipet           # 작업 폴더를 그대로 마켓플레이스로
 codex plugin add notipet@notipet                      # 고친 뒤 다시 실행해야 캐시가 바뀐다
-
 .\scripts\check-codex-plugin.ps1 [-Fix] [-Cli <notipet.exe>]
-notipet install-skill --codex --command notipet --path integrations\codex\plugin\skills --force
 ```
 
-플러그인 ID는 `notipet@notipet`(플러그인 이름 `notipet` @ 마켓플레이스 이름 `notipet`). 설정에는 `[marketplaces.notipet]`와 `[plugins."notipet@notipet"] enabled = true`가 생긴다.
+플러그인 ID는 `notipet@notipet`(플러그인 `notipet` @ 마켓플레이스 `notipet`). 설정에는 `[marketplaces.notipet]`와 `[plugins."notipet@notipet"] enabled = true`가 생긴다.
 
 ## Internal Flow
 
-1. Codex가 턴을 끝내거나(Stop), 권한을 묻거나(PermissionRequest), 사용자가 입력하면(UserPromptSubmit) 플러그인의 `hooks/hooks.json`에서 해당 훅을 찾는다.
-2. Windows에서는 `commandWindows`를 쓴다. 그 안의 `${PLUGIN_ROOT}`를 설치된 플러그인 폴더 경로로 **글자 그대로 치환**하고, `%ComSpec% /C "<command>"`로 실행한다. 페이로드 JSON은 stdin으로 들어온다.
-3. `notipet-hook.cmd`가 notipet.exe를 찾는다: `NOTIPET_CLI`(개발 빌드용) → `%LOCALAPPDATA%\NotipetApp\current\notipet.exe`(설치판) → PATH의 `notipet.exe`. 못 찾으면 아무것도 출력하지 않고 0으로 끝난다.
-4. `notipet.exe --source codex`가 stdin 페이로드를 읽어 알리거나 끝난 알람을 정리한다([cli_shim.md](cli_shim.md)). 훅 모드는 stdout에 아무것도 쓰지 않는다.
+**훅 설치** (`install-hooks --codex --write`):
+1. `$CODEX_HOME\config.toml`(기본 `%USERPROFILE%\.codex\config.toml`)을 줄 단위로 읽는다.
+2. notipet 블록을 찾아 뺀다: `[[hooks.X]]` 표 중 `command`가 전부 `notipet.exe`(또는 예전 플러그인의 `notipet-hook.cmd`)를 부르는 것, 바로 위의 `# notipet ...` 주석, 뒤의 빈 줄 하나. 다른 명령과 섞인 블록은 건드리지 않는다.
+3. 안전 확인: 빼고 나서도 `[hooks…]` 아래에 notipet.exe가 남았거나(섞인 블록, 인라인 표), 훅이 `Stop = [...]`·`hooks.Stop = ...`처럼 값으로 적혀 있으면(표를 덧붙이면 TOML 오류) **고치지 않고 멈춘다**(종료 코드 1).
+4. 새 블록을 **뺀 자리에 그대로**(없었으면 파일 끝에) 넣는다. 결과가 원래와 같으면 쓰지 않는다("already up to date"). 다르면 `config.toml.bak-notipet-<시각>`을 만들고 쓴다.
+5. 1.5.1 개발 중 한때 쓰던 `hooks.json`에 notipet 항목이 있으면 백업 후 그것만 뺀다(파일에 notipet 것만 있었으면 지운다).
 
-스킬은 Codex가 플러그인 스킬로 읽는다. 스킬은 `notipet`(PATH)을 부르고, 없으면 설치 경로를 쓰라고 안내한다. 한 파일이 모든 PC에서 써야 하므로 사용자별 절대 경로를 넣을 수 없다.
+블록 모양 (상태 메시지는 Windows 표시 언어가 한국어면 한국어):
+
+```toml
+# notipet hooks - written by `notipet install-hooks --codex --write`, which --remove undoes. Leave `notify` alone.
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = '"C:\Users\<user>\AppData\Local\NotipetApp\current\notipet.exe" --source codex'
+timeout = 10
+statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
+
+[[hooks.PermissionRequest]]   … (같은 꼴)
+[[hooks.UserPromptSubmit]]    … async = true
+```
+
+**훅 실행**: Codex가 이벤트마다 `%ComSpec% /C "<command>"`로 실행하고 페이로드 JSON을 stdin으로 준다. `notipet.exe --source codex`가 알리거나 끝난 알람을 정리한다([cli_shim.md](cli_shim.md)). stdout에는 아무것도 쓰지 않는다.
+
+**스킬**: Codex가 플러그인 스킬로 읽는다. 스킬은 `notipet`(PATH)을 부르고, 없으면 설치 경로를 쓰라고 안내한다. 한 파일이 모든 PC에서 쓰여야 하므로 사용자별 절대 경로를 넣을 수 없다. 훅 안내 절은 "사용자가 원할 때만, 동의를 받고, 직접 편집하지 말고 명령으로"다.
 
 ## State-Data Flow
 
 ```
 저장소
-  .agents/plugins/marketplace.json  ── source.path ──>  integrations/codex/plugin/
-                                                          .codex-plugin/plugin.json   (name, version, skills, interface)
-                                                          hooks/hooks.json            (Stop, PermissionRequest, UserPromptSubmit)
-                                                          scripts/notipet-hook.cmd
-                                                          skills/notipet/SKILL.md     (생성물)
-                                                          assets/icon.png
-       │ codex plugin add (복사)
-       ▼
-%USERPROFILE%\.codex\plugins\cache\notipet\notipet\<version>\     ← ${PLUGIN_ROOT}. Codex는 여기서 읽는다(원본이 아니라)
+  .agents/plugins/marketplace.json ── source.path ──> integrations/codex/plugin/
+                                                        .codex-plugin/plugin.json
+                                                        skills/notipet/SKILL.md   (생성물)
+                                                        assets/icon.png
+      │ codex plugin add (복사)
+      ▼
+%USERPROFILE%\.codex\plugins\cache\notipet\notipet\<version>\   ← Codex는 원본이 아니라 여기서 읽는다
 %USERPROFILE%\.codex\config.toml
-  [marketplaces.notipet]            source_type, source
-  [plugins."notipet@notipet"]       enabled
-  [hooks.state."notipet@notipet:hooks/hooks.json:stop:0:0"]   trusted_hash   ← 사용자가 신뢰하면 생긴다
+  [marketplaces.notipet] / [plugins."notipet@notipet"]          ← 플러그인
+  # notipet hooks ... + [[hooks.Stop]] [[hooks.PermissionRequest]] [[hooks.UserPromptSubmit]]   ← install-hooks --write
+  [hooks.state."<config.toml 경로>:stop:0:0"] trusted_hash      ← 사용자가 훅을 신뢰하면 Codex가 쓴다
+  config.toml.bak-notipet-<시각>                                 ← --write/--remove가 바꿀 때마다
 ```
 
 ## Important Constraints
 
-아래는 Codex 소스(openai/codex `main`, 2026-10)와 이 PC의 Codex 데스크톱(codex-cli 0.162.0-alpha.17.2)으로 확인한 것이다. Codex가 바뀌면 여기부터 다시 확인한다. 근거 파일은 Known Problems 아래 "확인한 곳"에 있다.
+아래는 Codex 소스(openai/codex `main`, 2026-10)와 이 PC의 Codex 데스크톱(codex-cli 0.162.0-alpha.17.2)으로 확인한 것이다. Codex가 바뀌면 여기부터 다시 확인한다. 근거는 Known Problems 아래 "확인한 곳".
 
-**형식**
-- **매니페스트는 `.codex-plugin/plugin.json`(레거시 형식)이어야 한다.** 플러그인 루트에 `plugin.json`이 있으면 Codex는 이식형(Agent Plugin) 형식으로 읽고, 그 형식은 **훅을 하나도 읽지 않는다**(`loader.rs`: `PluginManifestFormat::AgentPlugin`이면 hook source가 빈 목록). 공식 문서는 새 패키지에 이식형을 권하지만, 훅이 필요한 notipet은 따를 수 없다.
-- 훅 파일 기본 위치는 `hooks/hooks.json`. 매니페스트에 `hooks`를 적으면 기본 위치 대신 그것만 읽는다(더해지지 않는다). 우리는 적지 않는다.
-- `hooks.json` 최상위에는 `description`과 `hooks`만 올 수 있다(`deny_unknown_fields`). 다른 키가 있으면 **파일 전체가 거부된다**.
-- 핸들러 필드는 `type`, `command`, `commandWindows`(별칭 `command_windows`), `timeout`(초), `async`, `statusMessage`, `additionalContextLimit`뿐이다. **`args` 필드는 없고, 있어도 경고 없이 버려진다.** 인자는 명령줄 안에 쓴다. (예전 `install-hooks` 출력과 이 PC의 config.toml이 `args`를 썼는데, 버려지고 있었다. 그래도 동작한 것은 CLI가 페이로드 모양으로 Codex를 알아보기 때문이다.)
-- Windows에서는 `commandWindows`가 있으면 `command` 대신 쓴다. `command`는 `"true"`로 둔다 — notipet은 Windows 전용이고, 다른 OS에서 설치돼도 조용히 아무것도 하지 않게.
+**플러그인은 스킬만**
+- 공개 플러그인 목록은 **훅이나 앱 참조(`apps`/`.app.json`)가 든 플러그인을 받지 않는다.** 스킬만 든 플러그인은 MCP 심사 자료(데모 영상 등) 없이 스킬 검사만 통과하면 된다. 그래서 플러그인 폴더에는 `.codex-plugin`, `skills`, `assets`만 둔다(점검 스크립트가 확인).
+- 스킬만 든 플러그인에 나중에 MCP 서버를 더할 수는 없다(새 플러그인이 된다).
+- 매니페스트는 `.codex-plugin/plugin.json`(레거시 형식)을 쓴다. 이 PC의 Codex에서 설치·로드를 확인한 형식이다. 루트 `plugin.json`(이식형)으로 바꾸면 Codex는 그 형식에서 훅을 읽지 않는데(`loader.rs`), 스킬만이라 상관은 없지만 확인하지 않은 형식이므로 바꾸려면 다시 검증한다.
+- 플러그인 이름 `notipet`과 마켓플레이스 이름 `notipet`은 플러그인 ID다. 바꾸면 기존 설치가 남남이 된다.
+- `codex plugin add`는 폴더를 `cache\<marketplace>\<plugin>\<version>\`로 **복사**한다. 캐시는 버전별이므로 **플러그인 내용을 바꾸면 `version`을 올린다**. notipet은 앱 버전(csproj `<Version>`)과 같게 둔다.
+- 공개 목록에 올리면 플러그인 ID가 바뀐다(마켓플레이스가 다르다). 그때 저장소 마켓플레이스로 설치한 사용자는 같은 스킬이 두 번 보이므로, 옮겨 가라고 안내해야 한다.
 
-**실행**
-- 명령은 `%ComSpec% /C "<명령줄>"`(보통 cmd.exe)로, 세션의 cwd에서, 세션 환경을 다시 채운 새 환경으로, 창 없이 실행된다(`command_runner.rs`). 그래서 `%LOCALAPPDATA%` 같은 cmd 변수는 펼쳐진다.
-- `${PLUGIN_ROOT}`, `${PLUGIN_DATA}`(그리고 `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}`)는 Codex가 명령 문자열에서 **글자 그대로** 바꾼다. 환경 변수로도 들어온다. 경로에 공백이 있을 수 있으니 따옴표로 감싼다: `"\"${PLUGIN_ROOT}\\scripts\\notipet-hook.cmd\" --source codex"`.
-- 같은 이벤트의 훅은 모든 출처에서 모아 **동시에** 실행한다. 순서 보장도, 중복 제거도 없다.
-- 타임아웃 기본은 600초. 우리는 10초. `async = true`는 턴을 기다리게 하지 않는다(UserPromptSubmit에만).
-- Stop·PermissionRequest 훅의 stdout은 Codex가 결정(JSON)으로 읽을 수 있다. 그래서 스크립트와 CLI 훅 모드는 stdout에 아무것도 쓰지 않는다.
-- `.cmd`는 CRLF여야 한다(LF면 cmd.exe가 레이블·블록을 잘못 읽는다). `.gitattributes`가 `*.cmd`를 CRLF로 고정한다. ASCII만 쓴다(cmd는 배치 파일을 콘솔 코드 페이지로 읽는다).
+**훅은 config.toml에, notipet 명령으로만**
+- **`~/.codex/hooks.json`이 아니라 `config.toml`.** 이 PC의 Codex에서 `codex exec`는 config.toml의 훅은 실행했지만 hooks.json의 훅은 실행하지 않았다. 앱 서버의 `hooks/list`는 둘 다 보여 줬다. main 소스는 둘을 똑같이 다루지만, 설치된 버전에서 확인된 쪽을 쓴다.
+- **에이전트가 직접 편집하지 않는다.** 스킬은 `install-hooks --codex --write`를 실행하라고만 한다. LLM이 TOML을 고치면 파일을 깨거나(Codex가 못 뜬다) 무시되는 필드(`args`)를 넣고, 세션마다 다르게 고쳐 나중에 일괄로 바로잡을 수 없다.
+- **사용자 동의 없이 넣지 않는다.** 스킬은 사용자가 알림을 원할 때만 `doctor`로 확인하고 물어본다. 이 명령은 샌드박스 밖 실행이라 Codex가 승인을 받는데, 그 승인이 곧 동의다.
+- 핸들러 필드는 `type`, `command`, `commandWindows`, `timeout`(초), `async`, `statusMessage`, `additionalContextLimit`뿐이다(`hook_config.rs`). **`args`는 없고, 있어도 경고 없이 버려진다.** 인수는 명령줄 안에 쓴다.
+- 명령은 `%ComSpec% /C "<명령줄>"`로, 세션 cwd에서, 창 없이 실행된다(`command_runner.rs`). exe 경로는 따옴표로 감싼다.
+- **훅 환경이 비어 있을 수 있다.** 이 PC의 `codex exec`는 훅을 환경 변수 하나 없이 실행했다(`set` 출력이 비었다). `SystemRoot`가 없으면 Winsock이 소켓을 못 만들어 CLI가 "데몬이 꺼져 있다"고 했다. 그래서 CLI가 시작할 때 `SystemRoot`/`windir`을 Windows 폴더(셸 API)로 되살린다(`RestoreSystemRoot`). 데스크톱 앱의 훅은 환경이 채워져 있었다.
+- Codex는 같은 이벤트의 훅을 출처(사용자 설정, 프로젝트 설정, 플러그인)와 상관없이 **전부, 동시에** 실행하고 중복을 거르지 않는다. notipet 블록이 두 곳에 있으면 두 번 운다. `--write`가 예전 위치를 정리하고 `doctor`가 경고하는 이유다.
+- `notify`는 건드리지 않는다(AGENTS.md). 다른 것이 쓰고 있을 수 있는 단일 슬롯이다.
 
 **신뢰(trust) — 업데이트 때 가장 중요한 것**
-- Codex는 훅마다 **키**와 **해시**를 둔다. 키는 `notipet@notipet:hooks/hooks.json:<event>:<그룹 번호>:<핸들러 번호>`, 해시는 이벤트·matcher·핸들러 설정(명령, timeout, async, statusMessage — Windows에서는 `commandWindows`가 `command` 자리에 들어간 뒤)의 정규화 값이다(`discovery.rs` `hook_hash`). 사용자가 신뢰하면 `config.toml`의 `[hooks.state."<키>"] trusted_hash`에 저장된다.
-- 그러므로 **`hooks.json`의 그 어떤 글자를 바꿔도**(상태 메시지 문구, 타임아웃, 이벤트 추가, 순서 변경) 해시나 키가 달라져 그 훅은 "modified"/"untrusted"가 되고, **사용자가 다시 신뢰할 때까지 실행되지 않는다.** notipet이 조용히 멈추는 것이 사용자에게 보이는 증상이다.
-- 해시에는 `${PLUGIN_ROOT}` 치환 **전의** 문자열이 들어가고, 키에는 버전이 없다. 그래서 **플러그인 버전만 올라가면 다시 신뢰할 필요가 없다.** 스크립트(`notipet-hook.cmd`) 내용도 해시에 들어가지 않는다 — 바뀔 수 있는 로직은 스크립트에 둔다.
-- `check-codex-plugin.ps1`이 `hooks.json`의 SHA-256을 기록해 두고, 바뀌면 실패한다. 의도한 변경이면 스크립트의 값을 갱신하고 **릴리스 노트에 "Codex 훅을 다시 신뢰해야 합니다"를 쓴다.**
-- 신뢰 검토는 Codex CLI의 `/hooks` 또는 데스크톱 앱의 훅 설정에서 한다. `codex exec --dangerously-bypass-hook-trust`는 그 실행에서만 건너뛴다.
-
-**설치·업데이트**
-- `codex plugin add`는 플러그인 폴더를 `~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`로 **복사**한다. Codex는 원본이 아니라 이 복사본을 읽는다. 저장소를 고쳐도 다시 `add`(또는 Git 마켓플레이스면 `marketplace upgrade`)하기 전에는 바뀌지 않는다.
-- 캐시 폴더가 버전별이므로 **플러그인 내용을 바꾸면 `version`을 올린다.** notipet은 `plugin.json`의 `version`을 앱 버전(csproj `<Version>`)과 같게 둔다. 점검 스크립트가 확인한다.
-- 플러그인 이름 `notipet`과 마켓플레이스 이름 `notipet`을 바꾸면 플러그인 ID가 달라져 기존 설치·신뢰가 모두 남남이 된다. 바꾸지 않는다.
-- 마켓플레이스 `source.path`는 저장소 루트 기준, `./`로 시작, 루트 밖으로 못 나간다.
-- 공식 문서상 훅이 든 플러그인은 공개 플러그인 디렉터리에 올릴 수 없다. 배포는 이 저장소를 마켓플레이스로 추가하는 방식뿐이다.
-
-**훅 대상**
-- notipet이 쓰는 이벤트: `Stop`(완료 알림 + 이 스레드 권한 알람 정리), `PermissionRequest`(권한 대기 알람), `UserPromptSubmit`(지난 턴 완료 알림 정리, async). 무엇을 알리고 무엇을 끝내는지는 `PayloadMapper.PlanForHookEvent`가 정한다 — 이벤트를 더하거나 빼려면 그쪽과 함께 고친다.
-- Codex의 레거시 `notify`는 건드리지 않는다(AGENTS.md). 다른 것이 이미 쓰고 있을 수 있는 단일 슬롯이다.
+- Codex는 훅마다 **키**(`<config.toml 경로>:<event>:<그룹 번호>:<핸들러 번호>`)와 **해시**(이벤트·matcher·핸들러 설정 — 명령, timeout, async, statusMessage — 의 정규화 값, `discovery.rs` `hook_hash`)를 둔다. 신뢰하면 `[hooks.state."<키>"] trusted_hash`에 저장된다.
+- 그러므로 **블록의 어느 글자든**(상태 문구, timeout, 명령 경로) 바꾸거나 블록의 위치(그룹 번호)를 옮기면, 그 훅은 "modified"/"untrusted"가 되어 신뢰를 요구하는 환경에서는 **다시 신뢰할 때까지 돌지 않는다.** 그래서 `--write`는 블록을 원래 자리에 다시 넣고, 내용이 같으면 파일을 건드리지 않는다. `CodexHooks.Block`의 문구를 바꾸는 것은 모든 사용자에게 재신뢰를 요구하는 일이다 — 릴리스 노트에 적는다.
+- 설치판 경로(`%LOCALAPPDATA%\NotipetApp\current\notipet.exe`)는 업데이트해도 같으므로 앱 업데이트는 재신뢰를 부르지 않는다.
+- 이 PC의 데스크톱 앱은 `hooks/list`가 "untrusted"라고 보여 주는 config.toml 훅도 실행했다. CLI(`codex exec`)는 신뢰되지 않은 훅을 건너뛴다(`/hooks`로 신뢰, 또는 `--dangerously-bypass-hook-trust`).
 
 ## Known Problems
 
-- **`codex exec`(CLI)는 플러그인 훅을 실행하지 않았다.** 이 PC(0.162.0-alpha.17.2)에서 신뢰를 넣어 주거나 `--dangerously-bypass-hook-trust`를 줘도 플러그인 훅은 돌지 않았고, 같은 조건에서 config.toml 훅은 돌았다. 공식 문서도 "플러그인 훅은 데스크톱 앱에 수동 설치한 플러그인에서만 지원"이라고 한다. CLI만 쓰는 사용자는 config.toml 훅(`notipet install-hooks --codex`)을 쓴다.
-- **신뢰 표시와 실제 실행이 어긋난다.** `hooks/list`(app-server)는 이 PC의 config.toml 훅을 "untrusted"로 보여 주는데, 데스크톱 앱에서는 실제로 실행됐다. 데스크톱 앱이 신뢰를 어떻게 다루는지는 공개되지 않았다. 플러그인 훅이 안 울리면 먼저 신뢰부터 확인한다.
-- 플러그인 스킬은 `notipet`(PATH)을 부른다. 설치 직후 이미 떠 있던 Codex는 바뀐 PATH를 모를 수 있다 — Codex를 다시 시작하거나 스킬 안내대로 설치 경로를 쓴다. 사용자가 예전 절대 경로로 허용해 둔 `prefix_rule`은 `notipet`에 대해 한 번 더 물을 수 있다.
-- 이 PC의 Codex 레거시 `notify`(computer-use)는 `os error 206`(명령줄이 너무 김)으로 실패하고 있다(openai/codex#25141). notipet과 무관하지만, `notify`를 쓰지 않는 이유가 실제로 재현된 것이다.
+- **`codex exec`(CLI)에서 확인한 차이**: 플러그인 훅은 돌지 않았고(1.5.1 개발 중 훅을 넣은 플러그인으로 시험 — 공식 문서도 "데스크톱 앱 전용"), hooks.json 훅도 돌지 않았으며, config.toml 훅은 돌았지만 환경 변수 없이 실행됐다.
+- 플러그인 스킬은 `notipet`(PATH)을 부른다. 설치 직후 이미 떠 있던 Codex는 바뀐 PATH를 모를 수 있다 — Codex를 다시 시작하거나 스킬 안내대로 설치 경로를 쓴다. 예전 절대 경로로 허용해 둔 `prefix_rule`은 `notipet`에 대해 한 번 더 물을 수 있다.
+- `--write`는 TOML 파서 없이 줄 단위로 일한다. 사용자가 notipet 블록 안을 손으로 고쳐 다른 명령을 섞으면 그 블록은 건드리지 않고 멈춘다.
+- 이 PC의 Codex 레거시 `notify`(computer-use)는 `os error 206`(명령줄이 너무 김)으로 실패하고 있다(openai/codex#25141). notipet과 무관하지만 `notify`를 쓰지 않는 이유가 재현된 것이다.
 
 확인한 곳:
-- 문서: <https://learn.chatgpt.com/docs/plugins>, <https://learn.chatgpt.com/docs/hooks>, <https://developers.openai.com/plugins/build/plugins>
-- 소스(openai/codex): `codex-rs/config/src/hook_config.rs`(필드), `codex-rs/hooks/src/engine/command_runner.rs`(cmd /C 실행), `codex-rs/hooks/src/engine/discovery.rs`(`${…}` 치환, `hook_hash`, 신뢰 판정), `codex-rs/core-plugins/src/loader.rs`(`hooks/hooks.json` 기본값, 이식형은 훅 없음), `codex-rs/core-plugins/src/manifest.rs`(매니페스트 필드)
-- 이 PC: `codex plugin marketplace add/add` 결과, app-server `hooks/list` 응답, `codex exec --ephemeral` 시험
+- 문서: <https://learn.chatgpt.com/docs/plugins>, <https://learn.chatgpt.com/docs/hooks>, <https://developers.openai.com/plugins/build/plugins>, <https://developers.openai.com/plugins/deploy/submission>(훅·앱 참조가 든 플러그인은 제출 불가, 스킬만은 가능)
+- 소스(openai/codex): `codex-rs/config/src/hook_config.rs`(필드), `codex-rs/hooks/src/engine/command_runner.rs`(cmd /C, 환경 재구성), `codex-rs/hooks/src/engine/discovery.rs`(층별 hooks.json·config.toml, `hook_hash`, 신뢰 판정), `codex-rs/core-plugins/src/loader.rs`, `codex-rs/core-plugins/src/manifest.rs`
+- 이 PC: `codex plugin marketplace add/add/remove`, 앱 서버 `hooks/list`, `codex exec --ephemeral`에 `-c hooks.Stop=…`로 넣은 기록용 훅
 
 ## Regression Notes
 
-- `.\scripts\check-codex-plugin.ps1` — 모두 ok. (`pack.ps1`이 같은 검사를 하므로 릴리스 전에 반드시 한 번 돈다.)
-- 설치: `codex plugin marketplace add <저장소>` → `codex plugin add notipet@notipet` → 캐시 폴더에 다섯 파일, config.toml에 `[plugins."notipet@notipet"]`.
-- 실제 동작: 데스크톱 앱에서 새 스레드 → 짧은 요청 → 완료 알림이 오고, `notipet history`에 `codex` 출처로 남는다. 권한이 필요한 명령을 시켜 권한 대기 알람 → 승인하면 턴이 끝나며 알람이 멈춘다.
-- `notipet doctor`의 `codex hooks`가 `plugin …\hooks\hooks.json`. config.toml에도 notipet 훅이 있으면 경고.
-- notipet을 제거한 PC에서 훅이 돌아도 Codex에 오류가 보이지 않는다(스크립트가 조용히 0).
+- `notipet --self-test`의 `CodexHooks`: 넣기·반복·제자리 교체·빼기·예전 형식 정리·거부 사례·hooks.json 정리·임시 CODEX_HOME에서 끝까지.
+- `.\scripts\check-codex-plugin.ps1` 모두 ok(`pack.ps1`도 같은 검사).
+- 실제 설정 사본에 `--write` → Python `tomllib`로 읽힌다, `notify`·다른 설정 그대로, 두 번째는 "already up to date".
+- 빈 환경에서 `notipet --source codex`에 Stop 페이로드 → 알림 전달(`RestoreSystemRoot` 전에는 "daemon not running").
+- 데스크톱 앱 새 스레드 → 완료 알림, 권한 필요한 명령 → 승인 대기 알람, 승인 후 턴이 끝나면 알람 정지.
+- `notipet doctor`의 `codex hooks`: config.toml이면 ok, hooks.json에 남아 있으면 경고.
 
 ## Rejected Approaches
 
-- **hooks.json에서 notipet.exe를 직접 부르기** (`"%LOCALAPPDATA%\\NotipetApp\\current\\notipet.exe" --source codex`): 동작은 하지만 경로나 찾는 순서를 바꿀 때마다 `hooks.json`이 바뀌어 모든 사용자가 다시 신뢰해야 한다. 설치하지 않은 PC에서는 cmd가 "인식할 수 없는 명령" 오류를 낸다.
-- **PATH의 `notipet`만 부르기**: 설치 직후 이미 떠 있던 Codex는 새 PATH를 모른다.
-- **플러그인 안에 notipet.exe를 넣기**: 앱(트레이 데몬)과 CLI 버전이 따로 놀고, 업데이트 경로가 둘이 된다. 플러그인은 설치된 앱을 부르기만 한다.
-- **이식형 매니페스트(루트 `plugin.json`)**: 훅을 읽지 않는다.
-- **config.toml 훅과 함께 쓰기**: 모든 훅이 두 번 돈다.
+- **플러그인에 훅 넣기** (1.5.1 개발 중 만들었다가 뺐다): 공개 목록에 못 올리고, 데스크톱 앱에서만 돌며(`codex exec`에서 확인), `hooks.json`을 고칠 때마다 재신뢰가 필요하다.
+- **`~/.codex/hooks.json`에 쓰기** (JSON이라 편집이 안전했다): 이 PC의 Codex가 `codex exec`에서 실행하지 않았다.
+- **스킬이 에이전트에게 config.toml을 직접 고치게 하기**: 파일을 깨거나 무시되는 필드를 넣을 수 있고, 결과가 세션마다 다르며, 공개 심사에서 "훅 제한 우회"로 보일 수 있다. 편집은 notipet 명령이 하고 스킬은 동의를 받아 그 명령을 부른다.
+- **훅을 아예 빼고 스킬만**: 승인 대기 순간에 에이전트는 멈춰 있어 스스로 알릴 수 없고(Codex에서는 notipet 실행 자체가 또 승인을 요구한다), 완료 알림은 모델이 잊을 수 있다.
+- **TOML 파서 의존성 추가**: CLI는 의존성 없는 NativeAOT exe로 둔다. 블록을 통째로 넣고 빼며, 위험한 모양이면 멈춘다.
 
 ## TODO
 
-- 데스크톱 앱이 플러그인 훅 신뢰를 어떻게 다루는지 공식 문서가 나오면 Known Problems 정리
-- `Interrupt` 이벤트(사용자가 턴을 끊음)로 그 스레드 알람 정리 — `PayloadMapper`와 함께, 그리고 신뢰 재요청을 감수할 가치가 있을 때
-- Claude Code 플러그인
+- 스레드별로 훅 알림 켜기/끄기(훅은 그대로, notipet이 스레드 ID로 거른다)
+- `install-hooks --claude --write`
+- 공개 플러그인 목록 제출(조직 인증 필요). 제출하면 ID 이동 안내
+- `Interrupt` 이벤트(사용자가 턴을 끊음)로 그 스레드 알람 정리 — 블록 문구가 바뀌어 재신뢰가 필요하므로 다른 변경과 묶어서

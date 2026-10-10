@@ -80,35 +80,6 @@ internal static class HookSnippets
     }
     """;
 
-    // Codex's modern hooks rather than its legacy `notify`: notify is a single
-    // slot that something else may already own, it only ever fires on
-    // agent-turn-complete, and its argv payload can overflow the Windows command
-    // line. Hooks give PermissionRequest and deliver on stdin.
-    //
-    // UserPromptSubmit only ends things (the last turn's "finished", the idle
-    // reminder) and is async, so a prompt never waits on notipet.
-    //
-    // Codex has no `args` field (it ignores one silently): `command` is a whole
-    // command line, run through cmd.exe /C on Windows. The notipet plugin brings
-    // these same hooks without editing config.toml (docs/modules/codex_plugin.md).
-    public static string CodexHooks(string exePath) => $"""
-    [[hooks.Stop]]
-    [[hooks.Stop.hooks]]
-    type = "command"
-    command = '"{exePath}" --source codex'
-    timeout = 10
-
-    [[hooks.PermissionRequest]]
-    [[hooks.PermissionRequest.hooks]]
-    type = "command"
-    command = '"{exePath}" --source codex'
-    timeout = 10
-
-    [[hooks.UserPromptSubmit]]
-    [[hooks.UserPromptSubmit.hooks]]
-    type = "command"
-    command = '"{exePath}" --source codex'
-    timeout = 10
-    async = true
-    """;
+    // Codex's hooks are in CodexHooks: it writes hooks.json itself
+    // (`install-hooks --codex --write`) and prints the same thing otherwise.
 }

@@ -149,7 +149,7 @@ CLI 버전과 실행 중인 데몬 버전.
 [ok  ] quiet hours        not active
 [ok  ] at desk            no
 [warn] claude hooks       not configured - `notipet install-hooks --claude`
-[warn] codex hooks        not configured - install the notipet Codex plugin (docs/modules/codex_plugin.md)
+[warn] codex hooks        not configured - `notipet install-hooks --codex --write`
 [warn] claude skill       not installed - `notipet install-skill`
 [ok  ] cli                C:\src\notipet\bin\notipet.exe
 ```
@@ -220,9 +220,16 @@ notipet history clear
 notipet install-hooks [--claude] [--codex]
 ```
 
-Claude Code / Codex 훅 설정 블록을 **출력만** 한다. 설정 파일은 건드리지 않는다. 옵션 없이 부르면 둘 다. 자세한 설명은 [USAGE.md 3절](USAGE.md#3-에이전트-연동).
+Claude Code / Codex 훅 설정 블록을 출력한다(`--write` 없이는 설정 파일을 건드리지 않는다). 옵션 없이 부르면 둘 다. 자세한 설명은 [USAGE.md 3절](USAGE.md#3-에이전트-연동).
 
-Codex는 [플러그인](modules/codex_plugin.md)이 같은 훅과 스킬을 넣으므로, 플러그인을 쓰면 이 블록은 넣지 않는다(둘 다 있으면 훅이 두 번 돈다). Codex 훅에는 `args` 필드가 없어서 인수는 `command` 안에 쓴다 — 1.5.0까지의 출력은 `args`를 썼고, Codex가 그것을 조용히 버렸다.
+```
+notipet install-hooks --codex --write [--command EXE]   # ~/.codex/config.toml에 직접 넣는다
+notipet install-hooks --codex --remove                  # 다시 뺀다
+```
+
+Codex는 `--write`로 설정 파일에 직접 넣을 수 있다: 백업(`config.toml.bak-notipet-<시각>`)을 만들고, notipet 블록만 원래 자리에 넣거나 바꾸며, 다시 실행해도 같다. 예전 버전이 넣은 블록(`args`가 든 것)은 새 것으로 바꾸고, 1.5.1 개발판이 `hooks.json`에 넣은 항목은 뺀다. 훅이 `Stop = [...]`처럼 값으로 적혀 있거나 notipet과 다른 명령이 섞인 블록이 있으면 고치지 않고 멈춘다(종료 코드 1). `--command`는 훅이 부를 notipet.exe(기본: 이 CLI). 자세한 내용은 [modules/codex_plugin.md](modules/codex_plugin.md).
+
+Codex 훅에는 `args` 필드가 없어서 인수는 `command` 안에 쓴다 — 1.5.0까지의 출력은 `args`를 썼고, Codex가 그것을 조용히 버렸다. `--write`는 Codex만 지원한다(`--claude --write`는 TODO).
 
 ### `install-skill`
 

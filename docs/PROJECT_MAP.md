@@ -143,11 +143,12 @@
 | 기능 | 경로 |
 |---|---|
 | 스킬 원본 (CLI에 내장, `install-skill`이 설치) | [integrations/claude/skills/notipet/SKILL.md](../integrations/claude/skills/notipet/SKILL.md), [integrations/codex/skills/notipet/SKILL.md](../integrations/codex/skills/notipet/SKILL.md) |
-| Codex 플러그인 (훅 + 스킬) — **고치기 전에 [modules/codex_plugin.md](modules/codex_plugin.md)** | [integrations/codex/plugin/](../integrations/codex/plugin/) |
+| Codex 플러그인 (스킬만) — **고치기 전에 [modules/codex_plugin.md](modules/codex_plugin.md)** | [integrations/codex/plugin/](../integrations/codex/plugin/) |
 | Codex 플러그인 마켓플레이스 (`codex plugin marketplace add EvanHexX/notipet`) | [.agents/plugins/marketplace.json](../.agents/plugins/marketplace.json) |
 | Codex 플러그인 점검 (pack.ps1이 부름) | [scripts/check-codex-plugin.ps1](../scripts/check-codex-plugin.ps1) |
+| Codex 훅 넣기·빼기 (`install-hooks --codex --write/--remove`) | [cli/CodexHooks.cs](../cli/CodexHooks.cs) |
 | 스킬 미지원 에이전트용 AGENTS.md 조각 | [integrations/codex/AGENTS.notipet.md](../integrations/codex/AGENTS.notipet.md) |
-| 훅 설정 예시 (플러그인 없이) | [integrations/](../integrations/) |
+| 훅 설정 예시 | [integrations/](../integrations/) |
 
 문서: [CLI.md](CLI.md) · [SKILL.md](SKILL.md) · [IDEAS.md](IDEAS.md)
 
