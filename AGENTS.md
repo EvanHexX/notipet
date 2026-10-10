@@ -64,6 +64,9 @@ dotnet build app\Notipet.App.csproj -p:BaseOutputPath=$env:TEMP/notipet-build/
 
 `--self-test` must stay **silent and headless**: no tray icon, no window, no sound. Audible verification is `--test-sound [level]`. The HTTP check inside it binds a real ephemeral port — that is deliberate, it is the highest-value check in the suite.
 
+If you run inside an agent sandbox, check the daemon (`runtime.json`, `notipet ping`, `scripts/*.ps1`, `publish.ps1 -Restart`) from a shell outside it. A sandboxed shell can see a stale copy of `%LOCALAPPDATA%
+otipet`, and a CLI run there may auto-launch a daemon whose `runtime.json` the user's hooks never see.
+
 For tray, sound, or hook changes, report a manual smoke checklist (`docs/regression.md`, automated through step 8 by `scripts/smoke.ps1`) and do not launch the GUI yourself unless asked. If a command fails, report the exact failure. Do not claim verification that was not actually run.
 
 ## Invariants worth not breaking
