@@ -10,7 +10,7 @@ notipet is a tray app on the user's Windows machine. It plays a sound and shows 
 The command is:
 
 ```
-{{NOTIPET}}
+notipet
 ```
 
 (If that is not found: the installer puts notipet in `%LOCALAPPDATA%\NotipetApp\current\notipet.exe` and on PATH as `notipet`. Run `notipet ping` once to check.)
@@ -33,7 +33,7 @@ Do **not** notify:
 ## How
 
 ```
-{{NOTIPET}} send --title "<project>: <what happened>" --body "<one or two lines>" --level <level> --tag "<project>:<moment>" --project "<project>" --thread-title "<this conversation, in a few words>"
+notipet send --title "<project>: <what happened>" --body "<one or two lines>" --level <level> --tag "<project>:<moment>" --project "<project>" --thread-title "<this conversation, in a few words>"
 ```
 
 - `--level`: `info` | `success` | `attention` | `warn` | `error` | `critical`
@@ -49,11 +49,11 @@ You do not need to say which agent you are or pass a thread id: notipet reads bo
 Examples:
 
 ```
-{{NOTIPET}} send --title "notipet: tests passed" --body "17/17 checks passed; ready to publish when you are." --level success --tag "notipet:done" --project notipet --thread-title "project grouping"
+notipet send --title "notipet: tests passed" --body "17/17 checks passed; ready to publish when you are." --level success --tag "notipet:done" --project notipet --thread-title "project grouping"
 
-{{NOTIPET}} send --title "quota-scope: need a decision" --body "Two ways to fix the tray crash - which do you prefer? Details in the terminal." --level attention --tag "quota-scope:needs-input" --project quota-scope --thread-title "tray crash fix"
+notipet send --title "quota-scope: need a decision" --body "Two ways to fix the tray crash - which do you prefer? Details in the terminal." --level attention --tag "quota-scope:needs-input" --project quota-scope --thread-title "tray crash fix"
 
-{{NOTIPET}} send --title "api: migration failed" --body "Step 3 of 5 failed on a unique constraint; nothing was committed. Stopped and waiting." --level error --tag "api:blocked" --project api --thread-title "orders migration"
+notipet send --title "api: migration failed" --body "Step 3 of 5 failed on a unique constraint; nothing was committed. Stopped and waiting." --level error --tag "api:blocked" --project api --thread-title "orders migration"
 ```
 
 ## When it is over: resolve
@@ -61,8 +61,8 @@ Examples:
 An `attention`, `error` or `critical` alert can keep ringing until someone stops it - and the user may have answered from somewhere else (their phone, another window), or you may have fixed the problem yourself. When the moment you alerted about **is over**, say so:
 
 ```
-{{NOTIPET}} resolve
-{{NOTIPET}} resolve --tag "<the same tag you sent>"
+notipet resolve
+notipet resolve --tag "<the same tag you sent>"
 ```
 
 - With no arguments it stops the alarms **this conversation** raised and closes their pop-ups. With `--tag` only that one. Nothing else is touched - other conversations' alarms keep ringing.
@@ -74,9 +74,9 @@ An `attention`, `error` or `critical` alert can keep ringing until someone stops
 
 The user decides which projects and threads ring: either everything except what they turned off, or only what they turned on. Your sends follow the same rules as the hooks.
 
-- They ask to be alerted in this conversation ("let me know when this is done"): run `{{NOTIPET}} alerts on` once. It turns this thread on and is harmless if it already was.
-- They ask for quiet here ("stop pinging me in this thread"): `{{NOTIPET}} alerts off`. For the whole project, add `--project`.
-- `{{NOTIPET}} alerts` shows whether this thread rings and why.
+- They ask to be alerted in this conversation ("let me know when this is done"): run `notipet alerts on` once. It turns this thread on and is harmless if it already was.
+- They ask for quiet here ("stop pinging me in this thread"): `notipet alerts off`. For the whole project, add `--project`.
+- `notipet alerts` shows whether this thread rings and why.
 - Change the mode (`alerts mode all|selected`) or other threads' and projects' rules only when the user asks for exactly that.
 ## Rules
 
@@ -88,6 +88,6 @@ The user decides which projects and threads ring: either everything except what 
 
 ## Useful extras
 
-- `{{NOTIPET}} ping` - is notipet running?
-- `{{NOTIPET}} desk on` / `desk off` - the user is / is not at the desk (long alarms become short while they are).
-- `{{NOTIPET}} history --limit 5` - what was sent recently.
+- `notipet ping` - is notipet running?
+- `notipet desk on` / `desk off` - the user is / is not at the desk (long alarms become short while they are).
+- `notipet history --limit 5` - what was sent recently.

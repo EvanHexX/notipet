@@ -1,0 +1,14 @@
+{
+  "name": "notipet",
+  "displayName": "Notipet",
+  "version": "1.6.1",
+  "description": "A sound and a pop-up on your Windows desktop when Claude needs you or finishes - hooks for every turn and permission prompt, plus a skill so Claude can alert you itself. Needs the notipet app.",
+  "author": {
+    "name": "EvanHexX",
+    "url": "https://github.com/EvanHexX"
+  },
+  "homepage": "https://github.com/EvanHexX/notipet",
+  "repository": "https://github.com/EvanHexX/notipet",
+  "license": "MIT",
+  "keywords": ["notification", "alarm", "windows", "tray", "hooks"]
+}

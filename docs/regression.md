@@ -312,3 +312,9 @@
 - **플러그인에 넣은 훅**은 `codex exec`에서 돌지 않았다(신뢰를 넣거나 `--dangerously-bypass-hook-trust`를 줘도). 공식 문서도 데스크톱 전용이라고 하고, 훅이 든 플러그인은 공개 목록에 못 올린다 → 플러그인은 스킬만.
 - **`~/.codex/hooks.json`**에 쓴 훅은 앱 서버 `hooks/list`에는 보였지만 `codex exec`에서 실행되지 않았다. 같은 내용을 config.toml에 넣으면 실행됐다 → `install-hooks --codex --write`는 config.toml에 쓴다.
 - 확인 방법: `codex exec --ephemeral --dangerously-bypass-hook-trust -c 'hooks.Stop=[{hooks=[{type="command",command="echo ran >> %TEMP%\x.log"}]}]' ...`처럼 설정 파일을 건드리지 않는 기록용 훅으로 비교한다.
+
+### 플러그인 훅과 settings.json 훅은 둘 다 돈다 (1.6.1, 예방)
+
+- **사실**: Claude Code는 같은 핸들러가 여러 settings 파일에 있으면 한 번만 돌리지만, 플러그인의 복사본은 따로 돌린다(공식 hooks 문서). Codex도 모든 출처의 훅을 다 돌린다.
+- **대응**: Claude 플러그인으로 옮길 때 `notipet install-hooks --claude --remove`로 settings.json의 notipet 훅을 빼고 `~/.claude/skills/notipet`을 지운다. `doctor`가 둘 다 있으면 경고하고, `--write`도 플러그인이 켜져 있으면 경고한다.
+- 함께 확인한 것: Claude Code 훅의 `args`는 정식 필드다(exec form, 셸 없이 실행). 예전 settings.json의 `args`는 제대로 쓰이고 있었다 — Codex와 다르다.

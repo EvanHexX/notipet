@@ -96,13 +96,15 @@ internal static class Help
         new("start", "notipet start", "Start the tray daemon if it is not running.", ""),
         new("stop", "notipet stop", "Quit the tray daemon and wait for it to exit.", ""),
         new("restart", "notipet restart", "Stop, then start.", ""),
-        new("install-hooks", "notipet install-hooks [--claude] [--codex [--write | --remove]] [--command EXE]",
-            "Print hook config for Claude Code and/or Codex, or set Codex's up.",
+        new("install-hooks", "notipet install-hooks [--claude | --codex] [--write | --remove] [--command EXE]",
+            "Print hook config for Claude Code and/or Codex, or set it up.",
             """
-              --codex --write   add notipet's hooks to %USERPROFILE%\.codex\config.toml (backup first,
-                                only notipet's block, safe to repeat; replaces what older versions wrote)
-              --codex --remove  take them out again
-              --command EXE     the notipet.exe the hooks run (default: this one)
+              --codex --write    add notipet's hooks to %USERPROFILE%\.codex\config.toml (backup first,
+                                 only notipet's block, safe to repeat; replaces what older versions wrote)
+              --claude --write   the same in %USERPROFILE%\.claude\settings.json - unless you use the
+                                 notipet Claude Code plugin, which brings them (both would ring twice)
+              --remove           take them out again (with --claude or --codex)
+              --command EXE      the notipet.exe the hooks run (default: this one)
             """),
         new("install-skill", "notipet install-skill [--claude | --codex | --path DIR] [--command CMD] [--print] [--force]",
             "Install the notipet agent skill so the agent can decide when to alert you.",

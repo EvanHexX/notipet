@@ -248,7 +248,15 @@ notipet install-hooks --codex --remove                  # 다시 뺀다
 
 Codex는 `--write`로 설정 파일에 직접 넣을 수 있다: 백업(`config.toml.bak-notipet-<시각>`)을 만들고, notipet 블록만 원래 자리에 넣거나 바꾸며, 다시 실행해도 같다. 예전 버전이 넣은 블록(`args`가 든 것)은 새 것으로 바꾸고, 1.5.1 개발판이 `hooks.json`에 넣은 항목은 뺀다. 훅이 `Stop = [...]`처럼 값으로 적혀 있거나 notipet과 다른 명령이 섞인 블록이 있으면 고치지 않고 멈춘다(종료 코드 1). `--command`는 훅이 부를 notipet.exe(기본: 이 CLI). 자세한 내용은 [modules/codex_plugin.md](modules/codex_plugin.md).
 
-Codex 훅에는 `args` 필드가 없어서 인수는 `command` 안에 쓴다 — 1.5.0까지의 출력은 `args`를 썼고, Codex가 그것을 조용히 버렸다. `--write`는 Codex만 지원한다(`--claude --write`는 TODO).
+Codex 훅에는 `args` 필드가 없어서 인수는 `command` 안에 쓴다 — 1.5.0까지의 출력은 `args`를 썼고, Codex가 그것을 조용히 버렸다.
+
+```
+notipet install-hooks --claude --write [--command EXE]  # ~/.claude/settings.json에 직접 넣는다
+notipet install-hooks --claude --remove                 # 다시 뺀다 — Claude Code 플러그인으로 옮길 때
+notipet install-hooks --plugin                          # Claude 플러그인의 hooks/hooks.json 내용 (유지보수용)
+```
+
+Claude Code는 [플러그인](modules/claude_plugin.md)이 같은 훅과 스킬을 넣으므로 보통은 이것이 필요 없다. `--write`는 백업(`settings.json.bak-notipet-<시각>`)을 만들고 notipet 항목만 원래 자리에 넣거나 바꾸며(다른 설정·훅·순서는 그대로), 다시 실행해도 같다. 플러그인이 켜져 있으면 두 번 울린다고 경고한다. Claude Code 훅은 `args`를 지원한다(exec form, 셸 없이 실행). `$CLAUDE_CONFIG_DIR`가 있으면 그 폴더를 쓴다.
 
 ### `install-skill`
 

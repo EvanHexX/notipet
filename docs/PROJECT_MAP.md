@@ -148,6 +148,9 @@
 | Codex 플러그인 마켓플레이스 (`codex plugin marketplace add EvanHexX/notipet`) | [.agents/plugins/marketplace.json](../.agents/plugins/marketplace.json) |
 | Codex 플러그인 점검 (pack.ps1이 부름) | [scripts/check-codex-plugin.ps1](../scripts/check-codex-plugin.ps1) |
 | Codex 훅 넣기·빼기 (`install-hooks --codex --write/--remove`) | [cli/CodexHooks.cs](../cli/CodexHooks.cs) |
+| Claude Code 플러그인 (훅 + 스킬) — [modules/claude_plugin.md](modules/claude_plugin.md) | [integrations/claude/plugin/](../integrations/claude/plugin/), [.claude-plugin/marketplace.json](../.claude-plugin/marketplace.json) |
+| Claude 훅 정의 한 벌 (출력, settings.json `--write/--remove`, 플러그인 hooks.json) | [cli/ClaudeHooks.cs](../cli/ClaudeHooks.cs) |
+| Claude 플러그인 점검 (pack.ps1이 부름) | [scripts/check-claude-plugin.ps1](../scripts/check-claude-plugin.ps1) |
 | 스킬 미지원 에이전트용 AGENTS.md 조각 | [integrations/codex/AGENTS.notipet.md](../integrations/codex/AGENTS.notipet.md) |
 | 훅 설정 예시 | [integrations/](../integrations/) |
 

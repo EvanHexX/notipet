@@ -17,7 +17,7 @@
 ## 1. 설치
 
 ```powershell
-notipet install-skill                 # Claude Code (사용자 전체)
+notipet install-skill                 # Claude Code (사용자 전체) — 플러그인을 쓰면 필요 없다(modules/claude_plugin.md)
 notipet install-skill --codex         # Codex — 플러그인을 쓰면 필요 없다(아래)
 notipet install-hooks --codex --write # Codex 훅 (스킬이 동의를 받아 대신 실행할 수도 있다)
 notipet install-skill --path E:\my-repo\.claude\skills   # 특정 프로젝트에만

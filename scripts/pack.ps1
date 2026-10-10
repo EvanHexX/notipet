@@ -52,6 +52,9 @@ if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "publish failed ($LASTEXITCO
 Write-Host '==> Codex plugin check' -ForegroundColor Cyan
 & (Join-Path $PSScriptRoot 'check-codex-plugin.ps1') -Cli (Join-Path $publish 'notipet.exe')
 if ($LASTEXITCODE -ne 0) { throw "Codex plugin check failed ($LASTEXITCODE) - fix it, or run check-codex-plugin.ps1 -Fix" }
+Write-Host '==> Claude Code plugin check' -ForegroundColor Cyan
+& (Join-Path $PSScriptRoot 'check-claude-plugin.ps1') -Cli (Join-Path $publish 'notipet.exe')
+if ($LASTEXITCODE -ne 0) { throw "Claude plugin check failed ($LASTEXITCODE) - fix it, or run check-claude-plugin.ps1 -Fix" }
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 

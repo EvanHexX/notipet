@@ -83,19 +83,16 @@ notipet install-hooks --codex --write             # 훅. ~/.codex/config.toml에
 
 Codex에게 "notipet 설정해 줘"라고만 해도 됩니다. 스킬이 동의를 받은 뒤 마지막 명령을 실행합니다. 새 스레드부터 적용되며, Codex가 새 훅 검토(`/hooks`)를 물으면 신뢰합니다. 자세한 내용: [docs/modules/codex_plugin.md](docs/modules/codex_plugin.md).
 
-**Claude Code 훅** (권한 대기·턴 완료를 놓치지 않음):
+**Claude Code** — notipet을 먼저 설치하고, 플러그인 하나로 훅과 스킬을 넣습니다:
 
 ```powershell
-.\bin\notipet.exe install-hooks --claude   # ~/.claude/settings.json에 넣을 블록 출력
+claude plugin marketplace add EvanHexX/notipet
+claude plugin install notipet@notipet
 ```
 
-**Claude Code 스킬** (에이전트가 언제 보낼지 판단하고 필요한 내용을 씀):
+(Claude Code 안에서는 `/plugin marketplace add EvanHexX/notipet`, `/plugin install notipet@notipet`.) 새 세션부터 적용됩니다. 예전에 `~/.claude/settings.json`에 notipet 훅을 넣었다면 `notipet install-hooks --claude --remove`로 빼세요 — 둘 다 있으면 훅이 두 번씩 돕니다. 플러그인 없이 쓰려면 `notipet install-hooks --claude --write`와 `notipet install-skill`. 자세한 내용: [docs/modules/claude_plugin.md](docs/modules/claude_plugin.md).
 
-```powershell
-.\bin\notipet.exe install-skill
-```
-
-둘 다 쓰는 게 가장 좋습니다 — [docs/SKILL.md](docs/SKILL.md). Codex는 hooks 시스템을 쓰며 **`notify` 설정은 건드리지 않습니다.**
+훅은 권한 대기·턴 완료를 놓치지 않고, 스킬은 에이전트가 언제 보낼지 판단해 필요한 내용을 씁니다. 둘 다 쓰는 게 가장 좋습니다 — [docs/SKILL.md](docs/SKILL.md). Codex는 hooks 시스템을 쓰며 **`notify` 설정은 건드리지 않습니다.**
 
 직접 보낼 수도 있습니다:
 
@@ -172,7 +169,7 @@ dotnet build notipet.slnx
 - [x] 업데이트되는 설치 프로그램
 - [x] Codex 플러그인(스킬)과 `install-hooks --codex --write`
 - [x] 프로젝트·스레드별 알림 켜기/끄기
-- [ ] Claude Code 플러그인
+- [x] Claude Code 플러그인(훅과 스킬)
 - [ ] 자리를 비웠을 때 휴대폰 푸시 (Bark / Pushover)
 - [ ] macOS (플랫폼 중립 `core/`가 그 시작)
 

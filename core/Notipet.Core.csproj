@@ -13,7 +13,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Notipet.Core</AssemblyName>
     <RootNamespace>Notipet</RootNamespace>
-    <Version>1.6.0</Version>
+    <Version>1.6.1</Version>
     <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
