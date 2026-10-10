@@ -58,6 +58,7 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
                                                                             │
                                                           instanceId 일치 ──> Daemon
 정상 종료 / ProcessExit ──> runtime.json 삭제
+30초마다 ──> runtime.json·runtime-{세션}.json이 이 인스턴스(pid + instanceId)를 가리키나? 아니면 다시 쓰고 daemon.log에 기록
 ```
 
 `%LOCALAPPDATA%\notipet\runtime.json` 내용:
@@ -105,6 +106,12 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
 - 미인증 `/v1/health`는 `{ok, name, version, instanceId}`만 준다. CLI가 stale 파일을 판별하기엔 충분하고, 사용자가 무엇을 알림받는지는 새지 않는다.
 - `Local\` 뮤텍스는 **로그온 세션 범위**다. RDP + 콘솔이 동시에 붙으면 데몬이 둘 뜬다. 그건 올바른 동작이지만 `%LOCALAPPDATA%`를 공유하므로 `runtime-{sessionId}.json`을 함께 쓰고, CLI는 자기 세션 파일을 우선한다.
 - 포트 충돌로 **시작 실패하지 않는다.** 고정 포트가 점유되면 `port`~`port+9` → 임의 포트 순으로 떨어지고 경고를 남긴다. 조용히 안 뜨는 알림 데몬이 최악이다.
+
+### runtime.json 자가 복구
+
+데몬은 30초마다 두 파일이 자기를 가리키는지 확인하고, 아니면(없거나 다른 pid) 다시 쓴다(`TrayController.HealRuntimeFile`, `RuntimeFile.NamesInstance`). 데몬이 몇 시간 동안 정상으로 돌았는데 `runtime.json`은 이미 죽은 인스턴스를 가리켜, CLI와 모든 훅이 "꺼져 있다"고 판단한 일이 있었다([regression.md](../regression.md)). 무엇이 그렇게 만들었는지는 확정하지 못했고, 그래서 원인과 무관하게 30초 안에 낫게 했다. 종료할 때는 복구 타이머를 먼저 멈춘 뒤 파일을 지운다 — 거꾸로 하면 복구가 파일을 되살린다.
+
+시작할 때 남아 있는 `runtime.json`이 다른 pid를 가리키면, 그 인스턴스는 정리 없이 끝난 것이다(정상 종료는 파일을 지운다). `daemon.log`에 그렇게 남긴다 — 강제 종료는 스스로 아무것도 남기지 못하므로.
 
 ## Known Problems
 

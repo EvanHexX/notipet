@@ -36,5 +36,6 @@ public static class CoreSelfTests
         ("AlarmResolver", AlarmResolver.RunSelfTest),
         ("AuthGuard", AuthGuard.RunSelfTest),
         ("RuntimeFile", RuntimeFile.RunSelfTest),
+        ("DaemonLog", DaemonLog.RunSelfTest),
     };
 }

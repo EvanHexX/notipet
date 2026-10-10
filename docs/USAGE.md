@@ -549,10 +549,13 @@ curl.exe -s -H "Authorization: Bearer $($rt.token)" "$($rt.baseUrl)/v1/history?l
 ### 로그
 
 ```
-%LOCALAPPDATA%\notipet\crash.log
+%LOCALAPPDATA%\notipet\crash.log     예외 (무엇이 던졌나)
+%LOCALAPPDATA%\notipet\daemon.log    시작·종료와 그 이유 (언제, 왜 꺼졌나)
 ```
 
-> `--self-test`를 돌리면 여기에 `Channel:stub / stub failure` 항목이 남는다. **정상이다** — 채널 격리 검사가 일부러 예외를 던진 기록이다.
+`daemon.log`는 한 줄씩이다: `started`, `quit: tray menu` / `quit: notipet stop`, `watchdog: ... restarting`, `process exit`, 그리고 다음 시작 때 `previous instance pid N ... ended without cleaning up`(강제 종료·크래시·로그오프로 정리 없이 끝난 앞 인스턴스). `runtime.json`이 다른 인스턴스를 가리키거나 사라져 데몬이 고쳐 쓴 경우도 남는다. 256KB를 넘으면 `daemon.log.1`로 넘어간다. 알림 내용은 쓰지 않는다.
+
+> 1.4.1부터 `--self-test`는 실제 `crash.log`에 쓰지 않는다(예전엔 `Channel:stub` 항목이 남았다).
 
 ---
 

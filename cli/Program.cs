@@ -21,7 +21,7 @@ namespace Notipet.Cli;
 //      mode: a few hook events inject stdout into the agent's context.
 internal static class Program
 {
-    private const string CliVersion = "1.4.1";
+    private const string CliVersion = "1.4.2";
     private static readonly TimeSpan DefaultBudget = TimeSpan.FromMilliseconds(1500);
 
     private static async Task<int> Main(string[] args)

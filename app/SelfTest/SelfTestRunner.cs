@@ -22,6 +22,7 @@ internal static class SelfTestRunner
         // here, not into the user's crash.log.
         var scratchLog = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"notipet-selftest-{Environment.ProcessId}.log");
         CrashLog.OverridePath = scratchLog;
+        DaemonLog.OverridePath = scratchLog + ".daemon";
 
         // The core's checks (shared with any other front end), then Windows'.
         var checks = new List<(string Name, Func<bool> Check)>(CoreSelfTests.All)
@@ -55,7 +56,9 @@ internal static class SelfTestRunner
             : $"notipet self-test: {failures} of {checks.Count} checks FAILED");
         Console.Out.Flush();
         CrashLog.OverridePath = null;
+        DaemonLog.OverridePath = null;
         try { System.IO.File.Delete(scratchLog); } catch { }
+        try { System.IO.File.Delete(scratchLog + ".daemon"); } catch { }
         return failures == 0 ? 0 : 1;
     }
 
