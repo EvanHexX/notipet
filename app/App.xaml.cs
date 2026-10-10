@@ -22,7 +22,14 @@ public partial class App : Application
         InitializeComponent();
 
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
             CrashLog.Write("AppDomain.UnhandledException", args.ExceptionObject as Exception);
+            if (args.IsTerminating) DaemonLog.Write("terminating: unhandled exception (see crash.log)");
+        };
+        // The last word on any exit that runs managed code - a clean quit
+        // logs its reason first, so this line after it is expected. A kill
+        // leaves nothing; the next start reports that instead.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => DaemonLog.Write($"process exit (code {Environment.ExitCode})");
         UnhandledException += (_, args) =>
         {
             CrashLog.Write("App.UnhandledException", args.Exception);

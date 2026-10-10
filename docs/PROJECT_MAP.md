@@ -63,6 +63,8 @@
 | 울리는 중인 알람 추적, 확인(ack) 수렴 지점 | [core/Sound/AlarmRegistry.cs](../core/Sound/AlarmRegistry.cs) |
 | "그 일은 끝났다" (`/v1/resolve`, 훅의 턴 종료): 그 알림의 알람·알림 창만 끄기 | [core/Core/AlarmResolver.cs](../core/Core/AlarmResolver.cs) |
 | 카드가 여는 보낸 쪽 링크(`send --open`)의 허용 규칙 | [core/Core/OpenLinks.cs](../core/Core/OpenLinks.cs) |
+| 시작·종료 이유 기록 (`daemon.log`) | [core/DaemonLog.cs](../core/DaemonLog.cs) |
+| UI 스레드 감시 (1분 무응답이면 재시작) | [app/UiWatchdog.cs](../app/UiWatchdog.cs) |
 | 엔진 선택, 동시 알람 정책 | [app/Sound/SoundService.cs](../app/Sound/SoundService.cs) |
 
 ## 배달 경로

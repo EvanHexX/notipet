@@ -26,7 +26,7 @@ namespace Notipet;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class TrayController : IDisposable, INotipetHost
 {
-    public const string AppVersion = "1.4.1";
+    public const string AppVersion = "1.4.2";
 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly AppSettings _settings;
@@ -111,6 +111,8 @@ internal sealed class TrayController : IDisposable, INotipetHost
     {
         var seconds = (int)(UiWatchdog.Interval.TotalSeconds * UiWatchdog.MissesBeforeRecovery);
         CrashLog.Write("UiWatchdog", new TimeoutException($"UI thread did not answer for {seconds}s; restarting"));
+        DaemonLog.Write($"watchdog: UI thread did not answer for {seconds}s; restarting");
+        _runtimeHeal?.Dispose();
         try { _trayIcon?.RemoveIcon(); } catch { }
         try { RuntimeFile.Delete(Process.GetCurrentProcess().SessionId); } catch { }
         try
@@ -440,7 +442,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
                 OnUiThread(RefreshTray);
                 return _settings.Presence.AtDesk;
             },
-            Shutdown = () => OnUiThread(Quit),
+            Shutdown = () => OnUiThread(() => Quit("notipet stop / API shutdown")),
             ClosePopups = ids => OnUiThreadAsync(() => _popups.CloseFor(ids), (IReadOnlyCollection<string>)Array.Empty<string>())
         };
 
@@ -460,12 +462,48 @@ internal sealed class TrayController : IDisposable, INotipetHost
 
         // A leftover file from a crashed instance is cleared by overwriting it:
         // we have already won the single-instance mutex, so nothing else owns it.
-        RuntimeFile.Write(RuntimeFile.Describe(
-            _server.Port, token, _instanceId, Process.GetCurrentProcess().SessionId, AppVersion));
+        // Say so first: a predecessor that left its file behind never ran its
+        // shutdown - it was killed or died - and nothing else would record it.
+        var sessionId = Process.GetCurrentProcess().SessionId;
+        if (RuntimeFile.Read(Paths.RuntimePath) is { } left && left.Pid != Environment.ProcessId)
+        {
+            DaemonLog.Write($"previous instance pid {left.Pid} (v{left.Version}, started {left.StartedAtUtc}) ended without cleaning up - killed, crashed, or the session ended");
+        }
+        _runtime = RuntimeFile.Describe(_server.Port, token, _instanceId, sessionId, AppVersion);
+        RuntimeFile.Write(_runtime);
+        DaemonLog.Write($"started v{AppVersion}, port {_server.Port}{(Program.RecoveredFromHang ? ", replacing an instance whose UI thread hung" : "")}");
+
+        // Keep it that way. Something left runtime.json naming a dead instance
+        // while this one ran for hours - the CLI and every hook then believed
+        // Notipet was down. Whatever does that next time, it lasts 30 s.
+        _runtimeHeal = new System.Threading.Timer(_ => HealRuntimeFile(), null, RuntimeHealInterval, RuntimeHealInterval);
 
         if (_server.Warnings.Count > 0)
         {
             _trayIcon?.ShowNotification("Notipet", string.Join("; ", _server.Warnings), BalloonLevel.Warning);
+        }
+    }
+
+    private static readonly TimeSpan RuntimeHealInterval = TimeSpan.FromSeconds(30);
+    private RuntimeInfo? _runtime;
+    private System.Threading.Timer? _runtimeHeal;
+
+    // On a pool thread; touches only the files.
+    private void HealRuntimeFile()
+    {
+        if (_disposed || _runtime is not { } runtime) return;
+        try
+        {
+            if (RuntimeFile.NamesInstance(runtime)) return;
+            var found = RuntimeFile.Read(Paths.RuntimePath);
+            DaemonLog.Write(found is null
+                ? "runtime.json was missing; rewritten"
+                : $"runtime.json named pid {found.Pid}, not this instance; rewritten");
+            if (!_disposed) RuntimeFile.Write(runtime);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("RuntimeFile.Heal", ex);
         }
     }
 
@@ -500,7 +538,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         items.Add(new TrayMenuItem(Loc.T("Open data folder", "데이터 폴더 열기"), OpenDataFolder, Glyph: Glyphs.Folder));
         items.Add(new TrayMenuItem(Loc.T("Start with Windows", "Windows 시작 시 실행"), ToggleAutostart, Autostart.IsEnabled()));
         items.Add(TrayMenuItem.Separator);
-        items.Add(new TrayMenuItem(Loc.T("Quit Notipet", "Notipet 종료"), Quit, Glyph: Glyphs.Power));
+        items.Add(new TrayMenuItem(Loc.T("Quit Notipet", "Notipet 종료"), () => Quit("tray menu"), Glyph: Glyphs.Power));
 
         return items;
     }
@@ -697,8 +735,9 @@ internal sealed class TrayController : IDisposable, INotipetHost
         return finished == result.Task ? await result.Task.ConfigureAwait(false) : fallback;
     }
 
-    public void Quit()
+    public void Quit(string reason)
     {
+        DaemonLog.Write("quit: " + reason);
         Dispose();
         try { Microsoft.UI.Xaml.Application.Current.Exit(); } catch { }
     }
@@ -709,6 +748,9 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _disposed = true;
 
         _watchdog?.Dispose();
+        // Stop healing before deleting, or the heal would put the file back.
+        _runtimeHeal?.Dispose();
+        _runtimeHeal = null;
         try { RuntimeFile.Delete(Process.GetCurrentProcess().SessionId); } catch { }
         _settingsWindow?.Close();
         _historyWindow?.Close();

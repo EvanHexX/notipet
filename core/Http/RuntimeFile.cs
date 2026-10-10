@@ -43,6 +43,18 @@ internal static class RuntimeFile
         }
     }
 
+    // Whether both files (runtime.json and the per-session one) name this
+    // instance. False when either is missing, unreadable, or names another.
+    public static bool NamesInstance(RuntimeInfo info)
+    {
+        foreach (var path in new[] { Paths.RuntimePath, Paths.RuntimePathForSession(info.SessionId) })
+        {
+            var found = Read(path);
+            if (found is null || found.Pid != info.Pid || found.InstanceId != info.InstanceId) return false;
+        }
+        return true;
+    }
+
     public static void Delete(int sessionId)
     {
         foreach (var path in new[] { Paths.RuntimePath, Paths.RuntimePathForSession(sessionId) })
