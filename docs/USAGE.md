@@ -166,31 +166,28 @@ Claude Code는 `http` 훅 타입을 네이티브로 지원한다. 중간 프로�
 
 ### 경로 C — Codex
 
-`%USERPROFILE%\.codex\config.toml`에 **추가**한다:
+notipet을 설치 파일로 먼저 설치한다. 그다음 두 가지:
 
-```toml
-[[hooks.Stop]]
-[[hooks.Stop.hooks]]
-type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
-timeout = 10
+**스킬 — 플러그인으로.** Codex가 스스로 판단해 알리고, 끝난 알람을 끈다.
 
-[[hooks.PermissionRequest]]
-[[hooks.PermissionRequest.hooks]]
-type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
-timeout = 10
-
-[[hooks.UserPromptSubmit]]
-[[hooks.UserPromptSubmit.hooks]]
-type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
-timeout = 10
-async = true
+```powershell
+codex plugin marketplace add EvanHexX/notipet
+codex plugin add notipet@notipet
 ```
+
+업데이트는 `codex plugin marketplace upgrade notipet`. 예전에 `install-skill --codex`로 깐 `~/.codex/skills/notipet`이 있으면 지운다(같은 스킬이 두 번 보인다).
+
+**훅 — 명령 한 줄로.** 턴 완료·승인 대기는 에이전트가 멈춰 있는 순간이라 훅만 잡는다.
+
+```powershell
+notipet install-hooks --codex --write
+```
+
+`%USERPROFILE%\.codex\config.toml`에 notipet 블록(`[[hooks.Stop]]`, `[[hooks.PermissionRequest]]`, `[[hooks.UserPromptSubmit]]`)을 넣는다. 먼저 `config.toml.bak-notipet-<시각>`으로 백업하고, notipet 블록만 다루며, 다시 실행해도 같다. 예전 버전이 넣은 블록은 새 것으로 바꾼다. 빼려면 `--remove`, 넣을 내용만 보려면 `--write` 없이. Codex에게 "notipet 설정해 줘"라고 하면 스킬이 동의를 받고 이 명령을 실행한다.
+
+새 스레드부터 적용된다. Codex가 새 훅 검토(`/hooks`)를 물으면 신뢰한다. `notipet doctor`의 `codex hooks` 줄로 확인한다. 자세한 내용과 제약은 [modules/codex_plugin.md](modules/codex_plugin.md).
+
+손으로 넣는다면: `command`는 명령줄 전체다(Windows에서는 `cmd.exe /C`로 실행). Codex 훅에는 `args` 필드가 없어서, 있으면 조용히 버린다 — `command = '"C:\src\notipet\bin\notipet.exe" --source codex'`처럼 인수를 안에 쓴다.
 
 > ### ⚠️ 기존 `notify = [...]` 줄을 건드리지 않는다
 >

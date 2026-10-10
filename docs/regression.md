@@ -294,3 +294,21 @@
 - **원인**: CLI가 stdin을 `Console.In`으로 읽었다. `Console.In`은 콘솔 입력 코드 페이지(한국어 Windows는 CP949)로 디코딩하는데, 훅은 UTF-8 JSON을 보낸다. 실행 환경에 따라 깨진 글자로 들어오거나, JSON 파싱 자체가 실패해 본문이 비었다.
 - **해결**: stdin을 바이트로 읽어 **UTF-8로 엄격하게** 디코딩한다(BOM 허용). UTF-8이 아닌 바이트일 때만 콘솔 코드 페이지로 되돌아간다 — 옛 프로그램 출력을 `--body -`로 파이프하는 경우. `ArgParsing` 자체 테스트가 한글·BOM·비UTF-8 세 경우를 고정한다.
 - **확인**: 같은 UTF-8 페이로드를 바이트로 넣었을 때 1.3.0 CLI는 본문이 비었고, 1.3.1은 `분리해야 한다고 봅니다 → 끝` 그대로 저장했다.
+
+### Codex 훅의 `args`가 조용히 버려지고 있었다 (1.5.1)
+
+- **증상**: 없음 — 그래서 몰랐다. `install-hooks --codex`가 출력하고 문서가 안내한 `args = ["--source", "codex"]`가 실제로는 전달되지 않았다.
+- **원인**: Codex 훅 핸들러에는 `args` 필드가 없다(`codex-rs/config/src/hook_config.rs`). 모르는 필드는 경고 없이 버린다. 그래도 동작한 것은 CLI가 페이로드 모양(`turn_id`, `.codex` 경로)으로 Codex를 알아봤기 때문이다.
+- **해결**: 인수를 `command` 안으로(`'"…\notipet.exe" --source codex'`). `install-hooks --codex --write`가 넣는 블록도 그렇게 쓰고, 예전 블록(`args`가 든 것)은 새 것으로 바꾼다.
+
+### `codex exec`의 훅에서 notipet이 "꺼져 있다"고 했다 (1.5.1)
+
+- **증상**: `codex exec`로 턴을 돌리면 config.toml의 notipet 훅이 실행되는데도 알림이 없었다. 같은 명령을 사람이 cmd로 실행하면 알림이 왔다.
+- **원인**: 이 PC의 Codex(0.162.0-alpha.17.2)는 `codex exec`에서 훅을 **환경 변수 하나 없이** 실행했다(기록용 훅의 `set` 출력이 비었다). `SystemRoot`가 없으면 Winsock이 소켓을 만들지 못해, CLI가 루프백 연결에 실패하고 데몬이 꺼진 것으로 판단했다. 빈 환경으로 직접 실행해 재현했다: `daemon not running` → `SystemRoot`만 넣으면 전달.
+- **해결**: CLI가 시작할 때 `SystemRoot`/`windir`이 비어 있으면 Windows 폴더(셸 API, 환경 변수 아님)로 채운다(`Program.RestoreSystemRoot`). 데스크톱 앱의 훅은 환경이 채워져 있어 이 문제를 겪지 않았다.
+
+### Codex 훅 위치: 플러그인 → hooks.json → config.toml (1.5.1 개발 중, 예방)
+
+- **플러그인에 넣은 훅**은 `codex exec`에서 돌지 않았다(신뢰를 넣거나 `--dangerously-bypass-hook-trust`를 줘도). 공식 문서도 데스크톱 전용이라고 하고, 훅이 든 플러그인은 공개 목록에 못 올린다 → 플러그인은 스킬만.
+- **`~/.codex/hooks.json`**에 쓴 훅은 앱 서버 `hooks/list`에는 보였지만 `codex exec`에서 실행되지 않았다. 같은 내용을 config.toml에 넣으면 실행됐다 → `install-hooks --codex --write`는 config.toml에 쓴다.
+- 확인 방법: `codex exec --ephemeral --dangerously-bypass-hook-trust -c 'hooks.Stop=[{hooks=[{type="command",command="echo ran >> %TEMP%\x.log"}]}]' ...`처럼 설정 파일을 건드리지 않는 기록용 훅으로 비교한다.

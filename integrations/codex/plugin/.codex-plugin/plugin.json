@@ -1,0 +1,29 @@
+{
+  "name": "notipet",
+  "version": "1.5.1",
+  "description": "Lets Codex alert you on your Windows desktop - a sound and a pop-up - when it needs a decision, is blocked, or finished a long task, and stop that alarm when it is over. Needs the notipet tray app.",
+  "author": {
+    "name": "EvanHexX",
+    "url": "https://github.com/EvanHexX"
+  },
+  "homepage": "https://github.com/EvanHexX/notipet",
+  "repository": "https://github.com/EvanHexX/notipet",
+  "license": "MIT",
+  "keywords": ["notification", "alarm", "windows", "tray"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Notipet",
+    "shortDescription": "A sound and a pop-up when Codex needs you",
+    "longDescription": "A skill so Codex can alert you - and stop its own alarm - when it needs a decision, is blocked, or finished a long task. For alerts at every finished turn and every approval prompt, it can also set up notipet's Codex hooks with your consent (notipet install-hooks --codex --write). Windows only; install the notipet app from GitHub Releases first.",
+    "developerName": "EvanHexX",
+    "category": "Productivity",
+    "capabilities": ["Write"],
+    "websiteURL": "https://github.com/EvanHexX/notipet",
+    "defaultPrompt": [
+      "Alert me through notipet when this task is done"
+    ],
+    "brandColor": "#2F7CF6",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png"
+  }
+}

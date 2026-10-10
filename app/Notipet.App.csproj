@@ -13,7 +13,7 @@
          "notipet.exe" are one file. -->
     <AssemblyName>NotipetTray</AssemblyName>
     <RootNamespace>Notipet</RootNamespace>
-    <Version>1.5.0</Version>
+    <Version>1.5.1</Version>
     <!-- WindowsAppSDK rejects AnyCPU; pin so plain `dotnet build` works. -->
     <Platforms>x64;arm64</Platforms>
     <Platform Condition="'$(Platform)' == ''">x64</Platform>

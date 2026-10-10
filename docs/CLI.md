@@ -149,7 +149,7 @@ CLI 버전과 실행 중인 데몬 버전.
 [ok  ] quiet hours        not active
 [ok  ] at desk            no
 [warn] claude hooks       not configured - `notipet install-hooks --claude`
-[warn] codex hooks        not configured - `notipet install-hooks --codex`
+[warn] codex hooks        not configured - `notipet install-hooks --codex --write`
 [warn] claude skill       not installed - `notipet install-skill`
 [ok  ] cli                C:\src\notipet\bin\notipet.exe
 ```
@@ -220,12 +220,21 @@ notipet history clear
 notipet install-hooks [--claude] [--codex]
 ```
 
-Claude Code / Codex 훅 설정 블록을 **출력만** 한다. 설정 파일은 건드리지 않는다. 옵션 없이 부르면 둘 다. 자세한 설명은 [USAGE.md 3절](USAGE.md#3-에이전트-연동).
+Claude Code / Codex 훅 설정 블록을 출력한다(`--write` 없이는 설정 파일을 건드리지 않는다). 옵션 없이 부르면 둘 다. 자세한 설명은 [USAGE.md 3절](USAGE.md#3-에이전트-연동).
+
+```
+notipet install-hooks --codex --write [--command EXE]   # ~/.codex/config.toml에 직접 넣는다
+notipet install-hooks --codex --remove                  # 다시 뺀다
+```
+
+Codex는 `--write`로 설정 파일에 직접 넣을 수 있다: 백업(`config.toml.bak-notipet-<시각>`)을 만들고, notipet 블록만 원래 자리에 넣거나 바꾸며, 다시 실행해도 같다. 예전 버전이 넣은 블록(`args`가 든 것)은 새 것으로 바꾸고, 1.5.1 개발판이 `hooks.json`에 넣은 항목은 뺀다. 훅이 `Stop = [...]`처럼 값으로 적혀 있거나 notipet과 다른 명령이 섞인 블록이 있으면 고치지 않고 멈춘다(종료 코드 1). `--command`는 훅이 부를 notipet.exe(기본: 이 CLI). 자세한 내용은 [modules/codex_plugin.md](modules/codex_plugin.md).
+
+Codex 훅에는 `args` 필드가 없어서 인수는 `command` 안에 쓴다 — 1.5.0까지의 출력은 `args`를 썼고, Codex가 그것을 조용히 버렸다. `--write`는 Codex만 지원한다(`--claude --write`는 TODO).
 
 ### `install-skill`
 
 ```
-notipet install-skill [--claude | --codex | --path DIR] [--print] [--force]
+notipet install-skill [--claude | --codex | --path DIR] [--command CMD] [--print] [--force]
 ```
 
 에이전트가 **스스로 판단해서** 알림을 보내게 하는 스킬을 설치한다. 이 CLI의 실제 경로가 채워진 `SKILL.md`를 쓴다.
@@ -235,6 +244,7 @@ notipet install-skill [--claude | --codex | --path DIR] [--print] [--force]
 | (기본) `--claude` | `%USERPROFILE%\.claude\skills\notipet\SKILL.md` |
 | `--codex` | `%USERPROFILE%\.codex\skills\notipet\SKILL.md` — **Codex용 스킬**(샌드박스 밖에서 실행하라는 안내가 들어 있다). `--path`와 함께 쓰면 그 폴더에 Codex용을 쓴다 |
 | `--path DIR` | `DIR\notipet\SKILL.md` (예: 프로젝트의 `.claude\skills`) |
+| `--command CMD` | 스킬이 부를 명령(기본: 이 CLI의 전체 경로). Codex 플러그인의 스킬은 `--command notipet`으로 만든다 |
 | `--print` | 파일로 쓰지 않고 출력만 |
 | `--force` | 직접 고친 스킬 파일도 덮어씀 |
 

@@ -1,6 +1,13 @@
 # notipet <-> Codex CLI
 #
-# Append this to %USERPROFILE%\.codex\config.toml and fix the paths.
+# Easiest: `notipet install-hooks --codex --write` puts exactly this block (with
+# the real path) into %USERPROFILE%\.codex\config.toml - backup first, only
+# notipet's block, safe to repeat - and `--remove` takes it out. See
+# docs/modules/codex_plugin.md. To do it by hand, append this and fix the paths;
+# keep only one copy, or Codex runs every hook twice.
+#
+# `command` is a whole command line (cmd.exe /C on Windows). Codex has no
+# `args` field and silently ignores one, so arguments go in `command`.
 #
 # ---------------------------------------------------------------------------
 # Do NOT touch an existing `notify = [...]` line.
@@ -27,15 +34,13 @@
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 
 [[hooks.PermissionRequest]]
 [[hooks.PermissionRequest.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 
 # Ends alarms that are over: the last turn's "finished" once a new prompt
@@ -44,8 +49,7 @@ timeout = 10
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = 'C:\src\notipet\bin\notipet.exe'
-args = ["--source", "codex"]
+command = '"C:\src\notipet\bin\notipet.exe" --source codex'
 timeout = 10
 async = true
 

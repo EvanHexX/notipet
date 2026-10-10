@@ -10,7 +10,7 @@ notipet is a tray app on the user's Windows machine. It plays a sound and shows 
 The command is:
 
 ```
-{{NOTIPET}}
+notipet
 ```
 
 (If that is not found: the installer puts notipet in `%LOCALAPPDATA%\NotipetApp\current\notipet.exe` and on PATH as `notipet`.)
@@ -41,7 +41,7 @@ Do **not** notify:
 ## How
 
 ```
-{{NOTIPET}} send --title "<project>: <what happened>" --body "<one or two lines>" --level <level> --tag "<project>:<moment>" --project "<project>" --thread-title "<this conversation, in a few words>"
+notipet send --title "<project>: <what happened>" --body "<one or two lines>" --level <level> --tag "<project>:<moment>" --project "<project>" --thread-title "<this conversation, in a few words>"
 ```
 
 - `--level`: `info` | `success` | `attention` | `warn` | `error` | `critical`
@@ -57,9 +57,9 @@ You do not need to pass `--agent` or a thread id: notipet reads `CODEX_SESSION_I
 Examples:
 
 ```
-{{NOTIPET}} send --title "shop: tests passed" --body "412/412 passed; ready to merge when you are." --level success --tag "shop:done" --project shop --thread-title "checkout refactor"
+notipet send --title "shop: tests passed" --body "412/412 passed; ready to merge when you are." --level success --tag "shop:done" --project shop --thread-title "checkout refactor"
 
-{{NOTIPET}} send --title "api: need a decision" --body "Two ways to rotate the signing keys - which do you prefer? Details in the thread." --level attention --tag "api:needs-input" --project api --thread-title "auth refactor"
+notipet send --title "api: need a decision" --body "Two ways to rotate the signing keys - which do you prefer? Details in the thread." --level attention --tag "api:needs-input" --project api --thread-title "auth refactor"
 ```
 
 ## When it is over: resolve
@@ -67,8 +67,8 @@ Examples:
 An `attention`, `error` or `critical` alert can keep ringing until someone stops it - and the user may have answered from somewhere else (their phone, the Codex app), or you may have fixed the problem yourself. When the moment you alerted about **is over**, say so (outside the sandbox, like `send`):
 
 ```
-{{NOTIPET}} resolve
-{{NOTIPET}} resolve --tag "<the same tag you sent>"
+notipet resolve
+notipet resolve --tag "<the same tag you sent>"
 ```
 
 - With no arguments it stops the alarms **this conversation** raised and closes their pop-ups. With `--tag` only that one. Nothing else is touched - other conversations' alarms keep ringing.
@@ -81,11 +81,11 @@ An `attention`, `error` or `critical` alert can keep ringing until someone stops
 
 Codex hooks ring by themselves when a turn ends (`Stop`) and when it waits for the user's approval (`PermissionRequest`) - a moment you cannot announce yourself, because you are blocked. They are not part of this skill; they live in the user's `~/.codex/hooks.json`.
 
-- Only when the user asks for alerts like these, or asks to set notipet up: run `{{NOTIPET}} doctor` (outside the sandbox) and look at its `codex hooks` line. If it is a warning, **ask the user first**, and only with their yes run `{{NOTIPET}} install-hooks --codex --write`. It backs up the file, touches only notipet's own entries, and is safe to run again.
+- Only when the user asks for alerts like these, or asks to set notipet up: run `notipet doctor` (outside the sandbox) and look at its `codex hooks` line. If it is a warning, **ask the user first**, and only with their yes run `notipet install-hooks --codex --write`. It backs up the file, touches only notipet's own entries, and is safe to run again.
 - Never set them up without the user's yes, and do not check on every task.
 - Do not edit `hooks.json` or `config.toml` yourself for this - the command knows the format Codex reads. Never touch a `notify` setting.
 - They work from the next new thread. Codex may ask the user to review and trust the new hooks (`/hooks`); tell them.
-- To take them out: `{{NOTIPET}} install-hooks --codex --remove`.
+- To take them out: `notipet install-hooks --codex --remove`.
 
 ## Rules
 
@@ -97,6 +97,6 @@ Codex hooks ring by themselves when a turn ends (`Stop`) and when it waits for t
 
 ## Useful extras
 
-- `{{NOTIPET}} ping` - is notipet running? (outside the sandbox)
-- `{{NOTIPET}} desk on` / `desk off` - the user is / is not at the desk (long alarms become short while they are).
-- `{{NOTIPET}} history --limit 5` - what was sent recently.
+- `notipet ping` - is notipet running? (outside the sandbox)
+- `notipet desk on` / `desk off` - the user is / is not at the desk (long alarms become short while they are).
+- `notipet history --limit 5` - what was sent recently.
