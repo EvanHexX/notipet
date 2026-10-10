@@ -55,6 +55,48 @@ internal sealed class SoundService : IDisposable
         };
     }
 
+    // A device change (WM_DEVICECHANGE) asks for a re-probe. Never on the
+    // caller's thread, never two at once, and a burst becomes one: Windows
+    // sends these in runs - a headset connecting, waking from sleep - and
+    // probing on the UI thread is what hung the daemon. A MediaPlayer's
+    // Dispose waits with the message loop running, the next device message
+    // re-entered the probe there, and the second MediaPlayer's construction
+    // waited on the first forever (docs/regression.md).
+    //
+    // 0 idle, 1 running, 2 running with another request waiting.
+    private int _probeState;
+
+    public void RequestProbe()
+    {
+        while (true)
+        {
+            var state = Volatile.Read(ref _probeState);
+            if (state == 0)
+            {
+                if (Interlocked.CompareExchange(ref _probeState, 1, 0) != 0) continue;
+                _ = System.Threading.Tasks.Task.Run(ProbeLoopAsync);
+                return;
+            }
+            if (state == 1 && Interlocked.CompareExchange(ref _probeState, 2, 1) != 1) continue;
+            return;
+        }
+    }
+
+    private async System.Threading.Tasks.Task ProbeLoopAsync()
+    {
+        while (true)
+        {
+            // Let the burst settle, then probe once for all of it.
+            await System.Threading.Tasks.Task.Delay(1000).ConfigureAwait(false);
+            try { ProbeEngines(); }
+            catch (Exception ex) { CrashLog.Write("SoundService.Probe", ex); }
+
+            // Nothing came in meanwhile: done. Otherwise go round once more.
+            if (Interlocked.CompareExchange(ref _probeState, 0, 1) == 1) return;
+            Interlocked.Exchange(ref _probeState, 1);
+        }
+    }
+
     // Re-probe after a device change. Failures are never latched permanently:
     // a Bluetooth headset reconnecting must not require an app restart.
     public void ProbeEngines()

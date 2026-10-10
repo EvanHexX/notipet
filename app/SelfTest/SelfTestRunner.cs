@@ -18,6 +18,11 @@ internal static class SelfTestRunner
     {
         AttachParentConsole();
 
+        // Checks that throw on purpose (the HTTP test's stub channel) log
+        // here, not into the user's crash.log.
+        var scratchLog = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"notipet-selftest-{Environment.ProcessId}.log");
+        CrashLog.OverridePath = scratchLog;
+
         // The core's checks (shared with any other front end), then Windows'.
         var checks = new List<(string Name, Func<bool> Check)>(CoreSelfTests.All)
         {
@@ -49,6 +54,8 @@ internal static class SelfTestRunner
             ? $"notipet self-test: all {checks.Count} checks passed"
             : $"notipet self-test: {failures} of {checks.Count} checks FAILED");
         Console.Out.Flush();
+        CrashLog.OverridePath = null;
+        try { System.IO.File.Delete(scratchLog); } catch { }
         return failures == 0 ? 0 : 1;
     }
 

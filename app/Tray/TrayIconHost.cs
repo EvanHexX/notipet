@@ -349,6 +349,17 @@ internal sealed class TrayIconHost : ITrayIcon
         }
     }
 
+    // Takes the icon out of the notification area and nothing else. Callable
+    // from any thread - it is one shell call - so a recovery from a hung UI
+    // thread does not leave a dead icon behind.
+    public void RemoveIcon()
+    {
+        if (!_added) return;
+        var data = BuildData(0);
+        Shell_NotifyIcon(NimDelete, ref data);
+        _added = false;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

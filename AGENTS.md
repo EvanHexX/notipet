@@ -70,6 +70,7 @@ For tray, sound, or hook changes, report a manual smoke checklist (`docs/regress
 
 These each exist because of a specific failure, and each is commented at its site.
 
+- Nothing creates, plays or disposes a `MediaPlayer` on the UI thread. Done there, its waits pump messages, a re-entrant `WM_DEVICECHANGE` built a second player inside the first one's `Dispose`, and the UI thread hung for good while the API kept answering. Device changes go through `SoundService.RequestProbe`; UI-thread callers use `Task.Run`; `UiWatchdog` restarts the daemon if the UI thread stops answering for a minute.
 - `TrayIconHost._wndProc` is an instance field on purpose. It is a GC root for a native callback; without it the process dies by `FailFast`.
 - Balloons must set `NIIF_NOSOUND`. Otherwise the shell plays its own chime on top of the sound channel and every notification double-sounds.
 - The alarm duration cap is enforced in code (`AppSettings.AbsoluteMaxAlarmSeconds`), independently of settings, so a misconfigured hook firing `until_ack` in a loop cannot invent an endless alarm. The one exception is `sound.maxDurationSec = 0` (`UnlimitedAlarmSeconds`), which the user picks in Settings and which applies to `until_ack` alarms only: the cap was silencing the alarm while they were away, which is the case it exists for. Requests still cannot raise a duration, and at-desk shortening still cuts it to 30 s.

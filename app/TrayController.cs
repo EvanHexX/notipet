@@ -26,7 +26,7 @@ namespace Notipet;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class TrayController : IDisposable, INotipetHost
 {
-    public const string AppVersion = "1.4.0";
+    public const string AppVersion = "1.4.1";
 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly AppSettings _settings;
@@ -84,13 +84,47 @@ internal sealed class TrayController : IDisposable, INotipetHost
             PresenceMonitor.IsFocusAssistActive);
 
         _dispatcher.ThrottleAnnouncement += OnThrottleAnnouncement;
-        _history.Changed += () => OnUiThread(() => { RefreshTray(); _historyWindow?.Refresh(); });
+        _history.Changed += () => OnUiThread(() => { RefreshTray(); _historyWindow?.RefreshIfVisible(); });
         _history.Added += LookUpThreadTitle;
         _sound.Alarms.Changed += () => OnUiThread(RefreshTray);
 
         StartTray();
         StartServer();
         RefreshTray();
+
+        _watchdog = new UiWatchdog(_dispatcherQueue, RecoverFromHang);
+        if (Program.RecoveredFromHang)
+        {
+            _trayIcon?.ShowNotification("Notipet", Loc.T(
+                "Notipet stopped responding and restarted itself. Notifications from before are no longer in Recent.",
+                "Notipet이 응답하지 않아 스스로 다시 시작했습니다. 그 전 알림은 최근 알림에 남아 있지 않습니다."), BalloonLevel.Warning);
+        }
+    }
+
+    private UiWatchdog? _watchdog;
+
+    // From the watchdog's thread: the UI thread has not answered for a
+    // minute. Say so in crash.log, take the tray icon down (a plain shell
+    // call, it needs no UI thread), start a fresh instance that waits for this
+    // one to go, and go. Nothing here may wait on the UI thread.
+    private void RecoverFromHang()
+    {
+        var seconds = (int)(UiWatchdog.Interval.TotalSeconds * UiWatchdog.MissesBeforeRecovery);
+        CrashLog.Write("UiWatchdog", new TimeoutException($"UI thread did not answer for {seconds}s; restarting"));
+        try { _trayIcon?.RemoveIcon(); } catch { }
+        try { RuntimeFile.Delete(Process.GetCurrentProcess().SessionId); } catch { }
+        try
+        {
+            if (Environment.ProcessPath is { } exe)
+            {
+                Process.Start(new ProcessStartInfo(exe, $"--restart-after {Environment.ProcessId}") { UseShellExecute = false });
+            }
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("UiWatchdog.Restart", ex);
+        }
+        Process.GetCurrentProcess().Kill();
     }
 
     // ----- INotipetHost -----
@@ -181,7 +215,8 @@ internal sealed class TrayController : IDisposable, INotipetHost
         {
             var resolved = SoundResolver.Resolve(null, level, _settings, new List<string>(), atDesk);
             _sound.Alarms.StopAll();
-            if (!resolved.Silent) _sound.Play(resolved, level, "settings-preview");
+            // Sound work stays off the UI thread (MediaPlayerSoundEngine).
+            if (!resolved.Silent) _ = Task.Run(() => _sound.Play(resolved, level, "settings-preview"));
         }
         catch (Exception ex)
         {
@@ -352,7 +387,8 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _trayIcon.LeftClicked += OnTrayClicked;
         _trayIcon.BalloonClicked += OnBalloonClicked;
         _trayIcon.SessionLockChanged += locked => _presence.SetLocked(locked);
-        _trayIcon.AudioDeviceChanged += () => _sound.ProbeEngines();
+        // Off the UI thread, coalesced: see SoundService.RequestProbe.
+        _trayIcon.AudioDeviceChanged += () => _sound.RequestProbe();
         _trayIcon.SetIcon(TrayIconRenderer.Create(TrayIconState.Idle, TrayIconRenderer.NativeSize()));
         _trayIcon.SetMenu(BuildMenu());
         _trayIcon.Show();
@@ -608,7 +644,9 @@ internal sealed class TrayController : IDisposable, INotipetHost
             Source = new SourceInfo { Id = PayloadMapper.SourceManual }
         };
         if (!EnvelopeFactory.TryCreate(request, PayloadMapper.SourceManual, out var envelope, out _)) return;
-        _ = _dispatcher.DispatchAsync(envelope!, default);
+        // From a menu or a button, so on the UI thread: dispatch from the pool,
+        // as the HTTP path does, so the sound channel never runs here.
+        _ = Task.Run(() => _dispatcher.DispatchAsync(envelope!, default));
     }
 
     private void OnThrottleAnnouncement(string sourceId)
@@ -670,6 +708,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         if (_disposed) return;
         _disposed = true;
 
+        _watchdog?.Dispose();
         try { RuntimeFile.Delete(Process.GetCurrentProcess().SessionId); } catch { }
         _settingsWindow?.Close();
         _historyWindow?.Close();
