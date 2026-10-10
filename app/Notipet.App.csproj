@@ -13,7 +13,7 @@
          "notipet.exe" are one file. -->
     <AssemblyName>NotipetTray</AssemblyName>
     <RootNamespace>Notipet</RootNamespace>
-    <Version>1.4.2</Version>
+    <Version>1.5.0</Version>
     <!-- WindowsAppSDK rejects AnyCPU; pin so plain `dotnet build` works. -->
     <Platforms>x64;arm64</Platforms>
     <Platform Condition="'$(Platform)' == ''">x64</Platform>
@@ -36,6 +36,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.*" />
     <!-- TrayIconRenderer draws the tray icon at runtime (System.Drawing.Icon). -->
     <PackageReference Include="System.Drawing.Common" Version="10.0.*" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
   <ItemGroup>
     <!-- The platform-neutral core (rules, dispatch, history, HTTP API, settings,

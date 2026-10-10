@@ -61,6 +61,7 @@ internal static class Glyphs
     public const string FullScreen = "\uE740";
     public const string More = "\uE712";
     public const string Theme = "\uE790";
+    public const string Download = "\uE896";
 
     public static string ForLevel(NotificationLevel level) => level switch
     {

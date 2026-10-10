@@ -137,6 +137,25 @@ internal static class UiText
     public static string OtherProject() => Loc.T("Other", "기타");
 
     // Where a card's thread link goes.
+    // Settings > About, under Updates.
+    public static string UpdateStatus(Notipet.Update.UpdateState state, bool supported)
+    {
+        if (!supported) return Loc.T(
+            "Updates work in the installed app. This copy was not installed (a build from the repository).",
+            "업데이트는 설치한 앱에서만 됩니다. 지금은 설치하지 않은 빌드(저장소에서 빌드)로 실행 중입니다.");
+        var at = state.CheckedAt is { } when ? when.ToString("HH:mm") : null;
+        return state.Phase switch
+        {
+            Notipet.Update.UpdatePhase.Checking => Loc.T("Checking...", "확인하는 중..."),
+            Notipet.Update.UpdatePhase.UpToDate => Loc.T($"Up to date (checked {at})", $"최신 버전입니다 ({at} 확인)"),
+            Notipet.Update.UpdatePhase.Available => Loc.T($"Version {state.AvailableVersion} is available", $"새 버전 {state.AvailableVersion}이 있습니다"),
+            Notipet.Update.UpdatePhase.Downloading => Loc.T($"Downloading... {state.Progress}%", $"받는 중... {state.Progress}%"),
+            Notipet.Update.UpdatePhase.Restarting => Loc.T("Installing and restarting...", "설치하고 다시 시작하는 중..."),
+            Notipet.Update.UpdatePhase.Failed => Loc.T($"Could not check: {state.Error}", $"확인하지 못했습니다: {state.Error}"),
+            _ => Loc.T("Not checked yet - nothing is sent until you ask", "아직 확인하지 않았습니다 (누르기 전에는 아무것도 보내지 않습니다)")
+        };
+    }
+
     // A card whose sender gave a link (send --open).
     public static string OpenLink() => Loc.T("Open link", "링크 열기");
 

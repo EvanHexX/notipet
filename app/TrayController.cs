@@ -26,7 +26,9 @@ namespace Notipet;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class TrayController : IDisposable, INotipetHost
 {
-    public const string AppVersion = "1.4.2";
+    // From the build (<Version> in the csproj, or -p:Version= when packing a
+    // test release), so the installer, the updater and the API agree.
+    public static readonly string AppVersion = BuildVersion.Of(typeof(TrayController).Assembly);
 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly AppSettings _settings;
@@ -93,6 +95,10 @@ internal sealed class TrayController : IDisposable, INotipetHost
         RefreshTray();
 
         _watchdog = new UiWatchdog(_dispatcherQueue, RecoverFromHang);
+        _updater.Changed += state => OnUiThread(() => OnUpdateStateChanged(state));
+        // First look a few minutes after start, then every few hours; the
+        // check itself enforces "on, and a day since the last one".
+        _updateTimer = new System.Threading.Timer(_ => AutoCheckForUpdates(), null, TimeSpan.FromMinutes(3), TimeSpan.FromHours(3));
         if (Program.RecoveredFromHang)
         {
             _trayIcon?.ShowNotification("Notipet", Loc.T(
@@ -271,6 +277,83 @@ internal sealed class TrayController : IDisposable, INotipetHost
     public bool RemoveHistoryEntry(string id) => _history.Remove(id);
 
     public bool AutostartEnabled => Autostart.IsEnabled();
+
+    // ----- updates -----
+
+    private readonly Notipet.Update.Updater _updater = new();
+    private System.Threading.Timer? _updateTimer;
+    private bool _manualCheck;
+
+    public Notipet.Update.UpdateState UpdateState => _updater.State;
+    public bool UpdatesSupported => _updater.IsInstalled;
+    public event Action? UpdateStateChanged;
+
+    public void CheckForUpdates()
+    {
+        _manualCheck = true;
+        _ = Task.Run(_updater.CheckAsync);
+    }
+
+    public void InstallUpdate()
+    {
+        if (_updater.State.Available is null) return;
+        _ = Task.Run(() => _updater.DownloadAndRestartAsync(PrepareForUpdate));
+    }
+
+    // Velopack is about to end this process and start the new version. On a
+    // pool thread: only things that need no UI thread.
+    private void PrepareForUpdate()
+    {
+        DaemonLog.Write($"quit: updating to v{_updater.State.AvailableVersion}");
+        _watchdog?.Dispose();
+        _runtimeHeal?.Dispose();
+        _runtimeHeal = null;
+        try { _sound.Alarms.StopAll(); } catch { }
+        try { RuntimeFile.Delete(Process.GetCurrentProcess().SessionId); } catch { }
+        try { _trayIcon?.RemoveIcon(); } catch { }
+    }
+
+    private void OnUpdateStateChanged(Notipet.Update.UpdateState state)
+    {
+        RefreshTray();
+        UpdateStateChanged?.Invoke();
+
+        var manual = _manualCheck && state.Phase is Notipet.Update.UpdatePhase.UpToDate
+            or Notipet.Update.UpdatePhase.Available or Notipet.Update.UpdatePhase.Failed;
+        if (manual) _manualCheck = false;
+
+        if (state.Phase == Notipet.Update.UpdatePhase.Available
+            && (manual || state.AvailableVersion != _settings.Updates.NotifiedVersion))
+        {
+            _settings.Updates.NotifiedVersion = state.AvailableVersion;
+            _settings.Save();
+            _trayIcon?.ShowNotification("Notipet", Loc.T(
+                $"Version {state.AvailableVersion} is available. Install it from the tray menu or Settings > About.",
+                $"새 버전 {state.AvailableVersion}이 있습니다. 트레이 메뉴나 설정 > 정보에서 설치하세요."), BalloonLevel.Info);
+        }
+        else if (manual && state.Phase == Notipet.Update.UpdatePhase.UpToDate)
+        {
+            _trayIcon?.ShowNotification("Notipet", Loc.T($"Notipet {AppVersion} is up to date.", $"Notipet {AppVersion}이 최신 버전입니다."), BalloonLevel.Info);
+        }
+        else if (manual && state.Phase == Notipet.Update.UpdatePhase.Failed)
+        {
+            _trayIcon?.ShowNotification("Notipet", Loc.T($"Could not check for updates: {state.Error}", $"업데이트를 확인하지 못했습니다: {state.Error}"), BalloonLevel.Warning);
+        }
+    }
+
+    // Only when the user turned it on, and at most once a day - counted
+    // across restarts. A check only reports; nothing is downloaded.
+    private void AutoCheckForUpdates()
+    {
+        if (_disposed || !_settings.Updates.AutoCheck || !_updater.IsInstalled) return;
+        if (_settings.Updates.LastAutoCheck is { } last && DateTimeOffset.Now - last < TimeSpan.FromHours(24)) return;
+        OnUiThread(() =>
+        {
+            _settings.Updates.LastAutoCheck = DateTimeOffset.Now;
+            _settings.Save();
+        });
+        _ = _updater.CheckAsync();
+    }
 
     public bool SetAutostart(bool enabled)
     {
@@ -537,6 +620,12 @@ internal sealed class TrayController : IDisposable, INotipetHost
 
         items.Add(new TrayMenuItem(Loc.T("Open data folder", "데이터 폴더 열기"), OpenDataFolder, Glyph: Glyphs.Folder));
         items.Add(new TrayMenuItem(Loc.T("Start with Windows", "Windows 시작 시 실행"), ToggleAutostart, Autostart.IsEnabled()));
+        if (_updater.IsInstalled)
+        {
+            items.Add(_updater.State.Phase == Notipet.Update.UpdatePhase.Available
+                ? new TrayMenuItem(Loc.T($"Update to {_updater.State.AvailableVersion}", $"{_updater.State.AvailableVersion}(으)로 업데이트"), InstallUpdate, Glyph: Glyphs.Download)
+                : new TrayMenuItem(Loc.T("Check for updates", "업데이트 확인"), CheckForUpdates, Glyph: Glyphs.Refresh));
+        }
         items.Add(TrayMenuItem.Separator);
         items.Add(new TrayMenuItem(Loc.T("Quit Notipet", "Notipet 종료"), () => Quit("tray menu"), Glyph: Glyphs.Power));
 
@@ -748,6 +837,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _disposed = true;
 
         _watchdog?.Dispose();
+        _updateTimer?.Dispose();
         // Stop healing before deleting, or the heal would put the file back.
         _runtimeHeal?.Dispose();
         _runtimeHeal = null;

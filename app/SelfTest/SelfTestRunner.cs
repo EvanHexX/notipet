@@ -31,6 +31,7 @@ internal static class SelfTestRunner
             ("PresenceMonitor", PresenceMonitor.RunSelfTest),
             ("UiText", Notipet.Windows.UiText.RunSelfTest),
             ("MenuGlyphs", Notipet.Tray.MenuGlyphs.RunSelfTest),
+            ("Installation", Notipet.Update.Installation.RunSelfTest),
             ("HttpEndToEnd", HttpSelfTest.Run),
         };
 

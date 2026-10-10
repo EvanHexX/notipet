@@ -18,3 +18,6 @@ runtime*.json
 settings.json
 crash.log
 *.log
+
+# Installer builds (scripts/pack.ps1)
+artifacts/

@@ -44,6 +44,9 @@
 | 알림 창 쌓기·배치·맨 위 유지 | [app/Windows/PopupHost.cs](../app/Windows/PopupHost.cs) |
 | 카드를 프로젝트별로 나누기 (순수 함수) | [core/Core/HistoryGrouping.cs](../core/Core/HistoryGrouping.cs) |
 | 설정 창 (NavigationView: 일반/사운드/PC 앞/방해금지/기록/정보) | [app/Windows/SettingsWindow.cs](../app/Windows/SettingsWindow.cs) |
+| 설치·제거 때 하는 일 (PATH, 자동 시작) | [app/Update/Installation.cs](../app/Update/Installation.cs) |
+| 업데이트 확인·적용 (유일한 외부 통신, 누를 때만) | [app/Update/Updater.cs](../app/Update/Updater.cs) |
+| 설치 파일·업데이트 피드 만들기 | [scripts/pack.ps1](../scripts/pack.ps1) — [modules/installer.md](modules/installer.md) |
 | Fluent 공용 부품 (카드, 토글, 아이콘 버튼, 제목 표시줄, Mica) + 글리프 표 | [app/Windows/Fluent.cs](../app/Windows/Fluent.cs) |
 | 화면에 보이는 값의 EN/KO 이름 (레벨, 소리, 사유, 상대 시간) | [app/Windows/UiText.cs](../app/Windows/UiText.cs) |
 | 창이 트레이 컨트롤러에 요구하는 것 | [app/Windows/INotipetHost.cs](../app/Windows/INotipetHost.cs) |

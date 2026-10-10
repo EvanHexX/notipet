@@ -9,7 +9,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#설치)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![WinUI 3](https://img.shields.io/badge/UI-WinUI%203-0063B1)](https://learn.microsoft.com/windows/apps/winui/winui3/)
-[![Version](https://img.shields.io/badge/version-1.4.2-blue)](#)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 <br>
 [![Claude Code](https://img.shields.io/badge/works%20with-Claude%20Code-D97757)](#에이전트-연결)
@@ -37,7 +37,7 @@ Claude Code나 Codex에 긴 작업을 맡기고 다른 일을 하다 보면, 에
 - **PC 앞에 있음** — 자리에 있을 때는 긴 알람을 짧게, 또는 조용한 소리로 바꿉니다.
 - **방해금지, 음소거, 레이트 리밋, 중복 병합** — 툴 호출마다 훅이 터져도 트레이가 기관총이 되지 않습니다.
 - **English / 한국어** UI, Fluent 디자인, 라이트·다크.
-- **로컬 전용** — 베어러 토큰이 걸린 루프백 HTTP API. 원격 전송·텔레메트리 없음.
+- **로컬 전용** — 베어러 토큰이 걸린 루프백 HTTP API. 텔레메트리 없음. 외부 통신은 업데이트 확인뿐이고, 그것도 누를 때만.
 
 ## 동작 방식
 
@@ -52,7 +52,13 @@ Claude Code / Codex  ──훅 / 스킬──>  notipet.exe (CLI)  ──HTTP 12
 
 ## 설치
 
-Windows 10(19041) 이상 또는 11, x64. 빌드에는 [.NET 10 SDK](https://dotnet.microsoft.com/download)가 필요합니다.
+Windows 10(19041) 이상 또는 11, x64.
+
+**설치 파일** — [Releases](https://github.com/EvanHexX/notipet/releases)에서 `NotipetApp-win-Setup.exe`를 받아 실행합니다. 관리자 권한은 필요 없습니다. `%LOCALAPPDATA%\NotipetApp`에 설치되고, 시작 메뉴에 등록되며, `notipet` 명령을 PATH에 넣습니다. 아직 코드 서명을 하지 않아 Windows SmartScreen이 한 번 물어볼 수 있습니다("추가 정보" → "실행"). 제거는 설정 → 앱에서 하며, `%LOCALAPPDATA%\notipet`의 설정은 남습니다.
+
+**업데이트** — 트레이 메뉴 → *업데이트 확인*, 또는 설정 → 정보. 누를 때만 GitHub에 물어보고(설정에서 켜면 하루 한 번 자동 확인), 설치도 누를 때만 합니다.
+
+**소스에서 빌드** — [.NET 10 SDK](https://dotnet.microsoft.com/download)가 필요합니다:
 
 ```powershell
 git clone https://github.com/EvanHexX/notipet C:\src\notipet
@@ -62,7 +68,7 @@ cd C:\src\notipet
 .\bin\notipet.exe test           # 소리와 알림 확인
 ```
 
-`C:\src\notipet`은 예시 경로입니다. `install-hooks`와 `install-skill`은 실제 경로를 채워서 출력합니다.
+`C:\src\notipet`은 예시 경로입니다. `install-hooks`와 `install-skill`은 실제 경로를 채워서 출력합니다. 설치 파일은 `.\scripts\pack.ps1`로 만듭니다.
 
 ## 에이전트 연결
 
@@ -153,7 +159,8 @@ dotnet build notipet.slnx
 - [x] 트레이, 로컬 API, 레벨별 소리, 훅과 스킬
 - [x] 설정·최근 알림 창, English/한국어, 프로젝트별 묶기, 스레드로 이동
 - [x] 클릭할 때까지 남고 전체화면 위에도 뜨는 알림 창
-- [ ] 업데이트되는 설치 프로그램, Codex/Claude 플러그인
+- [x] 업데이트되는 설치 프로그램
+- [ ] Codex/Claude 플러그인
 - [ ] 자리를 비웠을 때 휴대폰 푸시 (Bark / Pushover)
 - [ ] macOS (플랫폼 중립 `core/`가 그 시작)
 

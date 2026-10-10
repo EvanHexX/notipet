@@ -133,6 +133,18 @@ internal sealed class SourceSettings
     public string? LevelFloor { get; set; }
 }
 
+// Updates (installed builds only). Checking reaches GitHub, so it happens
+// when the user clicks - or once a day if they turn AutoCheck on here. It is
+// off by default and settable only in Settings, never over the API.
+// Installing is always a click, whatever this says.
+internal sealed class UpdateSettings
+{
+    public bool AutoCheck { get; set; }
+    public DateTimeOffset? LastAutoCheck { get; set; }
+    // The newest version already announced, so a daily check says it once.
+    public string? NotifiedVersion { get; set; }
+}
+
 internal sealed class HistorySettings
 {
     public int KeepInMemory { get; set; } = 200;
@@ -210,6 +222,7 @@ internal sealed class AppSettings
     public Dictionary<string, ChannelSettings> Channels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, SourceSettings> Sources { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public HistorySettings History { get; set; } = new();
+    public UpdateSettings Updates { get; set; } = new();
     public PopupSettings Popup { get; set; } = new();
     public LinkSettings Links { get; set; } = new();
 
@@ -287,6 +300,7 @@ internal sealed class AppSettings
         History ??= new HistorySettings();
         Popup ??= new PopupSettings();
         Links ??= new LinkSettings();
+        Updates ??= new UpdateSettings();
         // Scheme names only, lower case, each once; never one OpenLinks refuses.
         Links.AllowedSchemes = (Links.AllowedSchemes ?? new List<string>())
             .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -493,6 +507,8 @@ internal sealed class AppSettings
             if (none.Popup.UseOwnPopup || none.Popup.Stays(NotificationLevel.Critical)) return false;
             if (none.Links.AllowedSchemes.Count != 0) return false;
             if (none.Theme != "System") return false;
+            // Updates are checked only on request unless the user opts in.
+            if (none.Updates.AutoCheck) return false;
             var themed = new AppSettings { Theme = " dark " };
             themed.Normalize();
             if (themed.Theme != "Dark") return false;

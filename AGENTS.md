@@ -10,7 +10,7 @@ It is a **public repository** (MIT). Documentation is Korean prose with English 
 
 ## Scope boundaries
 
-- **Local only, for now.** Phases 1 and 2 contain no outbound network code at all: `app/` has no `HttpClient` anywhere, and the CLI's is hard-pinned to `127.0.0.1`. Mobile push (phase 3) is the single exception and is gated behind `channels.mobile_push.outboundNetworkApproved`, which is settable only from the settings UI, never over the API. Do not add outbound calls without explicit maintainer approval.
+- **Local only, for now.** Phases 1 and 2 contain no outbound network code at all: `app/` has no `HttpClient` anywhere, and the CLI's is hard-pinned to `127.0.0.1`. Two exceptions, both approved by the maintainer. **Updates** (`app/Update/Updater.cs`, Velopack against this repository's GitHub Releases): a check runs only when the user clicks, or once a day if they turned on `updates.autoCheck` (off by default, settable only in the settings UI); downloading and installing is always a separate click. **Mobile push** (phase 3) is gated behind `channels.mobile_push.outboundNetworkApproved`, likewise settable only from the settings UI, never over the API. Do not add other outbound calls without explicit maintainer approval.
 - **Do not merge this into [`quota-scope`](https://github.com/EvanHexX/quota-scope).** It is a separate product with tagged releases; adding a listening socket and third-party egress to it would change its threat model. Code was copied from it, not linked. See `docs/PROJECT_MAP.md`.
 - Do not perform UI framework rewrites, namespace changes, or channel expansions as part of an unrelated fix.
 
@@ -23,6 +23,7 @@ Three projects:
 - CLI: `cli/Notipet.Cli.csproj` — .NET 10 console, NativeAOT. Deliberately a separate exe: hooks sit on the agent's critical path, and every hook invocation pays the startup. Measured on this machine (7 runs, `Start-Process -Wait`, so both figures include ~30 ms of harness overhead): CLI `--help` 48 ms median, daemon `--help` 68 ms median — and the daemon's `--help` returns before any WindowsAppSDK initialisation, so that is the best case for it. The console and exit-code behaviour is the other half of the argument: a `WinExe` has neither.
 - Entry point: `app/Program.cs` — hand-written `Main` (`DISABLE_XAML_GENERATED_MAIN`) so `--self-test` and `--test-sound` run before any XAML initialisation.
 - Lifecycle: `app/TrayController.cs` owns the tray icon, the HTTP server, the sound engines and `runtime.json`.
+- Installer and updates: Velopack (`scripts/pack.ps1`, `app/Update/`). Package id `NotipetApp`, installed to `%LOCALAPPDATA%\NotipetApp\current` - a different folder from the app data in `%LOCALAPPDATA%\notipet`, so uninstalling keeps settings. `VelopackApp...Run()` is the first thing in `Main`. See `docs/modules/installer.md`.
 
 ### Shared sources
 
