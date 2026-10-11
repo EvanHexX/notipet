@@ -352,4 +352,17 @@
 - **증상**: Codex 훅 통계에 Stop과 PermissionRequest가 모두 "실패함, hook exited with code 1"로 나왔다. 스킬이 보낸 알림은 정상이었다.
 - **원인**: `install-hooks --codex --write`가 쓴 명령이 `'"C:\...\notipet.exe" --source codex'`였다. `[windows] sandbox = "unelevated"`에서 Codex는 명령줄을 `cmd /C`의 인수 하나로 넘기면서 따옴표를 `\"`로 바꾼다. cmd는 `\"C:\...\notipet.exe\"`를 프로그램 이름으로 찾지 못하고 1로 끝난다. CLI는 실행조차 되지 않았다.
 - **재현**: `codex sandbox -- cmd /c "\"<exe>\" ping --no-launch"`는 "내부 또는 외부 명령이 아닙니다", 종료 코드 1이다. 따옴표 없이 실행하면 `ok`, 0이다.
-- **해결**: exe 경로에 따옴표를 쓰지 않는다. 공백이나 cmd 특수 문자가 있으면 8.3 짧은 이름을 쓴다(`CodexHooks.CommandLine`). 블록이 바뀌므로 업데이트 뒤 `notipet install-hooks --codex --write`를 다시 실행하고 훅 세 개를 다시 신뢰해야 한다. `doctor`가 예전 블록을 경고한다.
+- **해결**: exe 경로에 따옴표를 쓰지 않는다. 공백이나 cmd 특수 문자가 있으면 8.3 짧은 이름을 쓴다(`CodexHooks.CommandLine`).
+
+### Codex의 입력 제안과 자동 검토된 승인이 알림으로 울렸다 (1.6.5)
+
+- **증상**: Codex 훅이 동작하기 시작하자 두 종류의 가짜 알림이 생겼다.
+  - 사용자가 입력하지 않은 "입력 제안"(Tab으로 넣는 것)이 턴 완료 알림으로 왔다. 본문은 `{"suggestion":"..."}`이고, 스레드 ID는 매번 새것이며, 그 스레드의 기록 파일은 없었다.
+  - 실제 스레드에는 아무 요청도 없는데 "Permission needed"가 attention으로 계속 왔다.
+- **원인**:
+  - `ambient-suggestions-enabled = true`이면 데스크톱 앱이 다음 입력을 제안하려고 임시 스레드에서 보이지 않는 턴을 돌린다. 그 턴의 Stop 훅도 울린다.
+  - `approvals_reviewer = "guardian_subagent"`이면 승인 요청을 AI 검토자가 처리한다. Codex는 **훅 → 검토자 → (검토자가 없을 때만) 사용자** 순서로 처리하므로(`codex-rs/core/src/tools/approvals.rs`), 사용자에게 묻지 않는 요청에도 PermissionRequest 훅이 울린다. 훅 입력(`permission-request.command.input.schema.json`)에는 검토자가 누구인지 나오지 않는다.
+- **해결**(`PayloadMapper.PlanForHookEvent`, Codex만 해당):
+  - Stop의 마지막 메시지가 `{"suggestion":`으로 시작하면 아무것도 하지 않는다.
+  - PermissionRequest가 왔을 때 `config.toml`의 `approvals_reviewer`(최상위 또는 현재 `profile`)가 `user`가 아니면 아무것도 하지 않는다(`CodexHooks.ApprovalsAutoReviewed`). 앱에서 스레드별로 검토자를 바꿔도 `config.toml`에 남지 않으면 반영되지 않는다.
+- **확인**: 새 CLI에 두 페이로드를 넣으면 종료 코드 0이고, 최근 알림에 아무것도 남지 않는다. Claude의 같은 JSON 답변과 `approvals_reviewer = "user"`의 PermissionRequest는 그대로 알린다(자체 테스트). 블록이 바뀌므로 업데이트 뒤 `notipet install-hooks --codex --write`를 다시 실행하고 훅 세 개를 다시 신뢰해야 한다. `doctor`가 예전 블록을 경고한다.

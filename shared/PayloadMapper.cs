@@ -77,12 +77,28 @@ public static class PayloadMapper
     // once a new prompt starts a turn. What an agent sent through the skill is
     // ended only by the agent itself (`notipet resolve`): a hook cannot tell
     // whether the user has seen it.
-    public static HookPlan PlanForHookEvent(AgentHookEvent e, string? sourceHint = null)
+    //
+    // Two Codex events are not the user's moment at all, and plan nothing:
+    // - an ambient suggestion: the desktop app runs a hidden turn in a
+    //   throwaway thread to propose the next prompt (Tab inserts it). Its Stop
+    //   carries `{"suggestion": ...}` as the last message.
+    // - a PermissionRequest while Codex reviews approvals itself
+    //   (`approvals_reviewer = "guardian_subagent"`): Codex runs the hooks,
+    //   then its reviewer, and asks the user only when no reviewer is on
+    //   (codex-rs core/src/tools/approvals.rs). The payload does not say
+    //   which, so the caller reads Codex's config (approvalsAutoReviewed).
+    public static HookPlan PlanForHookEvent(AgentHookEvent e, string? sourceHint = null, Func<bool>? approvalsAutoReviewed = null)
     {
         var request = FromHookEvent(e, sourceHint);
         var sourceId = request.Source?.Id ?? SourceManual;
         var eventName = e.HookEventName?.Trim() ?? "";
         var session = string.IsNullOrWhiteSpace(e.SessionId) ? null : e.SessionId.Trim();
+
+        if (sourceId == SourceCodex)
+        {
+            if (eventName.Equals("Stop", StringComparison.OrdinalIgnoreCase) && IsAmbientSuggestion(e.LastAssistantMessage)) return new HookPlan();
+            if (eventName.Equals("PermissionRequest", StringComparison.OrdinalIgnoreCase) && approvalsAutoReviewed?.Invoke() == true) return new HookPlan();
+        }
 
         List<string>? ends = null;
         if (session is not null)
@@ -113,6 +129,16 @@ public static class PayloadMapper
             Notify = eventName.Equals("UserPromptSubmit", StringComparison.OrdinalIgnoreCase) ? null : request,
             Resolve = ends is null ? null : new ResolveRequest { Source = sourceId, Session = session, Tags = ends }
         };
+    }
+
+    // `{"suggestion": "..."}`, sometimes followed by more text.
+    public static bool IsAmbientSuggestion(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return false;
+        var text = message.TrimStart();
+        if (!text.StartsWith('{')) return false;
+        text = text[1..].TrimStart();
+        return text.StartsWith("\"suggestion\"", StringComparison.Ordinal) && text["\"suggestion\"".Length..].TrimStart().StartsWith(':');
     }
 
     // Prompts the agent stops on in the middle of a turn: a permission dialog
@@ -439,6 +465,21 @@ public static class PayloadMapper
         var codexPermission = FromHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PermissionRequest" }, SourceCodex);
         var codexStop = PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "Stop", TurnId = "t1" }, SourceCodex);
         if (codexStop.Resolve is null || !codexStop.Resolve.Tags!.Contains(codexPermission.Tag!)) return false;
+
+        // Codex's hidden suggestion turn and auto-reviewed approvals plan nothing.
+        var suggestion = PlanForHookEvent(new AgentHookEvent
+        {
+            SessionId = "c2", HookEventName = "Stop", LastAssistantMessage = " {\"suggestion\":\"Run the tests\"} ::inbox-item{title=\"x\"}"
+        }, SourceCodex);
+        if (suggestion.Notify is not null || suggestion.Resolve is not null) return false;
+        if (IsAmbientSuggestion("The suggestion: {\"suggestion\":1}") || IsAmbientSuggestion("{\"suggestions\":[]}") || !IsAmbientSuggestion("{ \"suggestion\" : \"x\" }")) return false;
+        // A Claude turn that happens to answer with that JSON still notifies.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "Stop", LastAssistantMessage = "{\"suggestion\":\"x\"}" }, SourceClaude).Notify is null) return false;
+        var reviewed = PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PermissionRequest" }, SourceCodex, () => true);
+        if (reviewed.Notify is not null || reviewed.Resolve is not null) return false;
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PermissionRequest" }, SourceCodex, () => false).Notify is null) return false;
+        // The reviewer setting is Codex's; a Claude permission prompt ignores it.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "Notification", NotificationType = "permission_prompt" }, SourceClaude, () => true).Notify is null) return false;
 
         // Without a thread there is nothing safe to end.
         if (PlanForHookEvent(new AgentHookEvent { HookEventName = "Stop" }, SourceClaude).Resolve is not null) return false;

@@ -62,6 +62,49 @@ internal static class CodexHooks
         return $"\"{path}\"";
     }
 
+    // Whether Codex reviews approval requests itself instead of asking the
+    // user (`approvals_reviewer` other than "user", at the top of config.toml
+    // or in the active `profile`). Then a PermissionRequest hook is not a
+    // moment the user is needed (PayloadMapper.PlanForHookEvent). Read only
+    // when such a hook arrives. A thread whose reviewer was changed in the app
+    // without touching config.toml is not seen.
+    public static bool ApprovalsAutoReviewed()
+    {
+        try
+        {
+            var path = Path.Combine(CodexHome(), "config.toml");
+            return File.Exists(path) && ApprovalsAutoReviewed(File.ReadAllText(path));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool ApprovalsAutoReviewed(string toml)
+    {
+        string? reviewer = null, profile = null, profileReviewer = null;
+        string? table = null;
+        foreach (var raw in toml.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.StartsWith('[')) { table = line.Trim('[', ']', ' '); continue; }
+            var eq = line.IndexOf('=');
+            if (eq <= 0 || line.StartsWith('#')) continue;
+            var key = line[..eq].Trim();
+            var value = line[(eq + 1)..].Trim();
+            var hash = value.IndexOf(" #", StringComparison.Ordinal);
+            if (hash >= 0) value = value[..hash].Trim();
+            value = value.Trim('"', '\'');
+            if (table is null && key == "approvals_reviewer") reviewer = value;
+            else if (table is null && key == "profile") profile = value;
+            else if (profile is not null && key == "approvals_reviewer"
+                     && (table == $"profiles.{profile}" || table == $"profiles.\"{profile}\"")) profileReviewer = value;
+        }
+        var effective = profileReviewer ?? reviewer;
+        return !string.IsNullOrEmpty(effective) && !effective.Equals("user", StringComparison.OrdinalIgnoreCase);
+    }
+
     // A notipet hook whose command starts with a quoted exe - what 1.5.1 to
     // 1.6.3 wrote, and what a sandboxed Codex cannot run.
     public static bool HasQuotedCommand(string toml) =>
@@ -414,6 +457,9 @@ internal static class CodexHooks
         // A space that has no 8.3 name to fall back on is quoted.
         if (CommandLine(@"C:\no such dir\notipet.exe") != "\"C:\\no such dir\\notipet.exe\" --source codex") return false;
         if (CommandLine(@"C:\a&b\notipet.exe").StartsWith("C:\\a&b", StringComparison.Ordinal)) return false;
+        if (!ApprovalsAutoReviewed("model = \"x\"\napprovals_reviewer = \"guardian_subagent\"\n[tui]\nx = 1\n")) return false;
+        if (ApprovalsAutoReviewed("approvals_reviewer = \"user\"\n") || ApprovalsAutoReviewed("[tui]\napprovals_reviewer = \"guardian_subagent\"\n") || ApprovalsAutoReviewed("")) return false;
+        if (ApprovalsAutoReviewed("approvals_reviewer = \"guardian_subagent\"\nprofile = \"careful\"\n[profiles.careful]\napprovals_reviewer = \"user\"\n")) return false;
         if (HasQuotedCommand(once) || !HasQuotedCommand("command = '\"C:\\x\\notipet.exe\" --source codex'")) return false;
         foreach (var hook in Hooks)
         {
