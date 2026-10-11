@@ -110,6 +110,10 @@ public static class PayloadMapper
         if (sourceId == SourceCodex)
         {
             if (eventName.Equals("Stop", StringComparison.OrdinalIgnoreCase) && IsAmbientSuggestion(e.LastAssistantMessage)) return new HookPlan();
+            // A turn the app runs from its own install folder is its own
+            // housekeeping (seen: a suggestion turn answering
+            // {"suggestions":[]} with cwd ...\OpenAI\Codex\bin\<hash>).
+            if (IsCodexAppFolder(e.Cwd)) return new HookPlan();
             if (eventName.Equals("PermissionRequest", StringComparison.OrdinalIgnoreCase) && approvalsAutoReviewed?.Invoke() == true) return new HookPlan();
         }
 
@@ -188,15 +192,26 @@ public static class PayloadMapper
         return !text.StartsWith('<') && !text.StartsWith("[agent-summit]", StringComparison.OrdinalIgnoreCase);
     }
 
-    // `{"suggestion": "..."}`, sometimes followed by more text.
+    // `{"suggestion": "..."}` or `{"suggestions": [...]}`, sometimes followed
+    // by more text.
     public static bool IsAmbientSuggestion(string? message)
     {
         if (string.IsNullOrWhiteSpace(message)) return false;
         var text = message.TrimStart();
         if (!text.StartsWith('{')) return false;
         text = text[1..].TrimStart();
-        return text.StartsWith("\"suggestion\"", StringComparison.Ordinal) && text["\"suggestion\"".Length..].TrimStart().StartsWith(':');
+        foreach (var key in new[] { "\"suggestion\"", "\"suggestions\"" })
+        {
+            if (text.StartsWith(key, StringComparison.Ordinal) && text[key.Length..].TrimStart().StartsWith(':')) return true;
+        }
+        return false;
     }
+
+    // The Codex desktop app's own folder (%LOCALAPPDATA%\OpenAI\Codex\...):
+    // no user's project lives there.
+    public static bool IsCodexAppFolder(string? cwd) =>
+        !string.IsNullOrWhiteSpace(cwd)
+        && cwd.Replace('/', '\\').Contains(@"\OpenAI\Codex\", StringComparison.OrdinalIgnoreCase);
 
     // Prompts the agent stops on in the middle of a turn: a permission dialog
     // (Claude's Notification, Codex's PermissionRequest) or an MCP form.
@@ -529,7 +544,12 @@ public static class PayloadMapper
             SessionId = "c2", HookEventName = "Stop", LastAssistantMessage = " {\"suggestion\":\"Run the tests\"} ::inbox-item{title=\"x\"}"
         }, SourceCodex);
         if (suggestion.Notify is not null || suggestion.Resolve is not null) return false;
-        if (IsAmbientSuggestion("The suggestion: {\"suggestion\":1}") || IsAmbientSuggestion("{\"suggestions\":[]}") || !IsAmbientSuggestion("{ \"suggestion\" : \"x\" }")) return false;
+        if (IsAmbientSuggestion("The suggestion: {\"suggestion\":1}") || IsAmbientSuggestion("{\"suggestionsx\":[]}") || !IsAmbientSuggestion("{ \"suggestion\" : \"x\" }")) return false;
+        if (!IsAmbientSuggestion("{\"suggestions\":[]}")) return false;
+        // A turn run from the Codex app's own folder is the app's, whatever it says.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c3", HookEventName = "Stop", LastAssistantMessage = "done",
+                Cwd = @"C:\Users\u\AppData\Local\OpenAI\Codex\bin\2e5e00daee91c61d" }, SourceCodex) is not { Notify: null, Resolve: null }) return false;
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c3", HookEventName = "Stop", Cwd = @"C:\src\OpenAI-tools" }, SourceCodex).Notify is null) return false;
         // The answer to the agent's question ends its prompt right away and
         // marks it read, ends what was sent --until-reply, and notifies nothing.
         var answer = PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "PostToolUse", ToolName = "AskUserQuestion" }, SourceClaude);

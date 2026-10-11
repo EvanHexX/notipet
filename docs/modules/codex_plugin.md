@@ -109,7 +109,8 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 - 명령은 `%ComSpec% /C "<명령줄>"`로, 세션 cwd에서, 창 없이 실행된다(`command_runner.rs`).
 - **PostToolUse(`^request_user_input$`)**(1.8.0): 동기 질문 도구는 답을 받은 뒤 끝나므로, 그때 그 스레드의 승인 알람과 `--until-reply` 알림을 끄고 "답함"으로 읽음 처리한다. Codex matcher는 정규식이고 고정되지 않아서(`regex.is_match`) `^…$`로 묶는다. `request_user_input_async`는 질문을 메시지로 띄우고 바로 끝나므로 제외한다. 그 답은 새 사용자 입력으로 오고(`UserPromptSubmit`), summit 중계가 아니면 답으로 센다. 블록 끝에 추가했으므로 기존 세 훅의 신뢰 키와 해시는 그대로이고, 사용자는 새 훅 하나만 신뢰하면 된다. `doctor`는 이 훅이 없는 블록을 경고한다.
 - **사용자의 순간이 아닌 Codex 이벤트는 알리지 않는다**(1.6.5, `PayloadMapper.PlanForHookEvent`).
-  - 입력 제안: 데스크톱 앱이 임시 스레드에서 돌리는 보이지 않는 턴이다. Stop의 `last_assistant_message`가 `{"suggestion":...}`이다.
+  - 입력 제안: 데스크톱 앱이 임시 스레드에서 돌리는 보이지 않는 턴이다. Stop의 `last_assistant_message`가 `{"suggestion":...}`이거나 `{"suggestions":[...]}`(1.8.1)이다.
+  - 앱 자체 폴더(`%LOCALAPPDATA%\OpenAI\Codex\...`)를 `cwd`로 하는 이벤트(1.8.1): 앱의 내부 작업이다.
   - `approvals_reviewer`가 `user`가 아닐 때의 PermissionRequest: Codex는 훅 → 검토자(Guardian) → 사용자 순서로 처리하므로 사용자에게 묻지 않는다. 훅 입력에는 검토자가 나오지 않아 `config.toml`(최상위와 현재 `profile`)을 읽는다.
 - **exe 경로에 따옴표를 쓰지 않는다**(1.6.4). 샌드박스(`[windows] sandbox = "unelevated"`, 제한 토큰)에서 Codex는 명령줄을 `cmd /C`의 인수 하나로 넘기면서 안의 따옴표를 `\"`로 바꾼다. cmd는 이를 되돌리지 않으므로 `\"C:\...\notipet.exe\"`라는 프로그램을 찾다가 실패하고, 훅은 "hook exited with code 1"로 끝난다. `codex sandbox -- cmd /c "\"<exe>\" ping"`로 재현된다(따옴표 없이는 성공). 그래서 `CodexHooks.CommandLine`은 공백이나 cmd 특수 문자가 없으면 경로를 그대로, 있으면 8.3 짧은 이름으로 쓴다. 짧은 이름도 없을 때만 따옴표로 감싼다. 이 경우 샌드박스 훅은 동작하지 않는다. 1.5.1~1.6.3이 쓴 따옴표 블록은 `doctor`가 경고하고, `--write`가 새 블록으로 바꾼다. 바뀐 명령은 다시 신뢰해야 한다.
 - **훅 환경이 비어 있을 수 있다.** 이 PC의 `codex exec`는 훅을 환경 변수 하나 없이 실행했다(`set` 출력이 비었다). `SystemRoot`가 없으면 Winsock이 소켓을 못 만들어 CLI가 "데몬이 꺼져 있다"고 했다. 그래서 CLI가 시작할 때 `SystemRoot`/`windir`을 Windows 폴더(셸 API)로 되살린다(`RestoreSystemRoot`). 데스크톱 앱의 훅은 환경이 채워져 있었다.
