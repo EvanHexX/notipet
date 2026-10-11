@@ -233,7 +233,7 @@ internal static class Program
             }
 
             var hook = JsonSerializer.Deserialize(json, NotipetJson.Compact.AgentHookEvent);
-            return hook is null ? null : PayloadMapper.PlanForHookEvent(hook, sourceHint);
+            return hook is null ? null : PayloadMapper.PlanForHookEvent(hook, sourceHint, CodexHooks.ApprovalsAutoReviewed);
         }
         catch (JsonException)
         {
