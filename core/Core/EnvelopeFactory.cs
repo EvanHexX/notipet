@@ -101,6 +101,14 @@ internal static class EnvelopeFactory
             .ToList();
         if (channels is { Count: 0 }) channels = null;
 
+        // A reply can only be recognised in a known thread.
+        var untilReply = request.UntilReply == true;
+        if (untilReply && thread is null)
+        {
+            untilReply = false;
+            warnings.Add("untilReply ignored: no thread (source.session) to watch for the reply");
+        }
+
         var result = new NotificationEnvelope
         {
             Title = title,
@@ -119,7 +127,8 @@ internal static class EnvelopeFactory
             OpenUri = OpenLinks.Accept(request.Open, allowedSchemes, warnings),
             Sound = request.Sound,
             RequestedChannels = channels,
-            TtlSec = request.TtlSec
+            TtlSec = request.TtlSec,
+            UntilReply = untilReply
         };
         result.Warnings.AddRange(warnings);
 
@@ -210,6 +219,13 @@ internal static class EnvelopeFactory
         if (!TryCreate(new NotifyRequest { Title = "bare" }, null, out var bare, out _)) return false;
         if (bare!.Project is not null || bare.SourceSession is not null || bare.ThreadTitle is not null) return false;
         if (bare.Warnings.Count != 0) return false;
+
+        // untilReply needs a thread to hear the reply in.
+        if (!TryCreate(new NotifyRequest { Title = "q", UntilReply = true }, null, out var noThread, out _)) return false;
+        if (noThread!.UntilReply || noThread.Warnings.Count != 1) return false;
+        if (!TryCreate(new NotifyRequest { Title = "q", UntilReply = true, Source = new SourceInfo { Id = "codex", Session = "019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b" } },
+                null, out var withThread, out _)) return false;
+        if (!withThread!.UntilReply || withThread.Warnings.Count != 0) return false;
 
         // Project falls back to the cwd; an explicit one wins.
         if (!TryCreate(new NotifyRequest { Title = "x", Source = new SourceInfo { Cwd = @"C:\src\notipet" } },

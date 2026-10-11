@@ -64,6 +64,7 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 
 [[hooks.PermissionRequest]]   … (같은 꼴)
 [[hooks.UserPromptSubmit]]    … async = true
+[[hooks.PostToolUse]]         matcher = '^request_user_input$', async = true (1.8.0)
 ```
 
 **훅 실행**: Codex가 이벤트마다 `%ComSpec% /C "<command>"`로 실행하고 페이로드 JSON을 stdin으로 준다. `notipet.exe --source codex`가 알리거나 끝난 알람을 정리한다([cli_shim.md](cli_shim.md)). stdout에는 아무것도 쓰지 않는다.
@@ -106,6 +107,7 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 - **사용자 동의 없이 넣지 않는다.** 스킬은 사용자가 알림을 원할 때만 `doctor`로 확인하고 물어본다. 이 명령은 샌드박스 밖 실행이라 Codex가 승인을 받는데, 그 승인이 곧 동의다.
 - 핸들러 필드는 `type`, `command`, `commandWindows`, `timeout`(초), `async`, `statusMessage`, `additionalContextLimit`뿐이다(`hook_config.rs`). **`args`는 없고, 있어도 경고 없이 버려진다.** 인수는 명령줄 안에 쓴다.
 - 명령은 `%ComSpec% /C "<명령줄>"`로, 세션 cwd에서, 창 없이 실행된다(`command_runner.rs`).
+- **PostToolUse(`^request_user_input$`)**(1.8.0): 동기 질문 도구는 답을 받은 뒤 끝나므로, 그때 그 스레드의 승인 알람과 `--until-reply` 알림을 끄고 "답함"으로 읽음 처리한다. Codex matcher는 정규식이고 고정되지 않아서(`regex.is_match`) `^…$`로 묶는다. `request_user_input_async`는 질문을 메시지로 띄우고 바로 끝나므로 제외한다. 그 답은 새 사용자 입력으로 오고(`UserPromptSubmit`), summit 중계가 아니면 답으로 센다. 블록 끝에 추가했으므로 기존 세 훅의 신뢰 키와 해시는 그대로이고, 사용자는 새 훅 하나만 신뢰하면 된다. `doctor`는 이 훅이 없는 블록을 경고한다.
 - **사용자의 순간이 아닌 Codex 이벤트는 알리지 않는다**(1.6.5, `PayloadMapper.PlanForHookEvent`).
   - 입력 제안: 데스크톱 앱이 임시 스레드에서 돌리는 보이지 않는 턴이다. Stop의 `last_assistant_message`가 `{"suggestion":...}`이다.
   - `approvals_reviewer`가 `user`가 아닐 때의 PermissionRequest: Codex는 훅 → 검토자(Guardian) → 사용자 순서로 처리하므로 사용자에게 묻지 않는다. 훅 입력에는 검토자가 나오지 않아 `config.toml`(최상위와 현재 `profile`)을 읽는다.

@@ -81,8 +81,9 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _channels.Add(new WindowsSoundChannel(_sound, () => _settings, () => _settings.Presence.AtDesk));
         // notipet's own pop-ups (PopupSettings); the visual channel uses them
         // instead of the shell balloon when either pop-up option is on.
-        _popups = new PopupHost(() => _settings, CardLinkFor, StopAlarms, OpenCardLinkFor, ShowHistory);
-        _channels.Add(new TrayBalloonChannel(() => _trayIcon, () => _settings, OnUiThread, () => _popups));
+        _popups = new PopupHost(() => _settings, CardLinkFor, StopAlarms, OpenCardLinkFor, ShowHistory, MarkSeen);
+        _channels.Add(new TrayBalloonChannel(() => _trayIcon, () => _settings, OnUiThread, () => _popups,
+            envelope => _lastBalloonId = envelope.Id));
 
         _dispatcher = new Dispatcher(
             () => _settings,
@@ -521,11 +522,20 @@ internal sealed class TrayController : IDisposable, INotipetHost
     // foreground process for a moment - the only time Windows lets it hand the
     // foreground on. Without the grant the agent app often just flashes in the
     // taskbar instead of coming up.
-    public void OpenThread(HistoryEntry entry) => Launch(ThreadLinkFor(entry.Envelope), "OpenThread");
+    // From the Recent window: following a card's link means the user saw it.
+    public void OpenThread(HistoryEntry entry)
+    {
+        _history.MarkSeen(new[] { entry }, HistoryStore.SeenLink, DateTimeOffset.Now);
+        Launch(ThreadLinkFor(entry.Envelope), "OpenThread");
+    }
 
     public Uri? SenderLink(HistoryEntry entry) => SenderLinkFor(entry.Envelope);
 
-    public void OpenSenderLink(HistoryEntry entry) => Launch(SenderLinkFor(entry.Envelope), "OpenSenderLink");
+    public void OpenSenderLink(HistoryEntry entry)
+    {
+        _history.MarkSeen(new[] { entry }, HistoryStore.SeenLink, DateTimeOffset.Now);
+        Launch(SenderLinkFor(entry.Envelope), "OpenSenderLink");
+    }
 
     public event Action? AlertScopeChanged;
 
@@ -894,7 +904,34 @@ internal sealed class TrayController : IDisposable, INotipetHost
         ToggleHistory();
     }
 
-    private void OnBalloonClicked() => StopAlarms();
+    // The shell shows one balloon at a time, so a click is on the last one.
+    private volatile string? _lastBalloonId;
+
+    private void OnBalloonClicked()
+    {
+        if (_lastBalloonId is { } id && _history.Find(id) is { } entry)
+        {
+            _history.MarkSeen(new[] { entry }, HistoryStore.SeenPopup, DateTimeOffset.Now);
+        }
+        StopAlarms();
+    }
+
+    // A pop-up the user clicked, closed or followed (PopupHost).
+    private void MarkSeen(NotificationEnvelope envelope, string how)
+    {
+        if (_history.Find(envelope.Id) is { } entry) _history.MarkSeen(new[] { entry }, how, DateTimeOffset.Now);
+    }
+
+    // ----- read state, from the Recent window -----
+
+    public void SetSeen(HistoryEntry entry, bool seen)
+    {
+        if (seen) _history.MarkSeen(new[] { entry }, HistoryStore.SeenRecent, DateTimeOffset.Now);
+        else _history.MarkUnseen(entry);
+    }
+
+    public int MarkAllSeen() =>
+        _history.MarkSeen(_history.Where(e => e.SeenAt is null), HistoryStore.SeenRecent, DateTimeOffset.Now);
 
     private void StopAlarms()
     {

@@ -43,6 +43,12 @@ internal interface INotipetHost
     int ClearHistory();
     bool RemoveHistoryEntry(string id);
 
+    // Read state (HistoryEntry.SeenAt): mark one read or unread, or every
+    // unread one read. Following a card's link (OpenThread/OpenSenderLink)
+    // marks it read too.
+    void SetSeen(HistoryEntry entry, bool seen);
+    int MarkAllSeen();
+
     bool AutostartEnabled { get; }
 
     // Updates. UpdateStateChanged is raised on the UI thread.

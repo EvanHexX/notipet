@@ -34,6 +34,10 @@ internal static class ClaudeHooks
         new("SubagentStop", "."),
         // Ends what is over (the last turn's "finished"); notifies nothing.
         new("UserPromptSubmit", null),
+        // The user answered the agent's question: its alarm stops now rather
+        // than at the end of the turn. Only these tools - every tool call
+        // would start notipet once per call.
+        new("PostToolUse", "AskUserQuestion|ExitPlanMode"),
     };
 
     public const string PluginId = "notipet@notipet";

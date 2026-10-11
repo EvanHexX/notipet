@@ -123,10 +123,11 @@ internal sealed class HistoryPersistence : IDisposable
                 {
                     Title = "shop: 테스트 통과", Body = "412/412", Level = NotificationLevel.Success, Tag = "shop:done",
                     SourceId = "codex", SourceSession = "019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b", Project = "shop",
-                    ThreadTitle = "checkout", SourceCwd = @"C:\src\shop", OpenUri = "http://127.0.0.1:5000/"
+                    ThreadTitle = "checkout", SourceCwd = @"C:\src\shop", OpenUri = "http://127.0.0.1:5000/",
+                    UntilReply = true
                 },
                 Accepted = false, SuppressedReason = "thread_off", Count = 3, AppThreadTitle = "Checkout refactor",
-                ResolvedAt = DateTimeOffset.Now
+                ResolvedAt = DateTimeOffset.Now, SeenAt = DateTimeOffset.Now, SeenBy = HistoryStore.SeenLink
             };
             entry.Deliveries.Add(new DeliveryResult { Channel = "windows_sound", Status = "delivered", ReferenceId = "alm_1" });
             var older = new HistoryEntry { Envelope = new NotificationEnvelope { Title = "older" } };
@@ -141,6 +142,8 @@ internal sealed class HistoryPersistence : IDisposable
             if (e.Envelope.SourceSession != entry.Envelope.SourceSession || e.Envelope.Project != "shop" || e.Envelope.OpenUri != entry.Envelope.OpenUri) return false;
             if (e.Accepted || e.SuppressedReason != "thread_off" || e.Count != 3 || e.AppThreadTitle != "Checkout refactor" || e.ResolvedAt is null) return false;
             if (e.Deliveries.Single().ReferenceId != "alm_1" || e.Envelope.DedupeKey != entry.Envelope.DedupeKey) return false;
+            if (!e.Envelope.UntilReply || e.SeenAt is null || e.SeenBy != HistoryStore.SeenLink) return false;
+            if (back[1].SeenAt is not null || back[1].Envelope.UntilReply) return false;
 
             // Restore puts them behind what is already there, once each.
             var store = new HistoryStore(() => 10);
@@ -205,6 +208,9 @@ internal sealed class HistoryFile
         public int Count { get; set; } = 1;
         public string? AppThreadTitle { get; set; }
         public DateTimeOffset? ResolvedAt { get; set; }
+        public DateTimeOffset? SeenAt { get; set; }
+        public string? SeenBy { get; set; }
+        public bool UntilReply { get; set; }
         public List<DeliveryResult>? Deliveries { get; set; }
 
         public static Item From(HistoryEntry e) => new()
@@ -232,6 +238,9 @@ internal sealed class HistoryFile
             Count = e.Count,
             AppThreadTitle = e.AppThreadTitle,
             ResolvedAt = e.ResolvedAt,
+            SeenAt = e.SeenAt,
+            SeenBy = e.SeenBy,
+            UntilReply = e.Envelope.UntilReply,
             Deliveries = e.Deliveries.Count > 0 ? e.Deliveries.ToList() : null
         };
 
@@ -254,7 +263,8 @@ internal sealed class HistoryFile
                     ThreadTitle = ThreadTitle,
                     HostSession = HostSession,
                     Client = Client,
-                    OpenUri = Open
+                    OpenUri = Open,
+                    UntilReply = UntilReply
                 },
                 Accepted = Accepted,
                 SuppressedReason = SuppressedReason,
@@ -262,7 +272,9 @@ internal sealed class HistoryFile
                 Count = Math.Max(1, Count),
                 LastAt = LastAt == default ? ReceivedAt : LastAt,
                 AppThreadTitle = AppThreadTitle,
-                ResolvedAt = ResolvedAt
+                ResolvedAt = ResolvedAt,
+                SeenAt = SeenAt,
+                SeenBy = SeenAt is null ? null : SeenBy
             };
             if (Deliveries is not null) entry.Deliveries.AddRange(Deliveries);
             return entry;

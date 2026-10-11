@@ -48,6 +48,8 @@ claude --plugin-dir C:\src\notipet\integrations\claude\plugin   # 설치 없이 
 3. `async: true`라 턴이 기다리지 않는다(타임아웃도 적용되지 않음).
 4. `notipet.exe --source claude-code`가 알리거나 끝난 알람을 정리한다([cli_shim.md](cli_shim.md)).
 
+**PostToolUse(`AskUserQuestion|ExitPlanMode`)**(1.8.0): 질문 창이 뜨고 약 6초 동안 답이 없으면 Claude Code가 Notification `permission_prompt`("Claude needs your permission to use AskUserQuestion")를 보낸다. 그 알람은 원래 턴이 끝날 때(Stop)만 꺼져서, 답한 뒤에도 Claude가 일하는 동안 계속 울렸다. 질문 도구가 답을 받고 끝나면 PostToolUse가 오므로, 그때 그 스레드의 프롬프트 알람을 끄고 "답함"으로 읽음 처리한다. `--until-reply`로 보낸 알림도 같이 끝낸다. 문서상 도구 성공 뒤에 오는 이벤트이고, 질문 답이 "성공"인지는 문서에 없어서 실제로 확인했다(regression.md). 모든 도구에 걸면 도구 호출마다 notipet이 실행되므로, 질문 도구에만 건다. 일반 권한 승인 알람은 여전히 턴이 끝날 때 꺼진다.
+
 **SubagentStop의 matcher는 `.`이다(1.7.1, 예전에는 `.*`).** Claude Code는 입력 제안(입력란의 회색 다음 프롬프트)과 `/btw` 같은 자체 기능을 내부 에이전트로 돌리고, 그것이 끝날 때도 SubagentStop을 울린다. 이때 `agent_type`은 빈 문자열이다. 세션이 `--agent`로 돌 때만 그 이름이 붙는다([hooks reference, SubagentStop](https://code.claude.com/docs/en/hooks.md)). 입력 제안은 Stop 1~2초 뒤 매 턴 오고, 본문이 "진행해" 같은 제안 문구여서 info 알림으로 쌓였다. 빈 문자열과 맞지 않는 matcher(`.`)를 쓰면 Claude Code가 그 훅을 아예 실행하지 않는다. `PayloadMapper`도 Claude의 SubagentStop에 `agent_type`이 없거나 비어 있으면 아무것도 하지 않는다. 예전 matcher를 쓰는 settings.json 훅을 위해서다. `--agent`로 도는 세션의 내부 에이전트는 구별할 수 없어 그대로 알린다.
 
 스킬은 `notipet`(PATH)을 부르고, 없으면 설치 경로를 쓰라고 안내한다.

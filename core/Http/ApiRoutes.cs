@@ -153,6 +153,7 @@ internal static class ApiRoutes
         var plan = PayloadMapper.PlanForHookEvent(hook, sourceHint);
         ResolveResponse? resolved = null;
         if (plan.Resolve is not null) resolved = await api.Resolver.ResolveAsync(plan.Resolve).ConfigureAwait(false);
+        if (plan.Replied is not null) await api.Resolver.ResolveAsync(plan.Replied).ConfigureAwait(false);
 
         if (plan.Notify is not { } request)
         {

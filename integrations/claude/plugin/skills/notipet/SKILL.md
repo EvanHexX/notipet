@@ -42,6 +42,7 @@ notipet send --title "<project>: <what happened>" --body "<one or two lines>" --
 - `--tag`: a stable key for the moment, such as `<project>:needs-input` or `<project>:done`. Repeats of the same tag in this conversation within 30 seconds collapse into one sound; another conversation using the same tag is kept separate.
 - `--project`: the repository or project name. The user's recent-notifications window groups cards by it. If you leave it out, notipet uses the name of the repository you are in.
 - `--thread-title`: what this conversation is about, in a few words ("auth refactor", "release 1.2 checklist"). Use the **same** words for every notification in one conversation, so the cards read as one thread. If the desktop app has its own name for the thread, notipet shows that instead.
+- `--until-reply`: for a **question** - the alert ends by itself the moment the user answers in this conversation (they type a reply, or answer your AskUserQuestion), and is marked as answered. Use it whenever you are waiting for their answer; you then do not need to resolve it.
 - Write the title, body and thread title **in the language the user is writing to you in**.
 
 You do not need to say which agent you are or pass a thread id: notipet reads both from your environment (Claude Code or Codex), and in their desktop apps a card can then open this exact conversation. Add `--agent claude-code` or `--agent codex` only if the user asks, or if you are running inside the other agent. `--project` and `--thread-title` are optional too - a notification without them still arrives, filed under "Other".
@@ -51,7 +52,7 @@ Examples:
 ```
 notipet send --title "notipet: tests passed" --body "17/17 checks passed; ready to publish when you are." --level success --tag "notipet:done" --project notipet --thread-title "project grouping"
 
-notipet send --title "quota-scope: need a decision" --body "Two ways to fix the tray crash - which do you prefer? Details in the terminal." --level attention --tag "quota-scope:needs-input" --project quota-scope --thread-title "tray crash fix"
+notipet send --title "quota-scope: need a decision" --body "Two ways to fix the tray crash - which do you prefer? Details in the terminal." --level attention --tag "quota-scope:needs-input" --project quota-scope --thread-title "tray crash fix" --until-reply
 
 notipet send --title "api: migration failed" --body "Step 3 of 5 failed on a unique constraint; nothing was committed. Stopped and waiting." --level error --tag "api:blocked" --project api --thread-title "orders migration"
 ```
@@ -69,6 +70,7 @@ notipet resolve --tag "<the same tag you sent>"
 - Do it **as soon as** the moment is over: first thing when the user replies to something you alerted about, or right after you resolved the blocker yourself.
 - It is safe to call blindly. If the user already stopped the alarm and closed the card, it does nothing and still exits 0 - do not check first, and do not retry.
 - Do not resolve a moment that is still open (you are still waiting for their answer).
+- An alert sent with `--until-reply` ends by itself when the user answers. Resolve it yourself only if the moment ended another way (you no longer need the answer).
 
 ## Only some threads or projects ring
 

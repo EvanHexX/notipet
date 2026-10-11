@@ -64,6 +64,7 @@ internal static class Glyphs
     public const string Download = "\uE896";
     public const string Save = "\uE74E";
     public const string Keyboard = "\uE765";
+    public const string CheckMark = "\uE73E";
 
     public static string ForLevel(NotificationLevel level) => level switch
     {
@@ -111,11 +112,14 @@ internal static class Fluent
         return icon;
     }
 
-    public static Border Card(UIElement child, string padding = "16,12")
+    // accent: an accent-coloured left edge - an unread card in Recent.
+    public static Border Card(UIElement child, string padding = "16,12", bool accent = false)
     {
+        var edge = accent
+            ? "BorderBrush='{ThemeResource AccentFillColorDefaultBrush}' BorderThickness='3,1,1,1' "
+            : "BorderBrush='{ThemeResource CardStrokeColorDefaultBrush}' BorderThickness='1' ";
         var card = Xaml<Border>(
-            "<Border $NS Background='{ThemeResource CardBackgroundFillColorDefaultBrush}' " +
-            "BorderBrush='{ThemeResource CardStrokeColorDefaultBrush}' BorderThickness='1' " +
+            "<Border $NS Background='{ThemeResource CardBackgroundFillColorDefaultBrush}' " + edge +
             $"CornerRadius='{{ThemeResource ControlCornerRadius}}' Padding='{padding}'/>");
         card.Child = child;
         return card;

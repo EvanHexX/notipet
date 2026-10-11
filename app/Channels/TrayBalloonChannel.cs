@@ -26,12 +26,18 @@ internal sealed class TrayBalloonChannel : INotificationChannel
     private readonly Action<Action> _onUiThread;
     private readonly Func<PopupHost?> _popups;
 
-    public TrayBalloonChannel(Func<ITrayIcon?> tray, Func<AppSettings> settings, Action<Action> onUiThread, Func<PopupHost?> popups)
+    // Which notification the Windows balloon now shows, so a click on it
+    // marks that one read.
+    private readonly Action<NotificationEnvelope>? _balloonShown;
+
+    public TrayBalloonChannel(Func<ITrayIcon?> tray, Func<AppSettings> settings, Action<Action> onUiThread, Func<PopupHost?> popups,
+        Action<NotificationEnvelope>? balloonShown = null)
     {
         _tray = tray;
         _settings = settings;
         _onUiThread = onUiThread;
         _popups = popups;
+        _balloonShown = balloonShown;
     }
 
     public string Id => AppSettings.Channels_TrayBalloon;
@@ -70,7 +76,11 @@ internal sealed class TrayBalloonChannel : INotificationChannel
 
         // Shell_NotifyIcon must be called from the thread that owns the window,
         // and we arrive here on an HTTP worker.
-        _onUiThread(() => tray.ShowNotification(envelope.Title, envelope.Body, level));
+        _onUiThread(() =>
+        {
+            tray.ShowNotification(envelope.Title, envelope.Body, level);
+            _balloonShown?.Invoke(envelope);
+        });
         return Task.FromResult(new ChannelResult(Id, DeliveryStatus.Delivered));
     }
 }

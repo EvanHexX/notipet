@@ -143,15 +143,19 @@ internal static class Program
     // is not running, nothing of its can be ringing.
     private static async Task<int> RunHookPlanAsync(HookPlan plan, string[] args)
     {
-        if (plan.Resolve is not null)
+        if (plan.Resolve is not null || plan.Replied is not null)
         {
             try
             {
                 var running = await RuntimeDiscovery.FindAsync(TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
                 if (running is not null)
                 {
-                    await RuntimeDiscovery.PostAsync(running.Info, "/v1/resolve", plan.Resolve,
-                        NotipetJson.Compact.ResolveRequest, DefaultBudget).ConfigureAwait(false);
+                    foreach (var resolve in new[] { plan.Resolve, plan.Replied })
+                    {
+                        if (resolve is null) continue;
+                        await RuntimeDiscovery.PostAsync(running.Info, "/v1/resolve", resolve,
+                            NotipetJson.Compact.ResolveRequest, DefaultBudget).ConfigureAwait(false);
+                    }
                 }
             }
             catch (Exception ex)
@@ -419,7 +423,10 @@ internal static class Program
             Channels = channels is { Count: > 0 } ? channels : null,
             TtlSec = int.TryParse(OptionValue(args, "--ttl"), out var ttl) ? ttl : null,
             // Checked by the daemon against its own allow-list; the CLI passes it on as is.
-            Open = NonEmpty(OptionValue(args, "--open"))
+            Open = NonEmpty(OptionValue(args, "--open")),
+            // Ends when the user answers in this thread (the daemon needs the
+            // thread, which FillIdentity finds for an agent).
+            UntilReply = HasFlag(args, "--until-reply") ? true : null
         };
         FillIdentity(request, env, gitProbe, ceiling);
         return request;
@@ -724,9 +731,11 @@ internal static class Program
         var inToml = File.Exists(codexConfig) && CodexHooks.MentionsNotipetHook(ReadOrNull(codexConfig) ?? "");
         var inJson = File.Exists(codexHooksJson) && CodexHooks.HooksJsonHasOurs(ReadOrNull(codexHooksJson));
         var quoted = inToml && CodexHooks.HasQuotedCommand(ReadOrNull(codexConfig) ?? "");
-        Check(inToml && !inJson && !quoted, "codex hooks",
+        var noAnswerHook = inToml && CodexHooks.LacksAnswerHook(ReadOrNull(codexConfig) ?? "");
+        Check(inToml && !inJson && !quoted && !noAnswerHook, "codex hooks",
             inJson ? $"in {codexHooksJson}, which Codex does not run everywhere - `notipet install-hooks --codex --write` moves them to config.toml"
             : quoted ? "written before 1.6.4 with a quoted exe path, which a sandboxed Codex breaks (hook exited with code 1) - run `notipet install-hooks --codex --write`, then trust the hooks again"
+            : noAnswerHook ? "written before 1.8.0, without the hook that ends a question's alarm when you answer - run `notipet install-hooks --codex --write` and trust the new PostToolUse hook"
             : inToml ? codexConfig
             : "not configured - `notipet install-hooks --codex --write`", warnOnly: true);
 
@@ -1329,6 +1338,7 @@ internal static class Program
         if (Build("send", "--title", "x", "--sound", "Notification.IM").Sound?.Alias != "Notification.IM") return false;
         if (Build("send", "--title", "x", "--sound", "ding").Sound?.Name != "ding") return false;
         if (Build("send", "--title", "x", "--silent").Sound?.Mute != true) return false;
+        if (Build("send", "--title", "x", "--until-reply").UntilReply != true || Build("send", "--title", "x").UntilReply is not null) return false;
 
         // Friendly channel names map to channel ids.
         var channels = Build("send", "--title", "x", "--channels", "sound, balloon").Channels;

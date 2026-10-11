@@ -33,7 +33,12 @@ internal static class Help
                                  http(s) on this PC, or a scheme listed in
                                  settings.json links.allowedSchemes (else ignored,
                                  with a warning). A URI, never a command
-              --cwd PATH         shown on the card (default: current directory)
+              --until-reply      over as soon as the user answers in this thread
+                                 (types a prompt there, or answers your question
+                                 tool): its alarm stops and it is marked read.
+                                 For questions; needs the thread (an agent's is
+                                 filled in)
+              --cwd PATH        shown on the card (default: current directory)
               --json             print the raw response
               --quiet            print nothing
               --fire-and-forget  do not wait for the response

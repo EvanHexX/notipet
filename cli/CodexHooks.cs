@@ -27,15 +27,20 @@ namespace Notipet.Cli;
 // - Codex runs the hooks of every source, so a second copy rings twice.
 internal static class CodexHooks
 {
-    private sealed record Hook(string Event, bool Async, string Korean, string English);
+    private sealed record Hook(string Event, bool Async, string Korean, string English, string? Matcher = null);
 
     // Stop also ends this thread's approval alarm; UserPromptSubmit only ends
     // what is over (PayloadMapper.PlanForHookEvent) and never makes a prompt wait.
+    // New hooks go at the end: each one's trust key is its event and position,
+    // so the three above keep the trust they have.
     private static readonly Hook[] Hooks =
     {
         new("Stop", false, "Notipet · 턴 완료 알림 및 권한 알람 정리", "Notipet · turn finished; ending its approval alarm"),
         new("PermissionRequest", false, "Notipet · 권한 승인 대기 알림", "Notipet · waiting for approval"),
         new("UserPromptSubmit", true, "Notipet · 새 입력 시 이전 완료 알림 정리", "Notipet · new prompt; ending the last turn's alerts"),
+        // The answer to request_user_input (the waiting one; the async one
+        // returns before any answer). Codex matchers are regexes, unanchored.
+        new("PostToolUse", true, "Notipet · 질문에 답하면 알람 정리", "Notipet · question answered; ending its alarm", "^request_user_input$"),
     };
 
     private const int TimeoutSeconds = 10;
@@ -105,6 +110,11 @@ internal static class CodexHooks
         return !string.IsNullOrEmpty(effective) && !effective.Equals("user", StringComparison.OrdinalIgnoreCase);
     }
 
+    // A block written before the PostToolUse hook (1.8.0): its question alarms
+    // end only with the turn.
+    public static bool LacksAnswerHook(string toml) =>
+        MentionsNotipetHook(toml) && !toml.Contains("^request_user_input$", StringComparison.Ordinal);
+
     // A notipet hook whose command starts with a quoted exe - what 1.5.1 to
     // 1.6.3 wrote, and what a sandboxed Codex cannot run.
     public static bool HasQuotedCommand(string toml) =>
@@ -147,6 +157,7 @@ internal static class CodexHooks
         {
             if (lines.Count > 1) lines.Add("");
             lines.Add($"[[hooks.{hook.Event}]]");
+            if (hook.Matcher is not null) lines.Add($"matcher = {TomlString(hook.Matcher)}");
             lines.Add($"[[hooks.{hook.Event}.hooks]]");
             lines.Add("type = \"command\"");
             lines.Add($"command = {TomlString(CommandLine(exePath))}");
@@ -463,7 +474,8 @@ internal static class CodexHooks
         if (HasQuotedCommand(once) || !HasQuotedCommand("command = '\"C:\\x\\notipet.exe\" --source codex'")) return false;
         foreach (var hook in Hooks)
         {
-            if (!once.Contains($"[[hooks.{hook.Event}]]\r\n[[hooks.{hook.Event}.hooks]]", StringComparison.Ordinal)) return false;
+            var matcher = hook.Matcher is null ? "" : $"matcher = '{hook.Matcher}'\r\n";
+            if (!once.Contains($"[[hooks.{hook.Event}]]\r\n{matcher}[[hooks.{hook.Event}.hooks]]", StringComparison.Ordinal)) return false;
         }
         if (Apply(once, exe, false, false, out _) != once) return false;
         if (!Apply(user, exe, korean: true, false, out _)!.Contains("권한 승인 대기", StringComparison.Ordinal)) return false;

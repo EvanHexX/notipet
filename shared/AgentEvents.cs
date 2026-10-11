@@ -21,6 +21,8 @@ public sealed class AgentHookEvent
     [JsonPropertyName("turn_id")] public string? TurnId { get; set; }
     // Claude, SessionStart / UserPromptSubmit only, and only for a custom title.
     [JsonPropertyName("session_title")] public string? SessionTitle { get; set; }
+    // UserPromptSubmit (both agents): what arrived as the prompt.
+    [JsonPropertyName("prompt")] public string? Prompt { get; set; }
 
     // Notification event
     [JsonPropertyName("notification_type")] public string? NotificationType { get; set; }

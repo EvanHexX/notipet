@@ -39,6 +39,9 @@ internal sealed class NotificationEnvelope
     public SoundSpec? Sound { get; init; }
     public IReadOnlyList<string>? RequestedChannels { get; init; }
     public int? TtlSec { get; init; }
+    // Sent with --until-reply: over as soon as the user answers in this thread
+    // (a hook resolves it - PayloadMapper.PlanForHookEvent). Only with a thread.
+    public bool UntilReply { get; init; }
     public List<string> Warnings { get; } = new();
 
     public NotificationEnvelope()

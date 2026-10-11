@@ -66,6 +66,10 @@ public sealed class NotifyRequest
     // http(s) on this PC or a scheme the user listed in settings; anything
     // else is dropped with a warning. Never a command line.
     [JsonPropertyName("open")] public string? Open { get; set; }
+    // Over once the user answers in this thread: the next prompt they type
+    // there, or their answer to the agent's question tool. Needs the thread
+    // (source.session); without one it is ignored with a warning.
+    [JsonPropertyName("untilReply")] public bool? UntilReply { get; set; }
 }
 
 public sealed class DeliveryResult
@@ -168,6 +172,11 @@ public sealed class ResolveRequest
     [JsonPropertyName("source")] public string? Source { get; set; }
     // The thread, as SourceInfo.session on the notification.
     [JsonPropertyName("session")] public string? Session { get; set; }
+    // Only notifications sent with untilReply - narrows like the others.
+    [JsonPropertyName("untilReply")] public bool? UntilReply { get; set; }
+    // The user dealt with it: what this ends is also marked read, with this
+    // reason. Only "reply" (they answered in the thread); hooks send it.
+    [JsonPropertyName("seenBy")] public string? SeenBy { get; set; }
 }
 
 public sealed class ResolveResponse
@@ -279,6 +288,12 @@ public sealed class HistoryEntryDto
     // When the sender said it was over (/v1/resolve) while its alarm or
     // pop-up was still live.
     [JsonPropertyName("resolvedAt")] public string? ResolvedAt { get; set; }
+    // When the user dealt with it, and how: popup (clicked the pop-up or the
+    // balloon), link (opened its thread or link), reply (answered in the
+    // thread), recent (marked read in Recent). Null: not yet.
+    [JsonPropertyName("seenAt")] public string? SeenAt { get; set; }
+    [JsonPropertyName("seenBy")] public string? SeenBy { get; set; }
+    [JsonPropertyName("untilReply")] public bool? UntilReply { get; set; }
     // What a click on the card opens, when the sender gave one (send --open).
     [JsonPropertyName("open")] public string? Open { get; set; }
     [JsonPropertyName("deliveries")] public List<DeliveryResult> Deliveries { get; set; } = new();
