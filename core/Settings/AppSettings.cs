@@ -157,6 +157,12 @@ internal sealed class HistorySettings
     // Keep Recent in history.json so restarts, updates and reboots do not
     // empty it. Off: memory only, and the file is deleted.
     public bool Persist { get; set; } = true;
+
+    // Global hotkey that opens Recent notifications (or closes it when it is
+    // already in front), as "Ctrl+Shift+Win+N". Empty: no hotkey. Set in the
+    // settings window; another program holding the same keys wins, and the
+    // window says so.
+    public string Hotkey { get; set; } = Notipet.Hotkeys.HotkeyDefinition.DefaultRecent;
 }
 
 // Settings model plus load/save. Follows quota-scope's AppSettings shape:
@@ -419,6 +425,11 @@ internal sealed class AppSettings
             _ => "System"
         };
         History.KeepInMemory = Math.Clamp(History.KeepInMemory, 10, 5000);
+        // Empty stays empty (turned off); anything unreadable goes back to the
+        // default, written canonically.
+        History.Hotkey = string.IsNullOrWhiteSpace(History.Hotkey) ? ""
+            : Notipet.Hotkeys.HotkeyDefinition.TryParse(History.Hotkey, out var hotkey) ? hotkey.Format()
+            : Notipet.Hotkeys.HotkeyDefinition.DefaultRecent;
     }
 
     // The six levels by wire name, in severity order.
@@ -525,6 +536,13 @@ internal sealed class AppSettings
             endless.Sound.MaxDurationSec = UnlimitedAlarmSeconds;
             endless.Normalize();
             if (endless.Sound.MaxDurationSec != UnlimitedAlarmSeconds) return false;
+
+            // The Recent hotkey: default when absent, canonical, off when
+            // empty, default again when unreadable.
+            if (Load(WriteTemp(path, "{}")).History.Hotkey != Notipet.Hotkeys.HotkeyDefinition.DefaultRecent) return false;
+            if (Load(WriteTemp(path, "{\"history\":{\"hotkey\":\"alt + ctrl + f9\"}}")).History.Hotkey != "Ctrl+Alt+F9") return false;
+            if (Load(WriteTemp(path, "{\"history\":{\"hotkey\":\"\"}}")).History.Hotkey != "") return false;
+            if (Load(WriteTemp(path, "{\"history\":{\"hotkey\":\"N\"}}")).History.Hotkey != Notipet.Hotkeys.HotkeyDefinition.DefaultRecent) return false;
 
             // Pop-ups that stay: per level. The 1.2.0 single switch becomes
             // "every level" once, and is not written back.

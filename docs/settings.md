@@ -138,7 +138,8 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
   "history": {
     "keepInMemory": 200,             // 설정 창: 20 50 100 200 500 1000. 줄이면 즉시 잘린다
     "lookupThreadTitles": true,      // 카드에 에이전트 앱의 스레드 이름 표시 (Codex/Claude 로컬 파일 읽기 전용)
-    "persist": true                  // history.json에 저장해 재시작·업데이트·재부팅 뒤에도 유지. 끄면 메모리에만, 파일 삭제
+    "persist": true,                 // history.json에 저장해 재시작·업데이트·재부팅 뒤에도 유지. 끄면 메모리에만, 파일 삭제
+    "hotkey": "Ctrl+Shift+Win+N"     // 최근 알림을 여는 전역 단축키(이미 앞에 있으면 닫기). "" = 없음. 읽을 수 없는 값은 기본값으로
   }
 }
 ```

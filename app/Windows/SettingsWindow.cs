@@ -683,6 +683,57 @@ internal sealed class SettingsWindow
             Fluent.Toggle(Settings.Mute.AllowCritical, on => { Settings.Mute.AllowCritical = on; Changed(); })));
     }
 
+    // The Recent hotkey: click the box and press keys; Backspace or "Off"
+    // removes it, "Default" puts Ctrl+Shift+Win+N back. The host lifts the
+    // registered keys while the box has focus, so they arrive here.
+    private UIElement BuildHotkey()
+    {
+        var status = Fluent.Secondary("");
+        void ShowStatus()
+        {
+            var problem = _host.HotkeyProblem;
+            status.Text = problem
+                ?? (Settings.History.Hotkey.Length == 0
+                    ? Loc.T("Off", "꺼짐")
+                    : Loc.T("Opens Recent notifications from any app, or puts it away when it is in front",
+                            "어느 앱에서든 최근 알림을 엽니다. 이미 앞에 있으면 닫습니다"));
+            status.Foreground = problem is null ? Fluent.Secondary("").Foreground : Fluent.Text("", foreground: "SystemFillColorCriticalBrush").Foreground;
+        }
+
+        var box = new HotkeyCaptureBox();
+        box.SetBinding(Settings.History.Hotkey);
+        void Set(string value)
+        {
+            Settings.History.Hotkey = value;
+            box.SetBinding(value);
+            Changed();
+            ShowStatus();
+        }
+        box.Captured += definition => Set(definition.Format());
+        box.Cleared += () => Set("");
+        box.GotFocus += (_, _) => _host.SuspendHotkey(true);
+        box.LostFocus += (_, _) =>
+        {
+            _host.SuspendHotkey(false);
+            ShowStatus();
+        };
+
+        var controls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        controls.Children.Add(box);
+        controls.Children.Add(Fluent.IconButton(Glyphs.Refresh, Loc.T("Default", "기본값"), () => Set(Notipet.Hotkeys.HotkeyDefinition.DefaultRecent)));
+        controls.Children.Add(Fluent.IconButton(Glyphs.Cancel, Loc.T("Off", "끄기"), () => Set("")));
+
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(Fluent.SettingCard(Glyphs.Keyboard,
+            Loc.T("Shortcut for Recent notifications", "최근 알림 단축키"),
+            Loc.T("Click the box and press the keys. Backspace clears it", "칸을 클릭하고 키를 누르세요. Backspace로 지웁니다"),
+            controls));
+        status.Margin = new Thickness(52, 0, 16, 4);
+        panel.Children.Add(status);
+        ShowStatus();
+        return panel;
+    }
+
     private void BuildHistory(StackPanel page)
     {
         page.Children.Add(Fluent.PageHeader(Loc.T("Recent notifications", "최근 알림")));
@@ -719,6 +770,8 @@ internal sealed class SettingsWindow
             Loc.T("Open Recent notifications", "최근 알림 열기"),
             null,
             Fluent.IconButton(Glyphs.History, Loc.T("Open", "열기"), _host.ShowHistory)));
+
+        page.Children.Add(BuildHotkey());
 
         var clear = Fluent.IconButton(Glyphs.Delete, Loc.T("Clear", "비우기"), () => { });
         var confirm = new Flyout();
