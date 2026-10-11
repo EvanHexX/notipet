@@ -419,7 +419,9 @@ notipet restart         # 데몬 재시작
 
 상대 시각은 창이 열려 있는 동안 30초마다 갱신된다. 100개씩 보여주고 더 있으면 "더 보기". `Esc`로 닫는다.
 
-여는 법: 트레이 좌클릭 · 메뉴의 "최근 알림..." · `notipet open` · `NotipetTray.exe`를 한 번 더 실행.
+여는 법: **`Ctrl+Shift+Win+N`**(어느 앱에서든, 이미 앞에 있으면 닫힘) · 트레이 좌클릭 · 메뉴의 "최근 알림..." · `notipet open` · `NotipetTray.exe`를 한 번 더 실행.
+
+단축키는 설정 → 최근 알림 → "최근 알림 단축키"에서 바꾼다. 칸을 클릭하고 원하는 키를 누르면 되고, Backspace나 "끄기"로 없앤다. Ctrl, Alt, Win 중 하나는 꼭 들어가야 한다. 다른 프로그램이 같은 키를 먼저 쓰고 있으면 등록되지 않으며, 그 줄에 빨간 글씨로 알려 준다. 기본값을 `Ctrl+Alt+N`으로 하지 않은 이유가 있다. JetBrains IDE(Inline)와 VS Code의 Code Runner가 그 키를 쓰고, 유럽 자판 상당수에서 `Ctrl+Alt`는 AltGr라 글자 입력을 막는다.
 
 ### 설정 창
 

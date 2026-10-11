@@ -33,6 +33,13 @@ internal interface INotipetHost
     void ShowHistory();
     void ShowSettings(string? page = null);
 
+    // The Recent hotkey (Settings.History.Hotkey) is applied by
+    // SettingsChanged. Null when it is registered or turned off; otherwise
+    // why Windows refused it. Suspended while the settings window captures a
+    // new one.
+    string? HotkeyProblem { get; }
+    void SuspendHotkey(bool suspended);
+
     int ClearHistory();
     bool RemoveHistoryEntry(string id);
 

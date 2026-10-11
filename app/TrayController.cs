@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Notipet.Channels;
 using Notipet.Core;
+using Notipet.Hotkeys;
 using Notipet.Http;
 using Notipet.Presence;
 using Notipet.Rules;
@@ -214,7 +215,63 @@ internal sealed class TrayController : IDisposable, INotipetHost
         // A lowered history limit applies now, not as new alerts push old out.
         _history.Trim();
         ApplyThreadTitleSetting();
+        ApplyHotkey();
         RefreshTray();
+    }
+
+    // ----- the Recent hotkey -----
+
+    private const int RecentHotkeyId = 1;
+    private HotkeyWindow? _hotkeys;
+    private string? _hotkeyApplied;
+    private bool _hotkeySuspended;
+
+    public string? HotkeyProblem { get; private set; }
+
+    // UI thread. Registers settings.history.hotkey, or nothing when it is
+    // empty or suspended; re-registers only when the keys changed.
+    private void ApplyHotkey()
+    {
+        var wanted = _hotkeySuspended ? "" : _settings.History.Hotkey;
+        if (_hotkeys is null || wanted == _hotkeyApplied) return;
+        _hotkeyApplied = wanted;
+        _hotkeys.Unregister(RecentHotkeyId);
+        if (!_hotkeySuspended) HotkeyProblem = null;
+        if (wanted.Length == 0 || !HotkeyDefinition.TryParse(wanted, out var definition)) return;
+
+        if (_hotkeys.TryRegister(RecentHotkeyId, definition, out var inUse)) return;
+        HotkeyProblem = inUse
+            ? Loc.T($"{wanted} is already used by another program - choose other keys", $"{wanted}은(는) 다른 프로그램이 이미 쓰고 있습니다. 다른 키를 고르세요")
+            : Loc.T($"Windows did not accept {wanted}", $"Windows가 {wanted}을(를) 받아들이지 않았습니다");
+        DaemonLog.Write($"hotkey {wanted} not registered ({(inUse ? "in use by another program" : "refused")})");
+    }
+
+    public void SuspendHotkey(bool suspended)
+    {
+        OnUiThread(() =>
+        {
+            _hotkeySuspended = suspended;
+            ApplyHotkey();
+        });
+    }
+
+    private void StartHotkeys()
+    {
+        try
+        {
+            _hotkeys = new HotkeyWindow();
+            _hotkeys.Pressed += id =>
+            {
+                // Same as a tray click on the window: up front, or away if it
+                // already is. Never stops an alarm - that stays a click.
+                if (id == RecentHotkeyId) ToggleHistory();
+            };
+            ApplyHotkey();
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("HotkeyWindow", ex);
+        }
     }
 
     // The "thread names from the agent apps" switch applies to the cards that
@@ -565,6 +622,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _trayIcon.SetIcon(TrayIconRenderer.Create(TrayIconState.Idle, TrayIconRenderer.NativeSize()));
         _trayIcon.SetMenu(BuildMenu());
         _trayIcon.Show();
+        StartHotkeys();
     }
 
     private void StartServer()
@@ -968,6 +1026,8 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _runtimeHeal?.Dispose();
         _runtimeHeal = null;
         try { RuntimeFile.Delete(Process.GetCurrentProcess().SessionId); } catch { }
+        try { _hotkeys?.Dispose(); } catch { }
+        _hotkeys = null;
         _settingsWindow?.Close();
         _historyWindow?.Close();
         try { _popups.CloseAll(); } catch { }

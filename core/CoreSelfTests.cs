@@ -27,6 +27,7 @@ public static class CoreSelfTests
         ("OpenLinks", OpenLinks.RunSelfTest),
         ("ThreadTitleLookup", ThreadTitleLookup.RunSelfTest),
         ("HistoryGrouping", HistoryGrouping.RunSelfTest),
+        ("HotkeyDefinition", Notipet.Hotkeys.HotkeyDefinition.RunSelfTest),
         ("AppSettings", AppSettings.RunSelfTest),
         ("HistoryStore", HistoryStore.RunSelfTest),
         ("HistoryPersistence", HistoryPersistence.RunSelfTest),

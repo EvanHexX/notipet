@@ -15,7 +15,8 @@
 - [x] 최근 알림 창 (1.1): 억제 이유 표시, 필터, 비우기, 개별 삭제
 - [ ] `WindowsToastChannel`: `AppNotificationManager`로 버튼 있는 리치 토스트
   - 위험: unpackaged에서는 AUMID와 시작 메뉴 바로가기가 필요하고 HKCU에 COM 액티베이터를 등록한다. 앱 이름이 틀리게 뜨거나 활성화 콜백이 안 오는 조용한 실패가 가능하다. **채널로 분리해 기본 off를 유지하고**, MVP의 시각 알림은 검증된 풍선이 계속 담당한다
-- [ ] "알람 정지" 전역 단축키 — quota-scope의 `HotkeyWindow.cs`를 복사
+- [x] 최근 알림 전역 단축키 (1.7.0, 기본 `Ctrl+Shift+Win+N`, 설정에서 변경)
+- [ ] "알람 정지" 전역 단축키 — 같은 `HotkeyWindow`에 id 하나 더
 - [ ] `PATCH /v1/settings` (허용 목록 방식). `outboundNetworkApproved`는 **절대 포함하지 않는다**
 - [ ] 토큰 회전을 트레이 메뉴에서
 

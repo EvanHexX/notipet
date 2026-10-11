@@ -100,10 +100,17 @@ TrayController (INotipetHost) ──보유──> SettingsWindow ──수정─
 HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상대 시간 갱신)
 ```
 
-여는 경로: 트레이 우클릭 메뉴 · 두 번째 인스턴스 실행(`NotipetTray.exe` = 최근, `--settings` = 설정) · `notipet open [recent|settings]`. 프로그램이 띄우는 실행(`--background`: CLI 자동 기동, 자동 시작; `--restart-after`)은 창을 열지 않는다([tray_shell.md](tray_shell.md)).
+여는 경로: 전역 단축키(`settings.history.hotkey`, 기본 `Ctrl+Shift+Win+N`) · 트레이 우클릭 메뉴 · 두 번째 인스턴스 실행(`NotipetTray.exe` = 최근, `--settings` = 설정) · `notipet open [recent|settings]`. 프로그램이 띄우는 실행(`--background`: CLI 자동 기동, 자동 시작; `--restart-after`)은 창을 열지 않는다([tray_shell.md](tray_shell.md)).
 
 ## Important Constraints
 
+- **최근 알림 단축키**(1.7.0)
+  - 구성: `app/Hotkeys/HotkeyWindow.cs`(UI 스레드의 메시지 전용 창, `RegisterHotKey` + `MOD_NOREPEAT`), `core/Hotkeys/HotkeyDefinition.cs`(문자열 ↔ 키), `app/Windows/HotkeyCaptureBox.cs`(키 입력 칸). 셋 다 quota-scope에서 복사했다.
+  - 동작은 트레이 좌클릭과 같은 토글(`ToggleHistory`)이다. 단, 알람은 멈추지 않는다.
+  - 입력 칸에 포커스가 있는 동안 호스트가 등록을 풀었다가(`SuspendHotkey`) 포커스가 빠지면 다시 건다. 그러지 않으면 지금 키를 칸에 누르는 순간 창이 토글될 뿐, 입력되지 않는다.
+  - 다른 프로그램이 먼저 등록한 키는 등록되지 않는다(Win32 1409). 그 이유를 설정 줄에 빨간 글씨로 보이고, `daemon.log`에도 남긴다.
+  - 기본값은 `Ctrl+Shift+Win+N`이다. `Ctrl+Alt+N`은 JetBrains Inline·VS Code Code Runner와 겹치고 AltGr 자판의 글자 입력을 막는다. `Win+Shift+N`·`Win+Alt+N`은 OneNote, `Win+N`은 알림 센터가 쓴다.
+  - 시험: 데몬이 떠 있을 때 다른 프로세스에서 같은 키로 `RegisterHotKey`를 시도하면 1409로 실패해야 한다. 입력 칸에 포커스를 주면 같은 시도가 성공해야 한다.
 - **`App.xaml`의 `XamlControlsResources`는 필수다.** 없으면 첫 창이 `0xc000027b`로 프로세스를 죽인다.
 - **`NumberBox`를 쓰지 않는다.** 렌더 시점에 같은 방식으로 죽인다. 프리셋 `ComboBox`를 쓴다.
 - **창이 데몬을 죽이면 안 된다.** 페이지·레벨별 `try/catch`로 구성 실패를 에러 텍스트로 대체한다. 렌더 시점 예외는 잡을 수 없으므로 `ui-check.ps1`로 실제로 띄워 확인한다.
