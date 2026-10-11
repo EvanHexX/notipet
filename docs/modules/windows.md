@@ -100,7 +100,7 @@ TrayController (INotipetHost) ──보유──> SettingsWindow ──수정─
 HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상대 시간 갱신)
 ```
 
-여는 경로: 트레이 우클릭 메뉴 · 두 번째 인스턴스 실행(`NotipetTray.exe` = 최근, `--settings` = 설정) · `notipet open [recent|settings]`.
+여는 경로: 트레이 우클릭 메뉴 · 두 번째 인스턴스 실행(`NotipetTray.exe` = 최근, `--settings` = 설정) · `notipet open [recent|settings]`. 프로그램이 띄우는 실행(`--background`: CLI 자동 기동, 자동 시작; `--restart-after`)은 창을 열지 않는다([tray_shell.md](tray_shell.md)).
 
 ## Important Constraints
 

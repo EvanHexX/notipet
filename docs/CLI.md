@@ -229,6 +229,8 @@ this thread: rings - this thread is turned on
 
 데몬을 **띄울 때**는 CLI 옆의 `NotipetTray.exe` → `runtime.json`의 경로 → `%LOCALAPPDATA%\notipet\daemon.path`(데몬이 뜰 때마다 기록) 순서로 찾는다. CLI 옆이 먼저인 이유: 강제 종료로 남은 `runtime.json`이 예전 개발 빌드를 가리킬 수 있고, 배포한 뒤에는 배포한 것을 띄워야 하기 때문이다. `doctor`와 `open`은 실행 중인 데몬의 경로를 먼저 본다.
 
+자동 기동은 `NotipetTray.exe --background`로 띄운다. 데몬이 사실은 떠 있었는데 CLI가 찾지 못했다면, 이 실행은 아무것도 하지 않고 끝난다. 이때 `daemon.log`에 `background start` 한 줄이 남는다. 1.6.2까지는 이 실행이 최근 알림 창을 열었다.
+
 ---
 
 ## 설치
