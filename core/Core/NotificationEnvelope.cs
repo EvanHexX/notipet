@@ -47,6 +47,13 @@ internal sealed class NotificationEnvelope
         Id = $"ntp_{DateTime.UtcNow:yyyyMMddHHmmss}_{Interlocked.Increment(ref _sequence):x4}";
     }
 
+    // Read back from history.json: the id and time it first arrived with.
+    public NotificationEnvelope(string id, DateTimeOffset receivedAt)
+    {
+        Id = id;
+        ReceivedAt = receivedAt;
+    }
+
     // The dedupe key. A caller-supplied tag wins; otherwise the content itself
     // identifies the notification, so a hook that fires three times for the same
     // prompt still collapses even without a tag.

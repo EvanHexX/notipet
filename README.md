@@ -30,7 +30,7 @@ You start a long task in Claude Code or Codex and switch to something else. Fort
 
 - **Sound by level** - `info` plays once, `attention` repeats, `critical` rings until you acknowledge it. Uses your own Windows sounds, with volume and repeat control.
 - **Agent hooks and an agent skill** - hooks never miss "waiting for input" or "turn finished"; the skill lets the agent say *what* it needs.
-- **Recent notifications, grouped by project** - each card shows which agent sent it, the thread name the agent app uses, and why a notification was held back if it was.
+- **Recent notifications, grouped by project** - each card shows which agent sent it, the thread name the agent app uses, and why a notification was held back if it was. Kept across restarts and updates.
 - **Jump to the thread** - click a card to open that conversation in the **Codex** or **Claude** desktop app.
 - **Pop-ups that stay until clicked** (you pick the levels) and that show **over full-screen apps** - optional; clicking one stops the alarm, they never steal keyboard focus, and when too many pile up the older ones fold into a "+N more" card instead of vanishing.
 - **Alarms that end themselves** - when the agent finishes what it called you for (you approved from your phone, or it fixed the problem itself), it says so and only that alarm and its pop-up go away. Already stopped? Nothing happens.

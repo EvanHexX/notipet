@@ -62,6 +62,7 @@ internal static class Glyphs
     public const string More = "\uE712";
     public const string Theme = "\uE790";
     public const string Download = "\uE896";
+    public const string Save = "\uE74E";
 
     public static string ForLevel(NotificationLevel level) => level switch
     {

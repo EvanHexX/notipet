@@ -318,3 +318,15 @@
 - **사실**: Claude Code는 같은 핸들러가 여러 settings 파일에 있으면 한 번만 돌리지만, 플러그인의 복사본은 따로 돌린다(공식 hooks 문서). Codex도 모든 출처의 훅을 다 돌린다.
 - **대응**: Claude 플러그인으로 옮길 때 `notipet install-hooks --claude --remove`로 settings.json의 notipet 훅을 빼고 `~/.claude/skills/notipet`을 지운다. `doctor`가 둘 다 있으면 경고하고, `--write`도 플러그인이 켜져 있으면 경고한다.
 - 함께 확인한 것: Claude Code 훅의 `args`는 정식 필드다(exec form, 셸 없이 실행). 예전 settings.json의 `args`는 제대로 쓰이고 있었다 — Codex와 다르다.
+
+### 그래픽 드라이버 업데이트 뒤 창이 비었다 (1.6.2)
+
+- **증상**: NVIDIA 드라이버를 업데이트한 뒤, 계속 떠 있던 notipet의 창(최근 알림, 설정)이 빈 화면이었다. 데몬은 응답했고 crash.log는 비어 있었다. quota-scope도 같았다. quota-scope에서 확인해 보니 기존 창은 거의 검었고, 새로 연 창도 일부 글자가 빠졌으며 메뉴를 옮길 때마다 그려졌다 안 그려졌다 했다.
+- **원인**: WinUI 3의 미해결 버그. 디스플레이 어댑터가 새로 추가되면(드라이버 설치, 장치 끄고 켜기) 실행 중인 앱의 글자·이미지·배경이 사라진다([microsoft/microsoft-ui-xaml#10844](https://github.com/microsoft/microsoft-ui-xaml/issues/10844), WinUI Gallery 등도 같다). 그래픽 드라이버 재설정(Win+Ctrl+Shift+B)으로는 재현되지 않았다 — 어댑터가 새로 추가되지 않는다.
+- **해결**: 시작할 때 DXGI 팩터리를 만들어 두고 30초마다 `IsCurrent()`를 본다. false면 울리는 알람이 없을 때 스스로 재시작한다(`--restart-after <pid> graphics`). 새 프로세스는 정상으로 그린다. `NOTIPET_SIMULATE_ADAPTER_CHANGE=1`로 띄운 bin 데몬이 30초 뒤 한 번 재시작하고, 최근 알림이 그대로 넘어오고, 다시 재시작하지 않는 것을 확인했다.
+
+### 재시작·업데이트하면 최근 알림이 사라졌다 (1.6.2)
+
+- **증상**: 업데이트(1.5.1 → 1.6.0)와 빈 화면 복구용 재시작 뒤 최근 알림 창이 비었다. 사용자는 지운 적이 없었다.
+- **원인**: 기록을 메모리에만 두었다. 알림 본문에 프롬프트가 인용될 수 있다는 이유였는데, Codex·Claude는 대화 전체를 사용자 폴더에 평문으로 저장하므로 실제로 막아 주는 것이 거의 없었다.
+- **해결**: `%LOCALAPPDATA%\notipet\history.json`(본인 계정만 접근하는 폴더)에 2초 단위로 모아 쓰고, 끝내는 모든 경로(종료, 업데이트, 워치독, 그래픽 재시작) 직전에 바로 쓴다. 시작할 때 읽는다. 비우기·삭제가 파일에도 반영되고, `history.persist`를 끄면 파일을 지운다. 깨진 파일은 `history.json.bad`로 옮기고 빈 기록으로 시작한다.

@@ -31,6 +31,9 @@ internal static class Paths
 
     public static string RuntimePath => Path.Combine(DataDir, "runtime.json");
 
+    // Recent notifications, across restarts (HistoryPersistence).
+    public static string HistoryPath => Path.Combine(DataDir, "history.json");
+
     // Where the daemon exe was last started from; kept after exit.
     public static string DaemonPathFile => Path.Combine(DataDir, "daemon.path");
 

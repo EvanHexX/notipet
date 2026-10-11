@@ -153,6 +153,10 @@ internal sealed class HistorySettings
     // session_index.jsonl, Claude ~/.claude/sessions). Read-only and local,
     // but it does open other programs' files, so it can be turned off.
     public bool LookupThreadTitles { get; set; } = true;
+
+    // Keep Recent in history.json so restarts, updates and reboots do not
+    // empty it. Off: memory only, and the file is deleted.
+    public bool Persist { get; set; } = true;
 }
 
 // Settings model plus load/save. Follows quota-scope's AppSettings shape:

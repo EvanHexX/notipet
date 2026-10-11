@@ -1,6 +1,6 @@
 {
   "name": "notipet",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Lets Codex alert you on your Windows desktop - a sound and a pop-up - when it needs a decision, is blocked, or finished a long task, and stop that alarm when it is over. Needs the notipet tray app.",
   "author": {
     "name": "EvanHexX",
