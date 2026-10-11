@@ -354,6 +354,14 @@
 - **재현**: `codex sandbox -- cmd /c "\"<exe>\" ping --no-launch"`는 "내부 또는 외부 명령이 아닙니다", 종료 코드 1이다. 따옴표 없이 실행하면 `ok`, 0이다.
 - **해결**: exe 경로에 따옴표를 쓰지 않는다. 공백이나 cmd 특수 문자가 있으면 8.3 짧은 이름을 쓴다(`CodexHooks.CommandLine`).
 
+### Codex 입력 제안이 `{"suggestions":[]}`로 왔다 (1.8.1)
+
+- **증상**: 1.6.5에서 막은 Codex 입력 제안 턴이 다른 형태로 다시 완료 알림이 됐다. 본문은 `{"suggestions":[]}`(복수, 빈 목록)였다. 작업 폴더가 Codex 앱 자체의 `%LOCALAPPDATA%\OpenAI\Codex\bin\<hash>`라서 프로젝트 이름이 `2e5e00daee91c61d`로 나왔다.
+- **해결**:
+  - `IsAmbientSuggestion`이 `"suggestion"`과 `"suggestions"` 두 키를 모두 본다.
+  - Codex 훅의 `cwd`가 `\OpenAI\Codex\` 아래면 무엇이든 앱 자체 작업으로 보고 아무것도 하지 않는다(`IsCodexAppFolder`). 사용자 프로젝트가 그 폴더에 있을 수는 없다.
+- **확인**: 같은 페이로드를 새 CLI에 넣으면 기록이 남지 않는다. `C:\src\OpenAI-tools` 같은 비슷한 이름의 폴더는 그대로 알린다(자체 테스트).
+
 ### 질문에 답한 뒤에도 알람이 계속 울렸고, 쌓인 알림 중 무엇을 처리했는지 알 수 없었다 (1.8.0)
 
 - **증상 1 (Claude)**: Claude Code의 질문 창(AskUserQuestion)에 답했는데도 알람이 10초 넘게 울렸다.
