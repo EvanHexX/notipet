@@ -641,6 +641,25 @@ internal static class Program
     }
 
     // Everything worth checking when "I didn't hear anything", in one place.
+    private static List<string> PackageShadowFiles()
+    {
+        var found = new List<string>();
+        try
+        {
+            var packages = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
+            if (!Directory.Exists(packages)) return found;
+            foreach (var package in Directory.EnumerateDirectories(packages))
+            {
+                var data = Path.Combine(package, "LocalCache", "Local", "notipet");
+                if (Directory.Exists(data) && Directory.GetFiles(data, "runtime*.json").Length > 0) found.Add(Path.GetFileName(package));
+            }
+        }
+        catch
+        {
+        }
+        return found;
+    }
+
     private static async Task<int> DoctorAsync(string[] args)
     {
         var problems = 0;
@@ -661,6 +680,14 @@ internal static class Program
             daemon is not null ? $"pid {daemon.Info.Pid}, port {daemon.Info.Port}, v{daemon.Info.Version}"
             : info is null ? "not running - start it with `notipet start`"
             : $"stale runtime.json (pid {info.Pid}) - `notipet start` replaces it");
+
+        // A packaged app (the Claude desktop app is one) keeps its own copy of
+        // a runtime.json written from inside it, and its hooks read that copy
+        // (PackageShadows in the daemon, which removes them every 30 s).
+        var shadows = PackageShadowFiles();
+        Check(shadows.Count == 0, "package copies",
+            shadows.Count == 0 ? "none" : $"{string.Join(", ", shadows)} - hooks run by that app see an old daemon; a running 1.6.4+ daemon removes them within 30 s",
+            warnOnly: true);
 
         if (daemon is not null)
         {
@@ -696,8 +723,10 @@ internal static class Program
         var codexHooksJson = Path.Combine(codexHome, "hooks.json");
         var inToml = File.Exists(codexConfig) && CodexHooks.MentionsNotipetHook(ReadOrNull(codexConfig) ?? "");
         var inJson = File.Exists(codexHooksJson) && CodexHooks.HooksJsonHasOurs(ReadOrNull(codexHooksJson));
-        Check(inToml && !inJson, "codex hooks",
+        var quoted = inToml && CodexHooks.HasQuotedCommand(ReadOrNull(codexConfig) ?? "");
+        Check(inToml && !inJson && !quoted, "codex hooks",
             inJson ? $"in {codexHooksJson}, which Codex does not run everywhere - `notipet install-hooks --codex --write` moves them to config.toml"
+            : quoted ? "written before 1.6.4 with a quoted exe path, which a sandboxed Codex breaks (hook exited with code 1) - run `notipet install-hooks --codex --write`, then trust the hooks again"
             : inToml ? codexConfig
             : "not configured - `notipet install-hooks --codex --write`", warnOnly: true);
 

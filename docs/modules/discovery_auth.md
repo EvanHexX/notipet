@@ -113,10 +113,13 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
 
 시작할 때 남아 있는 `runtime.json`이 다른 pid를 가리키면, 그 인스턴스는 정리 없이 끝난 것이다(정상 종료는 파일을 지운다). `daemon.log`에 그렇게 남긴다 — 강제 종료는 스스로 아무것도 남기지 못하므로.
 
+**패키지 앱의 사본**(1.6.4, `app/PackageShadows.cs`): Claude 데스크톱 같은 MSIX 앱과 그 앱이 띄운 프로세스가 `%LOCALAPPDATA%`에 새로 만든 파일은 `%LOCALAPPDATA%\Packages\<앱>\LocalCache\Local\`에 따로 저장된다. 그 앱 안에서는 이 사본이 진짜 파일을 가린다. 그래서 패키지 밖의 데몬은 시작할 때와 30초마다 `Packages\*\LocalCache\Local\notipet\runtime*.json`을 지운다. 사본이 없으면 앱 안에서도 진짜 파일이 보인다. 데몬이 패키지 안에서 떴다면(Claude Code 훅이 띄운 경우) 자기 파일을 지우지 않고 `daemon.log`에 경고만 남긴다. `notipet doctor`의 `package copies`가 사본을 보여 준다. 시험: `Invoke-CommandInDesktopPackage -PackageFamilyName <family> -AppId <id> -Command cmd.exe -Args '/c <script>'`로 그 앱 안에서 보이는 파일을 확인한다.
+
 ## Known Problems
 
 - **토큰이 평문 파일에 있다.** 같은 사용자 루프백 IPC의 본질적 한계이고, 완화책은 위 검사들과 이 문서다.
 - 다중 세션 동작을 실제 RDP로 검증하지 않았다.
+- 데몬이 꺼진 상태에서 패키지 앱(Claude 데스크톱)의 훅이 데몬을 띄우면, 그 데몬은 패키지 안에서 돈다. 그 데몬의 `runtime.json`은 그 앱 밖에서 보이지 않으므로 Codex 훅과 셸은 데몬을 못 찾는다. "Windows 시작 시 실행"을 켜 두면 생기지 않는다. 고치려면 패키지 밖에서 다시 띄우는 방법(예: CLI가 패키지 안이면 다른 경로로 실행)이 필요하다.
 - 토큰 회전 경로가 아직 없다 (2단계).
 - `IsStale`이 판정 불가(접근 거부 등)일 때는 "살아 있음"으로 처리하고 health 검사에 맡긴다. 동작하는 인스턴스를 죽이는 것보다 낫다는 판단.
 

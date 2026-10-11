@@ -649,6 +649,12 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _runtime = RuntimeFile.Describe(_server.Port, token, _instanceId, sessionId, AppVersion);
         RuntimeFile.Write(_runtime);
         DaemonLog.Write($"started v{AppVersion}, port {_server.Port}{(Program.RecoveredFromHang ? ", replacing an instance whose UI thread hung" : "")}");
+        _package = PackageShadows.CurrentPackage();
+        if (_package is not null)
+        {
+            DaemonLog.Write($"running inside the app package {_package}: its runtime.json is that app's private copy, and hooks of other apps cannot find this instance. Restart Notipet from the Start menu or the tray");
+        }
+        RemovePackageShadows();
 
         // Keep it that way. Something left runtime.json naming a dead instance
         // while this one ran for hours - the CLI and every hook then believed
@@ -665,6 +671,27 @@ internal sealed class TrayController : IDisposable, INotipetHost
     private RuntimeInfo? _runtime;
     private System.Threading.Timer? _runtimeHeal;
 
+    private string? _package;
+
+    // PackageShadows: a packaged app's copy of runtime.json hides the real one
+    // from it and from the hooks it runs. Not from inside a package, where the
+    // copies are this instance's own files.
+    private void RemovePackageShadows()
+    {
+        if (_package is not null) return;
+        try
+        {
+            foreach (var path in PackageShadows.Remove(PackageShadows.PackagesDir))
+            {
+                DaemonLog.Write($"removed {Path.GetFileName(path)} kept by the {PackageShadows.Describe(path)} app package, which hid this instance from its hooks");
+            }
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("PackageShadows", ex);
+        }
+    }
+
     // On a pool thread; touches only the files.
     private void HealRuntimeFile()
     {
@@ -672,6 +699,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         try
         {
             CheckGraphicsAdapters();
+            RemovePackageShadows();
             if (RuntimeFile.NamesInstance(runtime)) return;
             var found = RuntimeFile.Read(Paths.RuntimePath);
             DaemonLog.Write(found is null

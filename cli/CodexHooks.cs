@@ -46,7 +46,47 @@ internal static class CodexHooks
             ? home
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
 
-    public static string CommandLine(string exePath) => $"\"{exePath}\" --source codex";
+    // No quotes around the exe when they can be left out. A sandboxed Codex
+    // (Windows restricted token) hands the command to `cmd /C` as an argv
+    // element, escaping its quotes as \" - which cmd does not undo, so it
+    // looked for an exe named `\"C:\...\notipet.exe\"` and every hook failed
+    // with exit code 1 (`codex sandbox -- cmd /c "<command>"` reproduces it).
+    // A path with a space or a cmd metacharacter goes by its 8.3 short name;
+    // only when there is none is it quoted, and then sandboxed hooks break.
+    public static string CommandLine(string exePath) => $"{CmdSafePath(exePath)} --source codex";
+
+    private static string CmdSafePath(string path)
+    {
+        if (!NeedsQuotes(path)) return path;
+        if (OperatingSystem.IsWindows() && ShortPath(path) is { } shortPath && !NeedsQuotes(shortPath)) return shortPath;
+        return $"\"{path}\"";
+    }
+
+    // A notipet hook whose command starts with a quoted exe - what 1.5.1 to
+    // 1.6.3 wrote, and what a sandboxed Codex cannot run.
+    public static bool HasQuotedCommand(string toml) =>
+        toml.Split('\n').Select(l => l.Trim()).Any(l =>
+            l.StartsWith("command", StringComparison.Ordinal) && IsOurs(l)
+            && (l.Contains("= '\"", StringComparison.Ordinal) || l.Contains("= \"\\\"", StringComparison.Ordinal)));
+
+    private static bool NeedsQuotes(string path) => path.Length == 0 || path.Any(c => char.IsWhiteSpace(c) || "\"&|<>^()%!,;=".Contains(c));
+
+    private static string? ShortPath(string path)
+    {
+        try
+        {
+            var buffer = new char[1024];
+            var length = GetShortPathNameW(path, buffer, (uint)buffer.Length);
+            return length > 0 && length < buffer.Length ? new string(buffer, 0, (int)length) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint GetShortPathNameW(string longPath, [Out] char[] shortPath, uint bufferLength);
 
     // A handler is notipet's when it runs a notipet.exe (any path, any
     // arguments) or the script of the 1.5.1 development plugin.
@@ -369,7 +409,12 @@ internal static class CodexHooks
         // (Codex has no `args`), CRLF kept; then a second run changes nothing.
         var once = Apply(user, exe, korean: false, remove: false, out _)!;
         if (!once.StartsWith(user.TrimEnd(), StringComparison.Ordinal) || !once.EndsWith("\r\n", StringComparison.Ordinal)) return false;
-        if (!once.Contains("command = '\"C:\\x\\notipet.exe\" --source codex'", StringComparison.Ordinal) || once.Contains("args", StringComparison.Ordinal)) return false;
+        // No quotes: a sandboxed Codex escapes them on the way to cmd /C.
+        if (!once.Contains("command = 'C:\\x\\notipet.exe --source codex'", StringComparison.Ordinal) || once.Contains("args", StringComparison.Ordinal)) return false;
+        // A space that has no 8.3 name to fall back on is quoted.
+        if (CommandLine(@"C:\no such dir\notipet.exe") != "\"C:\\no such dir\\notipet.exe\" --source codex") return false;
+        if (CommandLine(@"C:\a&b\notipet.exe").StartsWith("C:\\a&b", StringComparison.Ordinal)) return false;
+        if (HasQuotedCommand(once) || !HasQuotedCommand("command = '\"C:\\x\\notipet.exe\" --source codex'")) return false;
         foreach (var hook in Hooks)
         {
             if (!once.Contains($"[[hooks.{hook.Event}]]\r\n[[hooks.{hook.Event}.hooks]]", StringComparison.Ordinal)) return false;
@@ -381,7 +426,8 @@ internal static class CodexHooks
         // replaced where it stands (its trust keys do not move).
         var later = once + "[tui]\r\nnotifications = true\r\n";
         if (Apply(later, exe, false, false, out _) != later) return false;
-        var moved = Apply(later.Replace("\"C:\\x\\notipet.exe\"", "\"C:\\old\\notipet.exe\"", StringComparison.Ordinal), exe, false, false, out _);
+        var moved = Apply(later.Replace("'C:\\x\\notipet.exe", "'C:\\old\\notipet.exe", StringComparison.Ordinal), exe, false, false, out _);
+        if (later.Replace("'C:\\x\\notipet.exe", "'C:\\old\\notipet.exe", StringComparison.Ordinal) == later) return false;
         if (moved != later) return false;
 
         // Remove gives back the user's file.

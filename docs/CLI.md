@@ -144,6 +144,7 @@ CLI 버전과 실행 중인 데몬 버전.
 ```
 [ok  ] daemon exe         C:\src\notipet\bin\NotipetTray.exe
 [ok  ] daemon running     pid 59796, port 4954, v1.1.0
+[ok  ] package copies     none
 [ok  ] sound engine       mediaplayer
 [ok  ] muted              no
 [ok  ] quiet hours        not active
