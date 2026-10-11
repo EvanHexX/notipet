@@ -334,6 +334,22 @@
 ### 알림이 올 때 최근 알림 창이 저절로 열렸다 (1.6.3)
 
 - **증상**: 알림이 오면 최근 알림 창이 사용자가 하던 일 앞에 저절로 떴다.
-- **원인**: 데몬을 한 번 더 실행하면 최근 알림을 연다(바로가기·더블클릭용). 그런데 CLI도 데몬을 찾지 못하면 같은 방법으로 실행했다. 데몬이 실제로는 떠 있었는데 CLI가 못 찾은 경우가 문제다. 낡은 `runtime.json`, 재시작 중(그래픽 재시작은 이날 10:55, 11:07 두 번 있었다), 샌드박스 셸에서 그럴 수 있다. 그러면 두 번째 실행이 되어 창을 열었다. 자동 시작(Run 키)도 훅이 먼저 데몬을 띄운 뒤라면 로그온 때 같은 일을 했다. 재시작 경합에서 진 `--restart-after` 인스턴스도 그랬다.
+- **원인**: 데몬을 한 번 더 실행하면 최근 알림을 연다(바로가기·더블클릭용). 그런데 CLI도 데몬을 찾지 못하면 같은 방법으로 실행했다. 데몬이 실제로는 떠 있었는데 CLI가 못 찾은 경우가 문제다. 낡은 `runtime.json`, 재시작 중(그래픽 재시작은 이날 10:55, 11:07 두 번 있었다)일 때 그럴 수 있다. 실제로 반복된 원인은 1.6.4에서 찾았다. Claude 앱 패키지가 가진 낡은 사본이었다(아래 항목). 그러면 두 번째 실행이 되어 창을 열었다. 자동 시작(Run 키)도 훅이 먼저 데몬을 띄운 뒤라면 로그온 때 같은 일을 했다. 재시작 경합에서 진 `--restart-after` 인스턴스도 그랬다.
 - **해결**: 프로그램이 띄우는 실행은 `--background`를 붙인다(CLI 자동 기동, Run 키). `--background`와 `--restart-after`는 이미 떠 있으면 `daemon.log`에 `background start: an instance is already running` 한 줄만 남기고 끝난다. 이 줄이 자주 보이면 CLI가 데몬을 못 찾고 있다는 뜻이다. 예전에 등록한 Run 키는 1.6.3으로 업데이트할 때 다시 쓴다.
 - **확인**: 설치본 데몬이 떠 있을 때 수정본 `NotipetTray.exe --background`를 실행했다. 0.2초 만에 0으로 끝났고, 데몬은 그대로였으며, 로그에 그 한 줄이 남았다.
+
+### Claude Code 훅이 몇 시간째 데몬을 못 찾았다 — 앱 패키지의 낡은 runtime.json (1.6.4)
+
+- **증상**: 1.6.3으로 올린 뒤 `daemon.log`에 `background start` 줄이 2~5초 간격으로 수십 번 쌓였다. 최근 알림에는 스킬로 보낸 알림만 있었고, 훅 알림은 15시 이후 한 건도 없었다. 줄의 시각이 Claude Code 세션들의 프롬프트 시각과 초 단위로 맞았다.
+- **원인**: Claude 데스크톱 앱은 MSIX 패키지다. 패키지 앱과 그 앱이 띄운 프로세스(Claude Code 훅 포함)가 `%LOCALAPPDATA%`에 **새로 만드는 파일**은 `%LOCALAPPDATA%\Packages\Claude_<id>\LocalCache\Local\`로 옮겨지고, 그 앱 안에서는 이 사본이 진짜 파일을 가린다. 00:35에 Claude 쪽에서 띄운 데몬(1.5.1, pid 77200)이 `runtime.json`을 거기에 썼다. 그 뒤로 Claude Code의 훅은 모두 죽은 77200을 보고 데몬이 꺼졌다고 판단했다. 데몬을 띄우려 했지만(1.6.2까지는 이 실행이 최근 알림을 열었다) 알림은 전달되지 않았다. 다른 프로세스에는 진짜 파일이 보이므로 `notipet ping`, Codex, 셸은 모두 정상이었다.
+- **확인**: `Invoke-CommandInDesktopPackage -PackageFamilyName Claude_pzs8sxrjxfjjc -AppId Claude`로 패키지 안에서 cmd를 실행했다. 사본 폴더에만 둔 표지 파일이 `%LOCALAPPDATA%\notipet\`에 보였고, `runtime.json`은 pid 77200이었다. 사본 runtime 파일 둘을 지우자 같은 방법으로 실행한 훅이 지금 데몬을 찾았다(종료 코드 0, `background start` 없음).
+- **해결**: 패키지 밖의 데몬이 시작할 때와 30초마다 `Packages\*\LocalCache\Local\notipet\runtime*.json`을 지운다(`PackageShadows`, `daemon.log`에 기록). 사본이 없으면 패키지 안에서도 진짜 파일이 보인다. 데몬 자신이 패키지 안에서 떴다면 지우지 않는다. 그 사본이 자기 파일이기 때문이다. 대신 그 사실을 `daemon.log`에 남긴다. `doctor`의 `package copies` 줄이 사본을 보여 준다.
+- **예전 판단 정정**: 1.4.1 항목의 "샌드박스 셸은 오래된 사본을 본다"도 같은 현상이었을 가능성이 크다. 지금의 Claude Code 셸 도구(샌드박스 포함)는 진짜 파일을 본다.
+- **남은 것**: 데몬이 꺼진 상태에서 Claude Code 훅이 처음 데몬을 띄우면, 그 데몬은 패키지 안에서 뜬다. 그 데몬의 `runtime.json`은 다른 프로그램에 보이지 않는다. "Windows 시작 시 실행"을 켜 두면 이 경우가 생기지 않는다.
+
+### Codex 훅이 "hook exited with code 1"로 실패했다 (1.6.4)
+
+- **증상**: Codex 훅 통계에 Stop과 PermissionRequest가 모두 "실패함, hook exited with code 1"로 나왔다. 스킬이 보낸 알림은 정상이었다.
+- **원인**: `install-hooks --codex --write`가 쓴 명령이 `'"C:\...\notipet.exe" --source codex'`였다. `[windows] sandbox = "unelevated"`에서 Codex는 명령줄을 `cmd /C`의 인수 하나로 넘기면서 따옴표를 `\"`로 바꾼다. cmd는 `\"C:\...\notipet.exe\"`를 프로그램 이름으로 찾지 못하고 1로 끝난다. CLI는 실행조차 되지 않았다.
+- **재현**: `codex sandbox -- cmd /c "\"<exe>\" ping --no-launch"`는 "내부 또는 외부 명령이 아닙니다", 종료 코드 1이다. 따옴표 없이 실행하면 `ok`, 0이다.
+- **해결**: exe 경로에 따옴표를 쓰지 않는다. 공백이나 cmd 특수 문자가 있으면 8.3 짧은 이름을 쓴다(`CodexHooks.CommandLine`). 블록이 바뀌므로 업데이트 뒤 `notipet install-hooks --codex --write`를 다시 실행하고 훅 세 개를 다시 신뢰해야 한다. `doctor`가 예전 블록을 경고한다.

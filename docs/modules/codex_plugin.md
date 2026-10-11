@@ -58,7 +58,7 @@ codex plugin add notipet@notipet                      # 고친 뒤 다시 실행
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = '"C:\Users\<user>\AppData\Local\NotipetApp\current\notipet.exe" --source codex'
+command = 'C:\Users\<user>\AppData\Local\NotipetApp\current\notipet.exe --source codex'
 timeout = 10
 statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 
@@ -105,7 +105,8 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 - **에이전트가 직접 편집하지 않는다.** 스킬은 `install-hooks --codex --write`를 실행하라고만 한다. LLM이 TOML을 고치면 파일을 깨거나(Codex가 못 뜬다) 무시되는 필드(`args`)를 넣고, 세션마다 다르게 고쳐 나중에 일괄로 바로잡을 수 없다.
 - **사용자 동의 없이 넣지 않는다.** 스킬은 사용자가 알림을 원할 때만 `doctor`로 확인하고 물어본다. 이 명령은 샌드박스 밖 실행이라 Codex가 승인을 받는데, 그 승인이 곧 동의다.
 - 핸들러 필드는 `type`, `command`, `commandWindows`, `timeout`(초), `async`, `statusMessage`, `additionalContextLimit`뿐이다(`hook_config.rs`). **`args`는 없고, 있어도 경고 없이 버려진다.** 인수는 명령줄 안에 쓴다.
-- 명령은 `%ComSpec% /C "<명령줄>"`로, 세션 cwd에서, 창 없이 실행된다(`command_runner.rs`). exe 경로는 따옴표로 감싼다.
+- 명령은 `%ComSpec% /C "<명령줄>"`로, 세션 cwd에서, 창 없이 실행된다(`command_runner.rs`).
+- **exe 경로에 따옴표를 쓰지 않는다**(1.6.4). 샌드박스(`[windows] sandbox = "unelevated"`, 제한 토큰)에서 Codex는 명령줄을 `cmd /C`의 인수 하나로 넘기면서 안의 따옴표를 `\"`로 바꾼다. cmd는 이를 되돌리지 않으므로 `\"C:\...\notipet.exe\"`라는 프로그램을 찾다가 실패하고, 훅은 "hook exited with code 1"로 끝난다. `codex sandbox -- cmd /c "\"<exe>\" ping"`로 재현된다(따옴표 없이는 성공). 그래서 `CodexHooks.CommandLine`은 공백이나 cmd 특수 문자가 없으면 경로를 그대로, 있으면 8.3 짧은 이름으로 쓴다. 짧은 이름도 없을 때만 따옴표로 감싼다. 이 경우 샌드박스 훅은 동작하지 않는다. 1.5.1~1.6.3이 쓴 따옴표 블록은 `doctor`가 경고하고, `--write`가 새 블록으로 바꾼다. 바뀐 명령은 다시 신뢰해야 한다.
 - **훅 환경이 비어 있을 수 있다.** 이 PC의 `codex exec`는 훅을 환경 변수 하나 없이 실행했다(`set` 출력이 비었다). `SystemRoot`가 없으면 Winsock이 소켓을 못 만들어 CLI가 "데몬이 꺼져 있다"고 했다. 그래서 CLI가 시작할 때 `SystemRoot`/`windir`을 Windows 폴더(셸 API)로 되살린다(`RestoreSystemRoot`). 데스크톱 앱의 훅은 환경이 채워져 있었다.
 - Codex는 같은 이벤트의 훅을 출처(사용자 설정, 프로젝트 설정, 플러그인)와 상관없이 **전부, 동시에** 실행하고 중복을 거르지 않는다. notipet 블록이 두 곳에 있으면 두 번 운다. `--write`가 예전 위치를 정리하고 `doctor`가 경고하는 이유다.
 - `notify`는 건드리지 않는다(AGENTS.md). 다른 것이 쓰고 있을 수 있는 단일 슬롯이다.

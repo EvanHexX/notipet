@@ -205,7 +205,7 @@ notipet install-hooks --codex --write
 
 새 스레드부터 적용된다. Codex가 새 훅 검토(`/hooks`)를 물으면 신뢰한다. `notipet doctor`의 `codex hooks` 줄로 확인한다. 자세한 내용과 제약은 [modules/codex_plugin.md](modules/codex_plugin.md).
 
-손으로 넣는다면: `command`는 명령줄 전체다(Windows에서는 `cmd.exe /C`로 실행). Codex 훅에는 `args` 필드가 없어서, 있으면 조용히 버린다 — `command = '"C:\src\notipet\bin\notipet.exe" --source codex'`처럼 인수를 안에 쓴다.
+손으로 넣는다면: `command`는 명령줄 전체다(Windows에서는 `cmd.exe /C`로 실행). Codex 훅에는 `args` 필드가 없어서, 있으면 조용히 버린다 — `command = 'C:\src\notipet\bin\notipet.exe --source codex'`처럼 인수를 안에 쓴다. exe 경로에 따옴표를 쓰지 않는다: 샌드박스 안의 Codex가 따옴표를 망가뜨려 훅이 "exited with code 1"로 끝난다(경로에 공백이 있으면 8.3 짧은 이름).
 
 > ### ⚠️ 기존 `notify = [...]` 줄을 건드리지 않는다
 >
