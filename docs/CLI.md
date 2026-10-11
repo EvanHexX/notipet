@@ -52,6 +52,7 @@ notipet send --title T --body B [--level L] [--tag T] [옵션]
 | `--silent` | 소리 없이 알림만 |
 | `--channels LIST` | `sound,notification` — 범위를 **좁히기만** 한다. 꺼 둔 채널을 켤 수는 없다 |
 | `--ttl SEC` | 그 시간 안에 전달 못 하면 버린다 |
+| `--until-reply` | 질문용. 사용자가 그 스레드에서 답하면(직접 입력, 또는 에이전트 질문 도구의 답) 알람이 멈추고 "답함"으로 읽음 처리된다. 스레드가 필요하다(에이전트 안에서는 자동) |
 | `--open URI` | 카드를 클릭하면 스레드 대신 이 URI를 연다. 이 PC의 http(s), 또는 settings.json `links.allowedSchemes`에 등록된 스킴만. 아니면 알림은 가고 링크만 버려진다(`warnings`). 명령은 받지 않는다 — [api.md](api.md#post-v1notify) |
 | `--cwd PATH` | 카드에 표시할 폴더. 기본은 현재 폴더 |
 | `--fire-and-forget` | 응답을 기다리지 않고 바로 반환 |

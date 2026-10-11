@@ -65,6 +65,15 @@ internal static class UiText
         };
     }
 
+    // How the user dealt with a notification (HistoryEntry.SeenBy).
+    public static string SeenBy(string? how) => how switch
+    {
+        "popup" => Loc.T("Seen on the pop-up", "알림 창에서 확인"),
+        "link" => Loc.T("Opened", "열어 봄"),
+        "reply" => Loc.T("Answered", "답함"),
+        _ => Loc.T("Read", "읽음")
+    };
+
     public static string Reason(string? reason) => reason switch
     {
         "muted" => Loc.T("Muted", "음소거"),

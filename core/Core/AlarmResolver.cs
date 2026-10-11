@@ -54,10 +54,18 @@ internal sealed class AlarmResolver
         var tags = Tags(request);
         var source = NonEmpty(request.Source) is { } named ? AgentIdentity.NormalizeAgent(named) : null;
         var session = NonEmpty(request.Session);
+        var untilReply = request.UntilReply == true;
 
         // Suppressed notifications never rang or showed; resolved ones are done.
-        var matched = _history.Where(e => e.Accepted && e.ResolvedAt is null && Matches(e, id, tags, source, session));
+        var matched = _history.Where(e => e.Accepted && e.ResolvedAt is null && Matches(e, id, tags, source, session)
+                                          && (!untilReply || e.Envelope.UntilReply));
         if (matched.Count == 0) return response;
+
+        // The user answered: they have seen these, live or not.
+        if (string.Equals(request.SeenBy, HistoryStore.SeenReply, StringComparison.Ordinal))
+        {
+            _history.MarkSeen(matched, HistoryStore.SeenReply, DateTimeOffset.Now);
+        }
 
         var live = new HashSet<HistoryEntry>();
         foreach (var entry in matched)
@@ -189,7 +197,38 @@ internal sealed class AlarmResolver
             // By id alone: exactly that one.
             var byId = resolver.ResolveAsync(new ResolveRequest { Id = aOther.Envelope.Id }).Result;
             if (byId.Resolved != 1 || alarms.Count != 0) return false;
-            return a.ToDto().ResolvedAt is not null;
+            if (a.ToDto().ResolvedAt is null) return false;
+
+            // A reply in the thread ends what was sent --until-reply there, and
+            // only that, and marks it read; a reply elsewhere ends nothing.
+            HistoryEntry Ask(string thread, string tag, string alarmId, bool untilReply)
+            {
+                var entry = new HistoryEntry
+                {
+                    Envelope = new NotificationEnvelope
+                    {
+                        Title = "q", Tag = tag, SourceId = PayloadMapper.SourceCodex, SourceSession = thread,
+                        Level = NotificationLevel.Attention, UntilReply = untilReply
+                    },
+                    Accepted = true
+                };
+                alarms.Add(AlarmRegistry.StartSilentForTest(alarmId, tag, NotificationLevel.Attention));
+                entry.Deliveries.Add(new DeliveryResult { Channel = AppSettings.Channels_WindowsSound, Status = "delivered", ReferenceId = alarmId });
+                history.Add(entry);
+                return entry;
+            }
+            var question = Ask("thread-q", "shop:confirm", "alm_q", untilReply: true);
+            var plain = Ask("thread-q", "shop:report", "alm_p", untilReply: false);
+            var elsewhere = Ask("thread-r", "shop:confirm", "alm_r", untilReply: true);
+            var replied = resolver.ResolveAsync(new ResolveRequest
+            {
+                Source = "codex", Session = "thread-q", UntilReply = true, SeenBy = HistoryStore.SeenReply
+            }).Result;
+            if (replied.Resolved != 1 || question.ResolvedAt is null || question.SeenBy != HistoryStore.SeenReply) return false;
+            if (plain.ResolvedAt is not null || plain.SeenAt is not null || elsewhere.ResolvedAt is not null || alarms.Count != 2) return false;
+            // Without SeenBy nothing is marked read.
+            resolver.ResolveAsync(new ResolveRequest { Session = "thread-q" }).Wait();
+            return plain.ResolvedAt is not null && plain.SeenAt is null;
         }
         finally
         {

@@ -21,7 +21,11 @@ namespace Notipet.Windows;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class HistoryWindow
 {
-    private enum Filter { All, Delivered, Suppressed }
+    private enum Filter { All, Unread, Delivered, Suppressed }
+
+    // Waiting for the user: it reached them and they have not dealt with it
+    // (clicked, closed, opened, answered, or marked read).
+    private static bool IsUnread(HistoryEntry e) => e.Accepted && e.SeenAt is null;
 
     // Rendering is bounded independently of the history limit: a thousand
     // cards is a slow window, and nobody scrolls that far.
@@ -147,6 +151,7 @@ internal sealed class HistoryWindow
 
         var filter = new ComboBox { MinWidth = 150 };
         filter.Items.Add(Loc.T("All", "전체"));
+        filter.Items.Add(Loc.T("Unread", "안 읽음"));
         filter.Items.Add(Loc.T("Delivered", "전달됨"));
         filter.Items.Add(Loc.T("Suppressed", "차단됨"));
         filter.SelectedIndex = (int)_filter;
@@ -167,6 +172,11 @@ internal sealed class HistoryWindow
         header.Children.Add(_count);
 
         var commands = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        commands.Children.Add(Fluent.IconButton(Glyphs.CheckMark, Loc.T("Mark all read", "모두 읽음"), () =>
+        {
+            _host.MarkAllSeen();
+            Refresh();
+        }));
         commands.Children.Add(IconOnly(Glyphs.Refresh, Loc.T("Refresh", "새로 고침"), Refresh));
         commands.Children.Add(IconOnly(Glyphs.Settings, Loc.T("Settings", "설정"), () => _host.ShowSettings("history")));
         commands.Children.Add(BuildClearButton());
@@ -204,12 +214,16 @@ internal sealed class HistoryWindow
         var all = _host.History.Recent(int.MaxValue);
         var filtered = _filter switch
         {
+            Filter.Unread => all.Where(IsUnread).ToList(),
             Filter.Delivered => all.Where(e => e.Accepted).ToList(),
             Filter.Suppressed => all.Where(e => !e.Accepted).ToList(),
             _ => all.ToList()
         };
 
-        _count.Text = Loc.T($"{all.Count} kept", $"{all.Count}개 보관 중");
+        var unread = all.Count(IsUnread);
+        _count.Text = unread > 0
+            ? Loc.T($"{unread} unread / {all.Count}", $"안 읽음 {unread} / {all.Count}")
+            : Loc.T($"{all.Count} kept", $"{all.Count}개 보관 중");
         _list.Children.Clear();
         _headers.Clear();
 
@@ -419,6 +433,15 @@ internal sealed class HistoryWindow
             footer.Children.Add(resolved);
         }
 
+        // How the user dealt with it, so a pile of alerts sorts into the ones
+        // they handled and the ones still waiting (the accent edge).
+        if (entry.SeenAt is { } seenAt)
+        {
+            var seen = Fluent.Chip(UiText.SeenBy(entry.SeenBy), Glyphs.CheckMark);
+            ToolTipService.SetToolTip(seen, seenAt.ToString("yyyy-MM-dd HH:mm:ss"));
+            footer.Children.Add(seen);
+        }
+
         var when = Fluent.Secondary(string.Join("  ·  ", new[]
         {
             UiText.Relative(entry.LastAt, now),
@@ -439,6 +462,10 @@ internal sealed class HistoryWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
         var more = IconOnly(Glyphs.More, Loc.T("More", "더 보기"), () => { });
         more.Flyout = BuildMenu(entry, link, senderLink);
+        if (IsUnread(entry))
+        {
+            actions.Children.Add(IconOnly(Glyphs.CheckMark, Loc.T("Mark read", "읽음으로 표시"), () => SetSeen(entry, true)));
+        }
         actions.Children.Add(more);
         actions.Children.Add(IconOnly(Glyphs.Cancel, Loc.T("Remove", "삭제"), () => Remove(entry)));
         Grid.SetColumn(actions, 1);
@@ -467,10 +494,11 @@ internal sealed class HistoryWindow
                 }
                 if (senderLink is not null) _host.OpenSenderLink(entry);
                 else _host.OpenThread(entry);
+                Refresh();
             };
         }
 
-        var card = Fluent.Card(grid, "14,12");
+        var card = Fluent.Card(grid, "14,12", accent: IsUnread(entry));
         // Suppressed entries recede: they did not reach you, and the ones that
         // did are what you usually came to find.
         if (!entry.Accepted) card.Opacity = 0.78;
@@ -485,13 +513,20 @@ internal sealed class HistoryWindow
         var menu = new MenuFlyout();
         if (senderLink is not null)
         {
-            var open = MenuItem(Glyphs.OpenInApp, UiText.OpenLink(), () => _host.OpenSenderLink(entry));
+            var open = MenuItem(Glyphs.OpenInApp, UiText.OpenLink(), () => { _host.OpenSenderLink(entry); Refresh(); });
             ToolTipService.SetToolTip(open, senderLink.OriginalString);
             menu.Items.Add(open);
         }
         if (link is not null)
         {
-            menu.Items.Add(MenuItem(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () => _host.OpenThread(entry)));
+            menu.Items.Add(MenuItem(Glyphs.OpenInApp, UiText.OpenThreadIn(envelope.SourceId), () => { _host.OpenThread(entry); Refresh(); }));
+        }
+        if (entry.Accepted)
+        {
+            menu.Items.Add(entry.SeenAt is null
+                ? MenuItem(Glyphs.CheckMark, Loc.T("Mark read", "읽음으로 표시"), () => SetSeen(entry, true))
+                : MenuItem(Glyphs.Bell, Loc.T("Mark unread", "안 읽음으로 표시"), () => SetSeen(entry, false)));
+            menu.Items.Add(new MenuFlyoutSeparator());
         }
         AddAlertScopeItems(menu, entry);
         menu.Items.Add(MenuItem(Glyphs.Copy, Loc.T("Copy", "복사"), () => Copy(entry)));
@@ -546,6 +581,12 @@ internal sealed class HistoryWindow
         var item = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
         item.Click += (_, _) => onClick();
         return item;
+    }
+
+    private void SetSeen(HistoryEntry entry, bool seen)
+    {
+        _host.SetSeen(entry, seen);
+        Refresh();
     }
 
     private void Remove(HistoryEntry entry)

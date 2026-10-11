@@ -33,6 +33,12 @@ internal sealed class HistoryEntry
     // or pop-up was still live. Set at most once, under the store's lock.
     public DateTimeOffset? ResolvedAt { get; set; }
 
+    // When the user dealt with it, and how (SeenBy). Unlike ResolvedAt, which
+    // says the moment ended, this says the user saw it: several alerts pile
+    // up, and Recent has to show which ones they already handled.
+    public DateTimeOffset? SeenAt { get; set; }
+    public string? SeenBy { get; set; }
+
     public HistoryEntryDto ToDto() => new()
     {
         Id = Envelope.Id,
@@ -49,6 +55,9 @@ internal sealed class HistoryEntry
         Accepted = Accepted,
         SuppressedReason = SuppressedReason,
         ResolvedAt = ResolvedAt?.ToString("o"),
+        SeenAt = SeenAt?.ToString("o"),
+        SeenBy = SeenBy,
+        UntilReply = Envelope.UntilReply ? true : null,
         Open = Envelope.OpenUri,
         Deliveries = Deliveries.ToList()
     };
@@ -128,12 +137,59 @@ internal sealed class HistoryStore
         return marked;
     }
 
+    // How the user dealt with a notification (HistoryEntry.SeenBy).
+    public const string SeenPopup = "popup";
+    public const string SeenLink = "link";
+    public const string SeenReply = "reply";
+    public const string SeenRecent = "recent";
+
+    // Marks entries read, keeping the first way the user got to each. Returns
+    // how many were unread.
+    public int MarkSeen(IEnumerable<HistoryEntry> entries, string how, DateTimeOffset at)
+    {
+        var marked = 0;
+        lock (_gate)
+        {
+            foreach (var entry in entries)
+            {
+                if (entry.SeenAt is not null || !_entries.Contains(entry)) continue;
+                entry.SeenAt = at;
+                entry.SeenBy = how;
+                marked++;
+            }
+        }
+        if (marked > 0) Changed?.Invoke();
+        return marked;
+    }
+
+    // Back to unread (the Recent window's "mark unread").
+    public bool MarkUnseen(HistoryEntry entry)
+    {
+        lock (_gate)
+        {
+            if (entry.SeenAt is null || !_entries.Contains(entry)) return false;
+            entry.SeenAt = null;
+            entry.SeenBy = null;
+        }
+        Changed?.Invoke();
+        return true;
+    }
+
+    public HistoryEntry? Find(string id)
+    {
+        lock (_gate) return _entries.FirstOrDefault(e => string.Equals(e.Envelope.Id, id, StringComparison.Ordinal));
+    }
+
     public void NoteCollapse(HistoryEntry entry)
     {
         lock (_gate)
         {
             entry.Count++;
             entry.LastAt = DateTimeOffset.Now;
+            // It came again: whatever the user did about the last one, this
+            // one is news.
+            entry.SeenAt = null;
+            entry.SeenBy = null;
         }
         Changed?.Invoke();
     }
@@ -363,6 +419,19 @@ internal sealed class HistoryStore
         // A fresh lookup after the clear is fine, in bulk too.
         if (resizable.SetAppThreadTitles(new[] { (titled, (string?)"fresh") }, resizable.TitleGeneration) != 1) return false;
         if (titled.ToDto().ThreadTitle != "fresh") return false;
+
+        // Read state: the first way in wins, a repeat makes it news again,
+        // unread goes back, and an entry that is gone is not marked.
+        var at = DateTimeOffset.Now;
+        if (resizable.MarkSeen(new[] { titled }, SeenPopup, at) != 1 || titled.SeenBy != SeenPopup) return false;
+        if (resizable.MarkSeen(new[] { titled }, SeenLink, at) != 0 || titled.SeenBy != SeenPopup) return false;
+        if (titled.ToDto().SeenBy != SeenPopup || titled.ToDto().SeenAt is null) return false;
+        resizable.NoteCollapse(titled);
+        if (titled.SeenAt is not null) return false;
+        resizable.MarkSeen(new[] { titled }, SeenRecent, at);
+        if (!resizable.MarkUnseen(titled) || titled.SeenBy is not null || resizable.MarkUnseen(titled)) return false;
+        if (resizable.MarkSeen(new[] { removed }, SeenRecent, at) != 0) return false;
+        if (resizable.Find(titled.Envelope.Id) != titled || resizable.Find("nope") is not null) return false;
 
         return true;
     }

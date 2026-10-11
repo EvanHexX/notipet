@@ -50,6 +50,7 @@ Do **not** notify:
 - `--tag`: a stable key for the moment, such as `<project>:needs-input` or `<project>:done`. Repeats of the same tag in this conversation within 30 seconds collapse into one sound; another conversation using the same tag is kept separate. Keep it - you need it to resolve the moment later.
 - `--project`: the repository or project name. The user's recent-notifications window groups cards by it. If you leave it out, notipet uses the name of the repository you are in.
 - `--thread-title`: what this conversation is about, in a few words ("auth refactor", "release 1.2 checklist"). Use the **same** words for every notification in one conversation. If the Codex app has its own name for the thread, notipet shows that instead.
+- `--until-reply`: for a **question** - the alert ends by itself the moment the user answers in this thread (they type a reply, or answer your `request_user_input`), and is marked as answered. Use it whenever you are waiting for their answer; you then do not need to resolve it.
 - Write the title, body and thread title **in the language the user is writing to you in**.
 
 You do not need to pass `--agent` or a thread id: notipet reads `CODEX_SESSION_ID` from your environment, and in the Codex app a card can then open this exact conversation. Add `--agent codex` only if the escalated command no longer carries your environment and the card shows up as "manual". `--project` and `--thread-title` are optional too - a notification without them still arrives, filed under "Other".
@@ -59,7 +60,7 @@ Examples:
 ```
 {{NOTIPET}} send --title "shop: tests passed" --body "412/412 passed; ready to merge when you are." --level success --tag "shop:done" --project shop --thread-title "checkout refactor"
 
-{{NOTIPET}} send --title "api: need a decision" --body "Two ways to rotate the signing keys - which do you prefer? Details in the thread." --level attention --tag "api:needs-input" --project api --thread-title "auth refactor"
+{{NOTIPET}} send --title "api: need a decision" --body "Two ways to rotate the signing keys - which do you prefer? Details in the thread." --level attention --tag "api:needs-input" --project api --thread-title "auth refactor" --until-reply
 ```
 
 ## When it is over: resolve
@@ -75,11 +76,12 @@ An `attention`, `error` or `critical` alert can keep ringing until someone stops
 - Do it **as soon as** the moment is over: first thing when the user replies to something you alerted about, or right after you resolved the blocker yourself.
 - It is safe to call blindly. If the user already stopped the alarm and closed the card, it does nothing and still exits 0 - do not check first, and do not retry.
 - Do not resolve a moment that is still open (you are still waiting for their answer).
+- An alert sent with `--until-reply` ends by itself when the user answers in this thread. Resolve it yourself only if the moment ended another way (you no longer need the answer).
 - A `PermissionRequest` alarm from the hooks ends by itself when your turn stops; you do not need to resolve it.
 
 ## Alerts at every turn end and approval prompt: notipet's hooks
 
-Codex hooks ring by themselves when a turn ends (`Stop`) and when it waits for the user's approval (`PermissionRequest`) - a moment you cannot announce yourself, because you are blocked. They are not part of this skill; they live in the user's `~/.codex/hooks.json`.
+Codex hooks ring by themselves when a turn ends (`Stop`) and when it waits for the user's approval (`PermissionRequest`) - a moment you cannot announce yourself, because you are blocked - and end an alert sent `--until-reply` when the user answers (`UserPromptSubmit`, and `PostToolUse` after `request_user_input`). They are not part of this skill; they live in the user's `~/.codex/config.toml`.
 
 - Only when the user asks for alerts like these, or asks to set notipet up: run `{{NOTIPET}} doctor` (outside the sandbox) and look at its `codex hooks` line. If it is a warning, **ask the user first**, and only with their yes run `{{NOTIPET}} install-hooks --codex --write`. It backs up the file, touches only notipet's own entries, and is safe to run again.
 - Never set them up without the user's yes, and do not check on every task.

@@ -66,6 +66,23 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "AskUserQuestion|ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notipet.exe",
+            "args": [
+              "--source",
+              "claude-code"
+            ],
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
     ]
   }
 }

@@ -114,6 +114,7 @@ public static class PayloadMapper
         }
 
         List<string>? ends = null;
+        var answered = false;   // the user answered a question in this thread
         if (session is not null)
         {
             switch (eventName.ToLowerInvariant())
@@ -128,20 +129,63 @@ public static class PayloadMapper
                     break;
                 // Fires on scheduled tasks, background-agent reports and
                 // messages from other sessions too, not only on what the user
-                // typed - so it ends idleness, which any new turn does, and
-                // nothing that says the user has seen something.
+                // typed - so it ends idleness, which any new turn does. It is
+                // a reply only when it looks typed (IsTypedPrompt).
                 case "userpromptsubmit":
                     ends = IdleTags(sourceId, session);
+                    answered = IsTypedPrompt(e.Prompt);
+                    break;
+                // The agent's question tool came back with the answer: the
+                // prompt that asked it (Claude's permission_prompt for
+                // AskUserQuestion fires after ~6 s unanswered) is over now,
+                // not at the end of the turn.
+                case "posttooluse":
+                    if (IsQuestionTool(sourceId, e.ToolName))
+                    {
+                        ends = PromptTags(sourceId, session);
+                        answered = true;
+                    }
                     break;
             }
         }
 
         return new HookPlan
         {
-            // A new prompt is not news: the user (or their schedule) just did it.
-            Notify = eventName.Equals("UserPromptSubmit", StringComparison.OrdinalIgnoreCase) ? null : request,
-            Resolve = ends is null ? null : new ResolveRequest { Source = sourceId, Session = session, Tags = ends }
+            // A new prompt is not news: the user (or their schedule) just did
+            // it; nor is a tool finishing.
+            Notify = eventName.Equals("UserPromptSubmit", StringComparison.OrdinalIgnoreCase)
+                     || eventName.Equals("PostToolUse", StringComparison.OrdinalIgnoreCase) ? null : request,
+            Resolve = ends is null ? null : new ResolveRequest
+            {
+                Source = sourceId, Session = session, Tags = ends,
+                SeenBy = answered && eventName.Equals("PostToolUse", StringComparison.OrdinalIgnoreCase) ? SeenReply : null
+            },
+            // What the agent sent --until-reply in this thread ends with the answer.
+            Replied = answered ? new ResolveRequest { Source = sourceId, Session = session, UntilReply = true, SeenBy = SeenReply } : null
         };
+    }
+
+    // HistoryStore.SeenReply; shared/ cannot see core.
+    private const string SeenReply = "reply";
+
+    // Tools whose result is the user's answer. Codex's request_user_input_async
+    // returns at once and the answer arrives later as a new prompt.
+    private static bool IsQuestionTool(string sourceId, string? tool) => tool?.Trim() switch
+    {
+        "AskUserQuestion" or "ExitPlanMode" => sourceId == SourceClaude,
+        "request_user_input" => sourceId == SourceCodex,
+        _ => false
+    };
+
+    // A prompt that came from the user rather than from a machine: agent
+    // Summit relays ("[agent-summit] ..."), Claude's task notifications and
+    // reminders ("<task-notification>", "<system-reminder>") are not replies.
+    // An agent that sends no prompt text gets the benefit of the doubt.
+    public static bool IsTypedPrompt(string? prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt)) return true;
+        var text = prompt.TrimStart();
+        return !text.StartsWith('<') && !text.StartsWith("[agent-summit]", StringComparison.OrdinalIgnoreCase);
     }
 
     // `{"suggestion": "..."}`, sometimes followed by more text.
@@ -486,6 +530,23 @@ public static class PayloadMapper
         }, SourceCodex);
         if (suggestion.Notify is not null || suggestion.Resolve is not null) return false;
         if (IsAmbientSuggestion("The suggestion: {\"suggestion\":1}") || IsAmbientSuggestion("{\"suggestions\":[]}") || !IsAmbientSuggestion("{ \"suggestion\" : \"x\" }")) return false;
+        // The answer to the agent's question ends its prompt right away and
+        // marks it read, ends what was sent --until-reply, and notifies nothing.
+        var answer = PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "PostToolUse", ToolName = "AskUserQuestion" }, SourceClaude);
+        if (answer.Notify is not null || answer.Resolve is null || !answer.Resolve.Tags!.Contains(permission.Tag!) || answer.Resolve.SeenBy != SeenReply) return false;
+        if (answer.Replied is not { UntilReply: true, SeenBy: SeenReply } || answer.Replied.Session != session) return false;
+        var codexAnswer = PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PostToolUse", ToolName = "request_user_input" }, SourceCodex);
+        if (codexAnswer.Replied is null || !codexAnswer.Resolve!.Tags!.Contains(codexPermission.Tag!)) return false;
+        // Another tool, or the async question that returns before any answer: nothing.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PostToolUse", ToolName = "request_user_input_async" }, SourceCodex) is not { Notify: null, Resolve: null, Replied: null }) return false;
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "PostToolUse", ToolName = "Bash" }, SourceClaude) is not { Notify: null, Resolve: null, Replied: null }) return false;
+        // A typed prompt is a reply; a relayed or system one is not; the turn's
+        // end is not either.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "UserPromptSubmit", Prompt = "G1 실행" }, SourceCodex).Replied is null) return false;
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "UserPromptSubmit", Prompt = "[agent-summit] reply dl_x" }, SourceCodex).Replied is not null) return false;
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "UserPromptSubmit", Prompt = "<task-notification>..." }, SourceClaude).Replied is not null) return false;
+        if (codexStop.Replied is not null || next.Resolve.SeenBy is not null) return false;
+
         // Claude's internal agents (prompt suggestions) have no agent_type; a
         // real subagent does and still notifies.
         if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "SubagentStop", AgentType = "", LastAssistantMessage = "진행해" }, SourceClaude) is not { Notify: null, Resolve: null }) return false;
@@ -512,4 +573,7 @@ public sealed class HookPlan
 {
     public NotifyRequest? Notify { get; init; }
     public ResolveRequest? Resolve { get; init; }
+    // The user answered in this thread: ends what was sent --until-reply there.
+    // A second request because resolve selectors narrow together.
+    public ResolveRequest? Replied { get; init; }
 }

@@ -72,6 +72,10 @@
   - 2048자 이하, 제어 문자 없음
   - 안 맞으면 **알림은 그대로 보내고 `open`만 버린다** — `warnings`에 `open ignored: <이유>`. 4xx가 아니다
   - 클릭할 때 지금 설정으로 한 번 더 확인한다. 목록에서 뺀 스킴은 이미 있는 카드에서도 열리지 않는다
+- `untilReply: true`(1.8.0)면 **사용자가 그 스레드에서 답하는 순간 끝나는 알림**이 된다. 질문용이다. 답으로 치는 것은 두 가지다.
+  - 그 스레드에 사용자가 직접 친 프롬프트(`UserPromptSubmit`). summit 중계(`[agent-summit]…`)와 `<task-notification>` 같은 시스템 입력은 빼고 센다.
+  - 에이전트 질문 도구의 답: Claude `AskUserQuestion`/`ExitPlanMode`, Codex `request_user_input`의 `PostToolUse`.
+  - 답이 오면 훅이 `/v1/resolve`에 `untilReply: true`로 끝내고, 그 알림을 "답함"으로 읽음 처리한다. 스레드(`source.session`)가 없으면 무시하고 `warnings`에 남긴다.
 
 ### `source` — 누가, 어디서
 
@@ -187,6 +191,8 @@ Claude Code의 네이티브 `http` 훅이 보내는 원본 JSON을 그대로 받
 - 억제(차단)된 알림은 울린 적이 없으므로 대상이 아니다.
 - 실제로 무언가 멈추거나 닫힌 알림만 기록에 `resolvedAt`이 붙고, 최근 알림 카드에 **해결됨** 칩이 생긴다.
 - 해제된 알림은 중복 병합 대상에서 빠진다. 같은 태그가 30초 안에 다시 와도 새 알림으로 울린다.
+- `untilReply: true`(1.8.0)는 다른 선택자처럼 범위를 좁힌다. `untilReply`로 보낸 알림만 대상이다.
+- `seenBy: "reply"`(1.8.0): 사용자가 답했다는 뜻이다. 맞은 알림은 그 순간 살아 있었는지와 상관없이 "답함"으로 읽음 처리한다. 훅이 보낸다.
 
 ```json
 { "ok": true, "resolved": 1, "alarmsStopped": 1, "popupsClosed": 1 }
@@ -279,7 +285,7 @@ CLI가 stale `runtime.json`을 판별하기에는 충분하고, 사용자가 무
   { "id": "ntp_...", "at": "...", "level": "info", "title": "dup", "body": "same thing",
     "source": "manual", "project": "notipet", "thread": "8f3a…", "threadTitle": "project grouping",
     "tag": "smoke:dup", "count": 5, "accepted": true,
-    "suppressedReason": null, "resolvedAt": null, "deliveries": [ ... ] }
+    "suppressedReason": null, "resolvedAt": null, "seenAt": null, "seenBy": null, "deliveries": [ ... ] }
 ] }
 ```
 
@@ -288,6 +294,15 @@ CLI가 stale `runtime.json`을 판별하기에는 충분하고, 사용자가 무
 `open`은 보낸 쪽이 준 링크(받아들여진 경우)다.
 
 `resolvedAt`은 보낸 쪽이 `/v1/resolve`로 끝났다고 알렸을 때(그 시점에 알람이나 창이 아직 살아 있었을 때만) 채워진다.
+
+`seenAt`·`seenBy`(1.8.0)는 사용자가 그 알림을 처리한 때와 방법이다. 같은 알림이 다시 오면(중복 병합) 다시 안 읽음이 된다. `untilReply`로 보낸 알림이면 `"untilReply": true`가 붙는다.
+
+| `seenBy` | 뜻 |
+|---|---|
+| `popup` | notipet 알림 창이나 Windows 풍선을 클릭했거나, 알림 창의 닫기를 눌렀다 |
+| `link` | 알림 창·최근 알림 카드에서 스레드나 링크를 열었다 |
+| `reply` | 그 스레드에서 답했다(`untilReply`, 질문 도구) |
+| `recent` | 최근 알림 창에서 읽음으로 표시했다(하나씩, 또는 "모두 읽음") |
 
 `threadTitle`은 에이전트 앱이 붙인 이름(Codex `session_index.jsonl`, Claude `~/.claude/sessions`)을 찾으면 그것이고, 못 찾으면 보낸 쪽이 준 이름이다. 앱 이름 조회는 전달이 끝난 뒤 따로 돌므로 직후 조회에는 아직 없을 수 있다. 설정 → 최근 알림 → "에이전트 앱의 스레드 이름 표시"로 끈다.
 

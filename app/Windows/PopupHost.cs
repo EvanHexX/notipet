@@ -30,6 +30,10 @@ internal sealed class PopupHost
     private readonly Action _stopAlarms;
     private readonly Action<NotificationEnvelope> _openThread;
     private readonly Action _showHistory;
+    // The user dealt with this card: clicked it, closed it, or opened its link
+    // (HistoryStore.SeenPopup / SeenLink). Never for a card that timed out or
+    // was closed by a resolve.
+    private readonly Action<NotificationEnvelope, string> _seen;
     private readonly List<NotificationPopup> _open = new();
 
     // Cards that stayed until clicked but were pushed off the stack, by
@@ -43,13 +47,14 @@ internal sealed class PopupHost
     private readonly Microsoft.UI.Xaml.DispatcherTimer _keepOnTop = new() { Interval = TimeSpan.FromSeconds(2) };
 
     public PopupHost(Func<AppSettings> settings, Func<NotificationEnvelope, Uri?> link, Action stopAlarms,
-        Action<NotificationEnvelope> openThread, Action showHistory)
+        Action<NotificationEnvelope> openThread, Action showHistory, Action<NotificationEnvelope, string> seen)
     {
         _settings = settings;
         _link = link;
         _stopAlarms = stopAlarms;
         _openThread = openThread;
         _showHistory = showHistory;
+        _seen = seen;
         _keepOnTop.Tick += (_, _) =>
         {
             if (Cards().Count == 0 || !_settings().Popup.ShowOverFullscreen) { _keepOnTop.Stop(); return; }
@@ -70,7 +75,9 @@ internal sealed class PopupHost
         var belowForeground = fullScreen && !options.ShowOverFullscreen;
 
         var popup = NotificationPopup.ForNotification(envelope, _link(envelope), options.Stays(envelope.Level),
-            _stopAlarms, () => _openThread(envelope));
+            onClick: () => { _seen(envelope, Core.HistoryStore.SeenPopup); _stopAlarms(); },
+            onOpenThread: () => { _seen(envelope, Core.HistoryStore.SeenLink); _openThread(envelope); },
+            onDismissed: () => _seen(envelope, Core.HistoryStore.SeenPopup));
         popup.Closed += closed =>
         {
             _open.Remove(closed);

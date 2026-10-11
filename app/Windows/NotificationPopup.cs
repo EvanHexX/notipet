@@ -42,10 +42,12 @@ internal sealed class NotificationPopup
 
     public event Action<NotificationPopup>? Closed;
 
-    public static NotificationPopup ForNotification(NotificationEnvelope envelope, Uri? link, bool stays, Action onClick, Action onOpenThread)
+    // onDismissed: the user closed it with its close button (a timeout or a
+    // resolve closes it without that).
+    public static NotificationPopup ForNotification(NotificationEnvelope envelope, Uri? link, bool stays, Action onClick, Action onOpenThread, Action onDismissed)
     {
         var popup = new NotificationPopup(envelope, 116, envelope.Title) { Stays = stays };
-        popup._window.Content = popup.Build(envelope, link, onClick, onOpenThread);
+        popup._window.Content = popup.Build(envelope, link, onClick, onOpenThread, onDismissed);
         popup.Dress();
         return popup;
     }
@@ -215,7 +217,7 @@ internal sealed class NotificationPopup
         return grid;
     }
 
-    private UIElement Build(NotificationEnvelope envelope, Uri? link, Action onClick, Action onOpenThread)
+    private UIElement Build(NotificationEnvelope envelope, Uri? link, Action onClick, Action onOpenThread, Action onDismissed)
     {
         // text | open + close. The level's icon is on the title line, not in
         // a column of its own: the column cost a sixth of the width and left
@@ -270,7 +272,11 @@ internal sealed class NotificationPopup
                 Close();
             }));
         }
-        actions.Children.Add(SmallButton(Glyphs.Cancel, Loc.T("Close", "닫기"), Close));
+        actions.Children.Add(SmallButton(Glyphs.Cancel, Loc.T("Close", "닫기"), () =>
+        {
+            onDismissed();
+            Close();
+        }));
         Grid.SetColumn(actions, 1);
         grid.Children.Add(actions);
 
@@ -285,8 +291,9 @@ internal sealed class NotificationPopup
             {
                 if (node is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase) return;
             }
-            onClick();
+            // The link first, so the card records that it was opened.
             if (opensSenderLink) onOpenThread();
+            onClick();
             Close();
         };
 

@@ -354,6 +354,27 @@
 - **재현**: `codex sandbox -- cmd /c "\"<exe>\" ping --no-launch"`는 "내부 또는 외부 명령이 아닙니다", 종료 코드 1이다. 따옴표 없이 실행하면 `ok`, 0이다.
 - **해결**: exe 경로에 따옴표를 쓰지 않는다. 공백이나 cmd 특수 문자가 있으면 8.3 짧은 이름을 쓴다(`CodexHooks.CommandLine`).
 
+### 질문에 답한 뒤에도 알람이 계속 울렸고, 쌓인 알림 중 무엇을 처리했는지 알 수 없었다 (1.8.0)
+
+- **증상 1 (Claude)**: Claude Code의 질문 창(AskUserQuestion)에 답했는데도 알람이 10초 넘게 울렸다.
+  - 질문 창이 약 6초 열려 있으면 Notification `permission_prompt`가 온다. 이 알람은 턴이 끝나는 Stop에서만 꺼졌다.
+  - 답한 뒤 Claude가 작업을 이어가는 동안 계속 울렸다.
+- **증상 2 (Codex)**: `user-confirm` 스킬이 보낸 질문 알림(`attention`)도 답한 뒤 늦게 꺼졌다.
+  - 스킬 알림은 보낸 에이전트가 `notipet resolve`를 실행해야만 끝난다.
+  - 에이전트가 답을 처리하고 명령을 (샌드박스 승인을 거쳐) 실행할 때까지가 딜레이였다.
+- **증상 3**: 알림이 여러 개 쌓이면, 클릭해서 닫은 것·링크로 가 본 것과 아직 안 본 것을 최근 알림 창에서 구분할 수 없었다.
+- **해결**:
+  - 질문 도구의 PostToolUse 훅을 추가했다. Claude는 `AskUserQuestion|ExitPlanMode`, Codex는 `^request_user_input$`이다. 답이 오는 순간 그 스레드의 프롬프트 알람을 끈다.
+  - `send --until-reply`(`untilReply`)를 추가했다. 그 스레드에서 사용자가 답하면 훅이 끈다. 답으로 치는 것은 직접 친 프롬프트(summit 중계·시스템 입력 제외)와 질문 도구의 답이다. 에이전트가 고른 경우에만 해당한다.
+  - 기록에 읽음 상태(`seenAt`/`seenBy`)를 추가했다. 알림 창 클릭·닫기, 링크 열기, 답함, 최근 알림 창에서 읽음 표시가 기록된다. 안 읽은 카드는 파란 테두리로 보이고 ✓ 버튼, "모두 읽음", "안 읽음" 필터가 있다.
+- **확인** (bin 데몬):
+  - `--until-reply` 알림은 summit 중계 프롬프트에는 그대로 남았다. 직접 친 프롬프트가 오자 끝나고 `seenBy: reply`가 됐다.
+  - Claude `permission_prompt` 태그의 알림은 `PostToolUse`(AskUserQuestion)에서 끝나고 `reply`로 표시됐다. PostToolUse 자체는 알림을 만들지 않았다.
+  - ui-check를 통과했고, 스크린샷으로 테두리·✓·"답함" 칩을 확인했다.
+- **남은 것**:
+  - Claude Code가 질문 답에도 PostToolUse를 보내는지는 문서에 없다. 실제 질문 창에서 확인해야 한다.
+  - 일반 도구 권한 승인 알람은 여전히 턴 끝에서 꺼진다. 도구마다 훅을 걸면 호출마다 notipet이 실행되고, 병렬 도구가 끝나면서 알람을 일찍 끌 수 있어서다.
+
 ### Claude Code의 입력 제안이 info 알림으로 왔다 (1.7.1)
 
 - **증상**: Claude Code의 턴 완료(success) 1~2초 뒤마다 같은 세션의 SubagentStop이 info로 왔다. 본문은 "진행해", "summit 상태 확인해줘" 같은 다음 입력 제안이었고, `subagents\` 아래에 기록 파일은 없었다.
