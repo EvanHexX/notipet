@@ -5,7 +5,7 @@
 - [ ] `CrashLog`의 출력 경로를 주입 가능하게 만들어 `--self-test`가 사용자 `crash.log`에 쓰지 않게 한다 ([regression.md](regression.md) 참고)
 - [ ] 레벨별 기본 사운드를 며칠 실제로 써보고 조정한다. 특히 `attention`(권한 대기) 2회 반복이 유용한지 성가신지 — 이 설정 하나가 도구의 인상을 가른다
 - [ ] `sources[].levelFloor`를 `SourceRule`에 실제로 연결한다 (모델에만 있고 읽히지 않음)
-- [ ] `notipet install-hooks --write`: 현재는 출력만 한다. 확인 후 `settings.json` / `config.toml`을 실제로 편집하는 경로
+- [x] `notipet install-hooks --codex --write` (1.5.1, `config.toml`), `--claude --write/--remove` (1.6.1, `settings.json`)
 - [ ] Codex `Stop` 훅 페이로드에 `last_assistant_message`가 있는지 실제로 찍어 확인하고 `PayloadMapper`를 맞춘다 (조사 단계에서 확인하지 못한 항목)
 - [x] 최근 알림 카드에서 cwd 폴더 열기 (1.1)
 
@@ -55,6 +55,6 @@
 
 - [ ] quota-scope 연계(옵트인, 기본 off): quota-scope의 임계치 경고가 자체 풍선 대신 notipet API를 POST하게. 설정 한 줄 + HttpClient 호출 한 번. **quota-scope에 notipet을 합치는 것과는 다른 얘기다** — 그건 하지 않는다, 이유는 [PROJECT_MAP.md](PROJECT_MAP.md)
 - [ ] `sound.library` 관리 UI (파일 추가/미리듣기)
-- [ ] 히스토리 영속화 옵션. 기본은 계속 메모리만 — 히스토리에는 프롬프트 텍스트가 들어갈 수 있다
+- [x] 히스토리 영속화 (1.6.2): 기본 켬, `history.persist`로 끈다. 사용자 전용 데이터 폴더의 `history.json`. 재시작마다 최근 알림이 사라지는 쪽이 더 큰 문제였다
 - [ ] 다중 로그온 세션에서 데몬이 둘 뜨는 동작을 실제로 RDP로 확인 (세션별 `runtime-{id}.json`으로 완화해 뒀지만 검증 안 됨)
 - [ ] `HttpListener`가 향후 투자 대상이 아니라는 점 — `INotipetHttpServer` 심 뒤에 있으니 필요해지면 한 파일 교체
