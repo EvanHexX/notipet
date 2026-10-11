@@ -49,12 +49,13 @@ internal static class Installation
     }
 
     // "Start with Windows" names an exe path. Enabled from an older install
-    // or from bin\, it would keep starting that one; point it here.
+    // or from bin\, it would keep starting that one; point it here. Written
+    // before 1.6.3 it also lacks --background.
     private static void RepointAutostart()
     {
         try
         {
-            if (Autostart.IsEnabled() && !AutostartPointsInto(AppDir)) Autostart.TrySet(true);
+            if (Autostart.IsEnabled() && (!AutostartPointsInto(AppDir) || Autostart.NeedsRewrite())) Autostart.TrySet(true);
         }
         catch (Exception ex)
         {

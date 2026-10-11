@@ -38,6 +38,14 @@ internal static class Program
 
         var verb = args.Length > 0 ? args[0].ToLowerInvariant() : "";
 
+        // Started by a program, not a person: the CLI bringing the daemon up
+        // for a hook, the Run key at logon, a restart below. If one is already
+        // running there is nothing to show - a CLI that could not reach the
+        // daemon (stale runtime.json, a restart in progress) used to open
+        // Recent on top of whatever the user was doing, alarm after alarm.
+        var background = verb == "--background";
+        if (background) verb = "";
+
         // Started in place of another instance - one whose UI thread hung
         // (UiWatchdog), or one that restarted because the graphics adapters
         // changed (`--restart-after <pid> graphics`): let that one go first,
@@ -51,6 +59,7 @@ internal static class Program
             }
             if (args.Length > 2 && args[2] == "graphics") RestartedForGraphics = true;
             else RecoveredFromHang = true;
+            background = true;
             verb = "";
         }
 
@@ -86,6 +95,7 @@ internal static class Program
             Console.WriteLine("  --self-test           run headless checks and exit");
             Console.WriteLine("  --test-sound [level]  play one level's sound and exit");
             Console.WriteLine("  --settings            open Settings on the running instance");
+            Console.WriteLine("  --background          start quietly; if one is running, do nothing");
             return 0;
         }
 
@@ -96,7 +106,8 @@ internal static class Program
         {
             // A second launch drives the instance already running, so a shortcut
             // to the exe is a usable way in rather than a no-op.
-            if (verb == "--settings") settingsSignal.Set();
+            if (background) DaemonLog.Write("background start: an instance is already running; nothing to do");
+            else if (verb == "--settings") settingsSignal.Set();
             else showSignal.Set();
             return 0;
         }

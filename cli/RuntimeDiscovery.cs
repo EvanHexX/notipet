@@ -114,7 +114,11 @@ internal static class RuntimeDiscovery
 
         try
         {
-            Process.Start(new ProcessStartInfo(exePath) { UseShellExecute = true });
+            // --background: if a daemon is running after all - one this CLI
+            // could not reach, or one mid-restart - the start does nothing.
+            // Without it the daemon reads a second start as a person asking
+            // to see Recent, and opened it in front of the user.
+            Process.Start(new ProcessStartInfo(exePath, "--background") { UseShellExecute = true });
         }
         catch
         {
