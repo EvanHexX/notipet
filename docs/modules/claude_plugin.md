@@ -48,6 +48,8 @@ claude --plugin-dir C:\src\notipet\integrations\claude\plugin   # 설치 없이 
 3. `async: true`라 턴이 기다리지 않는다(타임아웃도 적용되지 않음).
 4. `notipet.exe --source claude-code`가 알리거나 끝난 알람을 정리한다([cli_shim.md](cli_shim.md)).
 
+**SubagentStop의 matcher는 `.`이다(1.7.1, 예전에는 `.*`).** Claude Code는 입력 제안(입력란의 회색 다음 프롬프트)과 `/btw` 같은 자체 기능을 내부 에이전트로 돌리고, 그것이 끝날 때도 SubagentStop을 울린다. 이때 `agent_type`은 빈 문자열이다. 세션이 `--agent`로 돌 때만 그 이름이 붙는다([hooks reference, SubagentStop](https://code.claude.com/docs/en/hooks.md)). 입력 제안은 Stop 1~2초 뒤 매 턴 오고, 본문이 "진행해" 같은 제안 문구여서 info 알림으로 쌓였다. 빈 문자열과 맞지 않는 matcher(`.`)를 쓰면 Claude Code가 그 훅을 아예 실행하지 않는다. `PayloadMapper`도 Claude의 SubagentStop에 `agent_type`이 없거나 비어 있으면 아무것도 하지 않는다. 예전 matcher를 쓰는 settings.json 훅을 위해서다. `--agent`로 도는 세션의 내부 에이전트는 구별할 수 없어 그대로 알린다.
+
 스킬은 `notipet`(PATH)을 부르고, 없으면 설치 경로를 쓰라고 안내한다.
 
 ## State-Data Flow

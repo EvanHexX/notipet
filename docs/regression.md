@@ -354,6 +354,13 @@
 - **재현**: `codex sandbox -- cmd /c "\"<exe>\" ping --no-launch"`는 "내부 또는 외부 명령이 아닙니다", 종료 코드 1이다. 따옴표 없이 실행하면 `ok`, 0이다.
 - **해결**: exe 경로에 따옴표를 쓰지 않는다. 공백이나 cmd 특수 문자가 있으면 8.3 짧은 이름을 쓴다(`CodexHooks.CommandLine`).
 
+### Claude Code의 입력 제안이 info 알림으로 왔다 (1.7.1)
+
+- **증상**: Claude Code의 턴 완료(success) 1~2초 뒤마다 같은 세션의 SubagentStop이 info로 왔다. 본문은 "진행해", "summit 상태 확인해줘" 같은 다음 입력 제안이었고, `subagents\` 아래에 기록 파일은 없었다.
+- **원인**: Claude Code는 입력 제안과 `/btw`를 내부 에이전트로 돌리고, 그것이 끝나도 SubagentStop을 울린다. 이때 `agent_type`은 빈 문자열이다(세션이 `--agent`로 돌면 그 이름). hooks reference의 SubagentStop 절에 적혀 있다. 플러그인 훅의 matcher `.*`는 빈 문자열에도 맞아서 매번 실행됐다.
+- **해결**: matcher를 `.`으로 바꿨다. 빈 `agent_type`에는 훅이 실행되지 않는다. `PayloadMapper`는 Claude의 SubagentStop에 `agent_type`이 없거나 비어 있으면 아무것도 하지 않는다. 예전 훅 설정이 남아 있어도 조용하게 하기 위해서다.
+- **확인**: 새 CLI에 `agent_type: ""`인 SubagentStop을 넣으면 종료 코드 0이고 최근 알림에 아무것도 남지 않는다. `agent_type: "Explore"`는 그대로 알린다(자체 테스트).
+
 ### Codex의 입력 제안과 자동 검토된 승인이 알림으로 울렸다 (1.6.5)
 
 - **증상**: Codex 훅이 동작하기 시작하자 두 종류의 가짜 알림이 생겼다.

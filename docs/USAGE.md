@@ -125,7 +125,7 @@ Claude Code 안에서는 `/plugin marketplace add EvanHexX/notipet` → `/plugin
                      "timeout": 10, "async": true } ] }
     ],
     "SubagentStop": [
-      { "matcher": ".*",
+      { "matcher": ".",
         "hooks": [ { "type": "command",
                      "command": "C:\\src\\notipet\\bin\\notipet.exe",
                      "args": ["--source", "claude-code"],
@@ -249,7 +249,7 @@ Claude Code / Codex  ──훅 발생──>  notipet.exe (CLI)  ──HTTP POST
 | `agent_completed` | success | 1회 |
 | `Stop` (턴 완료) | success | 1회 |
 | `PermissionRequest` (Codex) | **attention** | 알람음 2회 반복 |
-| `SubagentStop`, `SessionEnd` | info | 1회 |
+| `SubagentStop`, `SessionEnd` | info | 1회 (Claude Code 내부 에이전트의 SubagentStop은 제외: 입력 제안, `/btw`) |
 | `StopFailure` | error | 3회 반복 |
 | 모르는 이벤트 | info | 1회 + 본문에 원본 이벤트명 |
 
