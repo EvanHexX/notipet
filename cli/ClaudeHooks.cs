@@ -27,7 +27,11 @@ internal static class ClaudeHooks
         // The moments Claude needs the user, and the turn's own "finished".
         new("Notification", "agent_needs_input|agent_completed|permission_prompt|idle_prompt"),
         new("Stop", null),
-        new("SubagentStop", ".*"),
+        // "." and not ".*": Claude Code's own internal agents (prompt
+        // suggestions, /btw) finish with an empty agent_type, and a matcher
+        // that cannot match "" keeps the hook from running for them at all
+        // (PayloadMapper drops them too, for hooks written before this).
+        new("SubagentStop", "."),
         // Ends what is over (the last turn's "finished"); notifies nothing.
         new("UserPromptSubmit", null),
     };

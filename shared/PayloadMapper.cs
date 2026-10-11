@@ -94,6 +94,19 @@ public static class PayloadMapper
         var eventName = e.HookEventName?.Trim() ?? "";
         var session = string.IsNullOrWhiteSpace(e.SessionId) ? null : e.SessionId.Trim();
 
+        // Claude Code runs internal agents for its own features - prompt
+        // suggestions (the greyed next prompt, a second after every Stop),
+        // /btw side questions - and SubagentStop fires when one finishes, with
+        // an empty agent_type (hooks reference, SubagentStop). A subagent
+        // Claude spawned always carries its type ("Explore"). A session run
+        // with --agent gives its internal agents that name, and they still ring.
+        if (sourceId == SourceClaude
+            && eventName.Equals("SubagentStop", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(e.AgentType))
+        {
+            return new HookPlan();
+        }
+
         if (sourceId == SourceCodex)
         {
             if (eventName.Equals("Stop", StringComparison.OrdinalIgnoreCase) && IsAmbientSuggestion(e.LastAssistantMessage)) return new HookPlan();
@@ -473,6 +486,11 @@ public static class PayloadMapper
         }, SourceCodex);
         if (suggestion.Notify is not null || suggestion.Resolve is not null) return false;
         if (IsAmbientSuggestion("The suggestion: {\"suggestion\":1}") || IsAmbientSuggestion("{\"suggestions\":[]}") || !IsAmbientSuggestion("{ \"suggestion\" : \"x\" }")) return false;
+        // Claude's internal agents (prompt suggestions) have no agent_type; a
+        // real subagent does and still notifies.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "SubagentStop", AgentType = "", LastAssistantMessage = "진행해" }, SourceClaude) is not { Notify: null, Resolve: null }) return false;
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "SubagentStop", LastAssistantMessage = "진행해" }, SourceClaude).Notify is not null) return false;
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "SubagentStop", AgentType = "Explore" }, SourceClaude).Notify is null) return false;
         // A Claude turn that happens to answer with that JSON still notifies.
         if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "Stop", LastAssistantMessage = "{\"suggestion\":\"x\"}" }, SourceClaude).Notify is null) return false;
         var reviewed = PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PermissionRequest" }, SourceCodex, () => true);
