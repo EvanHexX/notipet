@@ -345,7 +345,7 @@
 - **확인**: `Invoke-CommandInDesktopPackage -PackageFamilyName Claude_pzs8sxrjxfjjc -AppId Claude`로 패키지 안에서 cmd를 실행했다. 사본 폴더에만 둔 표지 파일이 `%LOCALAPPDATA%\notipet\`에 보였고, `runtime.json`은 pid 77200이었다. 사본 runtime 파일 둘을 지우자 같은 방법으로 실행한 훅이 지금 데몬을 찾았다(종료 코드 0, `background start` 없음).
 - **해결**: 패키지 밖의 데몬이 시작할 때와 30초마다 `Packages\*\LocalCache\Local\notipet\runtime*.json`을 지운다(`PackageShadows`, `daemon.log`에 기록). 사본이 없으면 패키지 안에서도 진짜 파일이 보인다. 데몬 자신이 패키지 안에서 떴다면 지우지 않는다. 그 사본이 자기 파일이기 때문이다. 대신 그 사실을 `daemon.log`에 남긴다. `doctor`의 `package copies` 줄이 사본을 보여 준다.
 - **예전 판단 정정**: 1.4.1 항목의 "샌드박스 셸은 오래된 사본을 본다"도 같은 현상이었을 가능성이 크다. 지금의 Claude Code 셸 도구(샌드박스 포함)는 진짜 파일을 본다.
-- **남은 것**: 데몬이 꺼진 상태에서 Claude Code 훅이 처음 데몬을 띄우면, 그 데몬은 패키지 안에서 뜬다. 그 데몬의 `runtime.json`은 다른 프로그램에 보이지 않는다. "Windows 시작 시 실행"을 켜 두면 이 경우가 생기지 않는다.
+- **남은 것**: 데몬이 꺼진 상태에서 Claude Code 훅이 처음 데몬을 띄우면, 그 데몬은 패키지 안에서 뜬다. 그 데몬의 `runtime.json`은 다른 프로그램에 보이지 않는다. "Windows 시작 시 실행"을 켜 두면 이 경우가 생기지 않는다. → 1.8.2에서 데몬이 스스로 알아채고 패키지 밖에서 다시 시작하게 했다(위 항목).
 
 ### Codex 훅이 "hook exited with code 1"로 실패했다 (1.6.4)
 
@@ -353,6 +353,19 @@
 - **원인**: `install-hooks --codex --write`가 쓴 명령이 `'"C:\...\notipet.exe" --source codex'`였다. `[windows] sandbox = "unelevated"`에서 Codex는 명령줄을 `cmd /C`의 인수 하나로 넘기면서 따옴표를 `\"`로 바꾼다. cmd는 `\"C:\...\notipet.exe\"`를 프로그램 이름으로 찾지 못하고 1로 끝난다. CLI는 실행조차 되지 않았다.
 - **재현**: `codex sandbox -- cmd /c "\"<exe>\" ping --no-launch"`는 "내부 또는 외부 명령이 아닙니다", 종료 코드 1이다. 따옴표 없이 실행하면 `ok`, 0이다.
 - **해결**: exe 경로에 따옴표를 쓰지 않는다. 공백이나 cmd 특수 문자가 있으면 8.3 짧은 이름을 쓴다(`CodexHooks.CommandLine`).
+
+### 데몬이 Claude 앱 패키지 안에서 돌아 Codex 알림이 모두 사라졌다 (1.8.2)
+
+- **증상**: Codex의 선택 메뉴가 떴는데 알람이 울리지 않았다. `notipet ping`은 `stale runtime.json, pid 29496`이었고 실제 데몬은 67576이었다. `daemon.log`에는 30초마다 두 줄이 반복됐다. "removed runtime.json kept by the Claude app package"와 "runtime.json named pid 29496, not this instance; rewritten"이다.
+- **원인**:
+  - 67576은 12:35에 그래픽 재시작(`--restart-after 42224 graphics`)으로 떴다. 42224는 Claude Code 훅이 띄운 데몬으로 보인다. 패키지 앱이 띄운 프로세스의 자식도 파일 리디렉션을 물려받는다. 그래서 67576이 쓴 `runtime.json`은 Claude의 `LocalCache` 사본으로만 갔다.
+  - 밖(Codex, 셸)에서는 11:10에 꺼진 29496이 보였다. Codex 훅과 스킬은 데몬이 꺼졌다고 판단해 알림을 버렸다.
+  - `GetCurrentPackageFullName`은 "패키지 없음"을 돌려줬다. 그래서 1.6.4의 `PackageShadows`가 그 사본(자기 파일)을 지웠다. 그러면 진짜 파일(29496)이 보여서 다시 썼고, 그 쓰기는 다시 사본으로 갔다. 이것이 30초마다 반복됐다.
+- **해결**:
+  - 패키지 신원 대신 결과로 판단한다. 패키지 사본 중에 **자기 pid를 담은 runtime 파일**이 있으면(`PackageShadows.FindOwn`) 자기가 리디렉션되고 있다는 뜻이다. 그러면 단일 인스턴스 뮤텍스를 놓고(`Program.ReleaseSingleInstance`), `explorer.exe <exe>`로 패키지 밖에서 새로 띄운 뒤 끝낸다. 시작할 때와 30초 점검마다 확인한다.
+  - explorer는 인수를 넘기지 않는다. 그래서 뮤텍스를 먼저 놓아야 새 인스턴스가 "두 번째 실행"(최근 알림 열기)이 아니라 유일한 인스턴스로 뜬다.
+  - 사본 정리는 자기 pid의 사본을 건드리지 않는다.
+- **확인**: 설치본을 멈추고, bin 데몬을 `Invoke-CommandInDesktopPackage -PackageFamilyName Claude_pzs8sxrjxfjjc -AppId Claude`로 패키지 안에서 띄웠다. 시작한 그 초에 "restarting outside it"를 남기고 끝났다. explorer의 자식으로 새 데몬이 떴고, 밖의 셸에서 `ping`이 바로 됐다.
 
 ### Codex 입력 제안이 `{"suggestions":[]}`로 왔다 (1.8.1)
 

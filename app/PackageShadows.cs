@@ -52,14 +52,35 @@ internal static class PackageShadows
         return found;
     }
 
-    // Deletes them; returns the ones it deleted.
-    public static List<string> Remove(string packagesDir)
+    // A copy that names this very process: then this process is the one being
+    // redirected - its own runtime.json landed in a package's LocalCache, and
+    // nothing outside that package can find it. Package identity is no test:
+    // a daemon started (or restarted) by a process inside the Claude app was
+    // redirected with GetCurrentPackageFullName reporting no package, and for
+    // hours deleted and rewrote its own file every 30 s while Codex saw a dead
+    // pid.
+    public static string? FindOwn(string packagesDir, int pid)
+    {
+        foreach (var path in Find(packagesDir))
+        {
+            if (NamesPid(path, pid)) return path;
+        }
+        return null;
+    }
+
+    private static bool NamesPid(string path, int pid) =>
+        Http.RuntimeFile.Read(path) is { } info && info.Pid == pid;
+
+    // Deletes them, except one naming ownPid (FindOwn); returns the ones it
+    // deleted.
+    public static List<string> Remove(string packagesDir, int ownPid = 0)
     {
         var removed = new List<string>();
         foreach (var path in Find(packagesDir))
         {
             try
             {
+                if (ownPid > 0 && NamesPid(path, ownPid)) continue;
                 File.Delete(path);
                 removed.Add(path);
             }
@@ -120,6 +141,13 @@ internal static class PackageShadows
             // Only notipet's runtime files go.
             if (!File.Exists(Path.Combine(shadow, "crash.log")) || !File.Exists(Path.Combine(other, "runtime.json"))) return false;
             if (Find(Path.Combine(root, "missing")).Count != 0) return false;
+
+            // A copy naming this process means this process is redirected: it
+            // is found, and kept; another pid's copy still goes.
+            File.WriteAllText(Path.Combine(shadow, "runtime.json"), "{\"pid\": " + Environment.ProcessId + "}");
+            File.WriteAllText(Path.Combine(shadow, "runtime-1.json"), "{\"pid\": 1}");
+            if (FindOwn(root, Environment.ProcessId) is null || FindOwn(root, 2) is not null) return false;
+            if (Remove(root, Environment.ProcessId).Count != 1 || !File.Exists(Path.Combine(shadow, "runtime.json"))) return false;
             // The self-test runs unpackaged.
             return CurrentPackage() is null;
         }

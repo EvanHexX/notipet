@@ -22,6 +22,19 @@ internal static class Program
     // adapters changed (GraphicsAdapters).
     public static bool RestartedForGraphics { get; private set; }
 
+    private static Mutex? _instanceMutex;
+
+    // Lets the next instance start as the only one before this one has quite
+    // gone (TrayController.RestartOutsidePackage, which cannot pass it
+    // --restart-after). UI thread - the thread that owns the mutex.
+    public static void ReleaseSingleInstance()
+    {
+        var mutex = Interlocked.Exchange(ref _instanceMutex, null);
+        if (mutex is null) return;
+        try { mutex.ReleaseMutex(); } catch { }
+        try { mutex.Dispose(); } catch { }
+    }
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -100,6 +113,7 @@ internal static class Program
         }
 
         using var mutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var isFirstInstance);
+        _instanceMutex = isFirstInstance ? mutex : null;
         using var showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSignalEventName);
         using var settingsSignal = new EventWaitHandle(false, EventResetMode.AutoReset, SettingsSignalEventName);
         if (!isFirstInstance)

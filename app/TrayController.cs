@@ -720,7 +720,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _package = PackageShadows.CurrentPackage();
         if (_package is not null)
         {
-            DaemonLog.Write($"running inside the app package {_package}: its runtime.json is that app's private copy, and hooks of other apps cannot find this instance. Restart Notipet from the Start menu or the tray");
+            DaemonLog.Write($"running inside the app package {_package}: its runtime.json is that app's private copy, and hooks of other apps cannot find this instance");
         }
         RemovePackageShadows();
 
@@ -740,16 +740,55 @@ internal sealed class TrayController : IDisposable, INotipetHost
     private System.Threading.Timer? _runtimeHeal;
 
     private string? _package;
+    private int _leavingPackage;
+
+    // A process started from inside a packaged app (a Claude Code hook's
+    // auto-launch, or a restart of a daemon that one started) inherits its
+    // file redirection. Explorer starts programs from the shell, outside any
+    // package. It passes no arguments, so this instance lets go of the
+    // single-instance mutex first: the new one then starts as the only one
+    // instead of reading as a second launch that opens Recent.
+    private void RestartOutsidePackage()
+    {
+        if (_disposed || Environment.ProcessPath is not { } exe) return;
+        _historyFile.Flush();
+        Program.ReleaseSingleInstance();
+        try
+        {
+            Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), $"\"{exe}\"")
+            {
+                UseShellExecute = false
+            });
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("PackageShadows.Restart", ex);
+            return;
+        }
+        Quit("started inside an app package; restarting outside it");
+    }
 
     // PackageShadows: a packaged app's copy of runtime.json hides the real one
     // from it and from the hooks it runs. Not from inside a package, where the
     // copies are this instance's own files.
     private void RemovePackageShadows()
     {
-        if (_package is not null) return;
         try
         {
-            foreach (var path in PackageShadows.Remove(PackageShadows.PackagesDir))
+            // Our own runtime.json in a package's copy: this process is being
+            // redirected, so no other app can find it. Start over outside.
+            if (PackageShadows.FindOwn(PackageShadows.PackagesDir, Environment.ProcessId) is { } own)
+            {
+                if (System.Threading.Interlocked.Exchange(ref _leavingPackage, 1) == 0)
+                {
+                    DaemonLog.Write($"this instance's runtime.json went to the {PackageShadows.Describe(own)} app package, where only that app sees it; restarting outside it");
+                    OnUiThread(RestartOutsidePackage);
+                }
+                return;
+            }
+            // Inside a package the copies are this instance's own files.
+            if (_package is not null) return;
+            foreach (var path in PackageShadows.Remove(PackageShadows.PackagesDir, Environment.ProcessId))
             {
                 DaemonLog.Write($"removed {Path.GetFileName(path)} kept by the {PackageShadows.Describe(path)} app package, which hid this instance from its hooks");
             }
