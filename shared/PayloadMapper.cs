@@ -117,6 +117,21 @@ public static class PayloadMapper
             if (eventName.Equals("PermissionRequest", StringComparison.OrdinalIgnoreCase) && approvalsAutoReviewed?.Invoke() == true) return new HookPlan();
         }
 
+        // Codex's question box went up: the hook says so itself, with the
+        // question, instead of trusting the agent to run `notipet send` - one
+        // thread showed three of them and sent nothing. request_user_input
+        // waits for the answer, so its PreToolUse is the moment;
+        // request_user_input_async returns as soon as the box is shown, so its
+        // PostToolUse is. Both end when the user answers (untilReply).
+        if (sourceId == SourceCodex && session is not null && IsQuestionShown(eventName, e.ToolName))
+        {
+            request.Level = NotificationLevelParser.ToWire(NotificationLevel.Attention);
+            request.Body = QuestionText(e.ToolInput) ?? "Waiting for your answer";
+            request.Tag = BuildTag(sourceId, session, "Question", null);
+            request.UntilReply = true;
+            return new HookPlan { Notify = request };
+        }
+
         List<string>? ends = null;
         var answered = false;   // the user answered a question in this thread
         if (session is not null)
@@ -156,9 +171,10 @@ public static class PayloadMapper
         return new HookPlan
         {
             // A new prompt is not news: the user (or their schedule) just did
-            // it; nor is a tool finishing.
+            // it; nor is a tool starting or finishing.
             Notify = eventName.Equals("UserPromptSubmit", StringComparison.OrdinalIgnoreCase)
-                     || eventName.Equals("PostToolUse", StringComparison.OrdinalIgnoreCase) ? null : request,
+                     || eventName.Equals("PostToolUse", StringComparison.OrdinalIgnoreCase)
+                     || eventName.Equals("PreToolUse", StringComparison.OrdinalIgnoreCase) ? null : request,
             Resolve = ends is null ? null : new ResolveRequest
             {
                 Source = sourceId, Session = session, Tags = ends,
@@ -184,12 +200,54 @@ public static class PayloadMapper
     // A prompt that came from the user rather than from a machine: agent
     // Summit relays ("[agent-summit] ..."), Claude's task notifications and
     // reminders ("<task-notification>", "<system-reminder>") are not replies.
+    // The Codex app's answer to an async question box arrives wrapped in
+    // <send_user_message_question_reply> - that one is the user's.
     // An agent that sends no prompt text gets the benefit of the doubt.
     public static bool IsTypedPrompt(string? prompt)
     {
         if (string.IsNullOrWhiteSpace(prompt)) return true;
         var text = prompt.TrimStart();
+        if (text.StartsWith("<send_user_message_question_reply>", StringComparison.Ordinal)) return true;
         return !text.StartsWith('<') && !text.StartsWith("[agent-summit]", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsQuestionShown(string eventName, string? tool) => tool?.Trim() switch
+    {
+        "request_user_input" => eventName.Equals("PreToolUse", StringComparison.OrdinalIgnoreCase),
+        "request_user_input_async" => eventName.Equals("PostToolUse", StringComparison.OrdinalIgnoreCase),
+        _ => false
+    };
+
+    // The question titles from { "questions": [ { "title": ... } ] }, or null.
+    private static string? QuestionText(System.Text.Json.JsonElement? input)
+    {
+        try
+        {
+            if (input is not { ValueKind: System.Text.Json.JsonValueKind.Object } o
+                || !o.TryGetProperty("questions", out var questions)
+                || questions.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+            var titles = new List<string>();
+            foreach (var q in questions.EnumerateArray())
+            {
+                if (q.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && q.TryGetProperty("title", out var t) && t.ValueKind == System.Text.Json.JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(t.GetString()))
+                {
+                    titles.Add(t.GetString()!.Trim());
+                }
+                else if (q.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && q.TryGetProperty("question", out var t2) && t2.ValueKind == System.Text.Json.JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(t2.GetString()))
+                {
+                    titles.Add(t2.GetString()!.Trim());
+                }
+            }
+            return titles.Count == 0 ? null : string.Join("\n", titles);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // `{"suggestion": "..."}` or `{"suggestions": [...]}`, sometimes followed
@@ -557,9 +615,22 @@ public static class PayloadMapper
         if (answer.Replied is not { UntilReply: true, SeenBy: SeenReply } || answer.Replied.Session != session) return false;
         var codexAnswer = PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PostToolUse", ToolName = "request_user_input" }, SourceCodex);
         if (codexAnswer.Replied is null || !codexAnswer.Resolve!.Tags!.Contains(codexPermission.Tag!)) return false;
-        // Another tool, or the async question that returns before any answer: nothing.
-        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PostToolUse", ToolName = "request_user_input_async" }, SourceCodex) is not { Notify: null, Resolve: null, Replied: null }) return false;
+        // The async question returns before any answer: it ends nothing (it
+        // rings instead - below). Another tool: nothing at all.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "PostToolUse", ToolName = "request_user_input_async" }, SourceCodex) is not { Resolve: null, Replied: null }) return false;
         if (PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "PostToolUse", ToolName = "Bash" }, SourceClaude) is not { Notify: null, Resolve: null, Replied: null }) return false;
+        // Codex's question box rings by itself, with the question, until the
+        // answer: async when it was shown (PostToolUse), the waiting one
+        // before it is shown (PreToolUse). Other tools ring nothing.
+        var questionInput = System.Text.Json.JsonDocument.Parse("{\"questions\":[{\"title\":\"M0-5: open the portal\",\"options\":[\"done\"]}]}").RootElement.Clone();
+        var asked = PlanForHookEvent(new AgentHookEvent { SessionId = "c9", HookEventName = "PostToolUse", ToolName = "request_user_input_async", ToolInput = questionInput }, SourceCodex);
+        if (asked.Notify is not { UntilReply: true } q || q.Body != "M0-5: open the portal" || q.Level != "attention" || asked.Resolve is not null) return false;
+        var waiting = PlanForHookEvent(new AgentHookEvent { SessionId = "c9", HookEventName = "PreToolUse", ToolName = "request_user_input" }, SourceCodex);
+        if (waiting.Notify is not { UntilReply: true } w || w.Body != "Waiting for your answer" || w.Tag != q.Tag) return false;
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c9", HookEventName = "PreToolUse", ToolName = "shell" }, SourceCodex).Notify is not null) return false;
+        // ...and the async box's answer, wrapped by the app, counts as a reply.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c9", HookEventName = "UserPromptSubmit", Prompt = "<send_user_message_question_reply>\n[...]" }, SourceCodex).Replied is null) return false;
+
         // A typed prompt is a reply; a relayed or system one is not; the turn's
         // end is not either.
         if (PlanForHookEvent(new AgentHookEvent { SessionId = "c1", HookEventName = "UserPromptSubmit", Prompt = "G1 실행" }, SourceCodex).Replied is null) return false;

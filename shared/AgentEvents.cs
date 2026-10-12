@@ -36,6 +36,8 @@ public sealed class AgentHookEvent
 
     // Tool events (Codex PreToolUse / PermissionRequest)
     [JsonPropertyName("tool_name")] public string? ToolName { get; set; }
+    // The tool's arguments; for the question tools, { "questions": [ { "title": ... } ] }.
+    [JsonPropertyName("tool_input")] public System.Text.Json.JsonElement? ToolInput { get; set; }
 }
 
 // Codex's legacy `notify` config spawns a program with the payload as the FINAL

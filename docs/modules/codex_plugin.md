@@ -65,6 +65,8 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 [[hooks.PermissionRequest]]   … (같은 꼴)
 [[hooks.UserPromptSubmit]]    … async = true
 [[hooks.PostToolUse]]         matcher = '^request_user_input$', async = true (1.8.0)
+[[hooks.PostToolUse]]         matcher = '^request_user_input_async$', async = true (1.9.0)
+[[hooks.PreToolUse]]          matcher = '^request_user_input$', async = true (1.9.0)
 ```
 
 **훅 실행**: Codex가 이벤트마다 `%ComSpec% /C "<command>"`로 실행하고 페이로드 JSON을 stdin으로 준다. `notipet.exe --source codex`가 알리거나 끝난 알람을 정리한다([cli_shim.md](cli_shim.md)). stdout에는 아무것도 쓰지 않는다.
@@ -107,6 +109,12 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 - **사용자 동의 없이 넣지 않는다.** 스킬은 사용자가 알림을 원할 때만 `doctor`로 확인하고 물어본다. 이 명령은 샌드박스 밖 실행이라 Codex가 승인을 받는데, 그 승인이 곧 동의다.
 - 핸들러 필드는 `type`, `command`, `commandWindows`, `timeout`(초), `async`, `statusMessage`, `additionalContextLimit`뿐이다(`hook_config.rs`). **`args`는 없고, 있어도 경고 없이 버려진다.** 인수는 명령줄 안에 쓴다.
 - 명령은 `%ComSpec% /C "<명령줄>"`로, 세션 cwd에서, 창 없이 실행된다(`command_runner.rs`).
+- **질문 창은 훅이 직접 알린다**(1.9.0).
+  - 비동기 질문 창은 PostToolUse(`^request_user_input_async$`) 시점에, 동기 질문 창은 PreToolUse(`^request_user_input$`) 시점에 알린다. 비동기 도구는 창을 띄우고 바로 끝나고, 동기 도구는 답을 받을 때까지 끝나지 않기 때문이다.
+  - 알림은 `attention`이다. 본문은 `tool_input.questions[].title`(질문 문장)이고 태그는 `codex:<스레드>:Question`이다. `untilReply`가 붙어 있어 답이 오면 끝난다.
+  - 비동기 창의 답은 `<send_user_message_question_reply>`로 시작하는 사용자 입력으로 온다. `IsTypedPrompt`는 이것만 `<`로 시작해도 답으로 친다.
+  - 그 전까지는 에이전트가 스킬대로 `notipet send`를 해야 울렸다. 한 스레드가 비동기 질문 창을 세 번 띄우면서 한 번도 보내지 않은 일이 있었다.
+  - 새 훅 두 개는 블록 끝에 붙는다. 기존 훅의 신뢰 키는 바뀌지 않고, 새 두 개만 신뢰하면 된다.
 - **PostToolUse(`^request_user_input$`)**(1.8.0): 동기 질문 도구는 답을 받은 뒤 끝나므로, 그때 그 스레드의 승인 알람과 `--until-reply` 알림을 끄고 "답함"으로 읽음 처리한다. Codex matcher는 정규식이고 고정되지 않아서(`regex.is_match`) `^…$`로 묶는다. `request_user_input_async`는 질문을 메시지로 띄우고 바로 끝나므로 제외한다. 그 답은 새 사용자 입력으로 오고(`UserPromptSubmit`), summit 중계가 아니면 답으로 센다. 블록 끝에 추가했으므로 기존 세 훅의 신뢰 키와 해시는 그대로이고, 사용자는 새 훅 하나만 신뢰하면 된다. `doctor`는 이 훅이 없는 블록을 경고한다.
 - **사용자의 순간이 아닌 Codex 이벤트는 알리지 않는다**(1.6.5, `PayloadMapper.PlanForHookEvent`).
   - 입력 제안: 데스크톱 앱이 임시 스레드에서 돌리는 보이지 않는 턴이다. Stop의 `last_assistant_message`가 `{"suggestion":...}`이거나 `{"suggestions":[...]}`(1.8.1)이다.
