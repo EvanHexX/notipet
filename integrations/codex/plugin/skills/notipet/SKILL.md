@@ -51,6 +51,7 @@ notipet send --title "<project>: <what happened>" --body "<one or two lines>" --
 - `--project`: the repository or project name. The user's recent-notifications window groups cards by it. If you leave it out, notipet uses the name of the repository you are in.
 - `--thread-title`: what this conversation is about, in a few words ("auth refactor", "release 1.2 checklist"). Use the **same** words for every notification in one conversation. If the Codex app has its own name for the thread, notipet shows that instead.
 - `--until-reply`: for a **question** - the alert ends by itself the moment the user answers in this thread (they type a reply, or answer your `request_user_input`), and is marked as answered. Use it whenever you are waiting for their answer; you then do not need to resolve it.
+- When you ask through `request_user_input` or `request_user_input_async`, notipet's hooks already alert the user with your question (if they set the hooks up) - do not send a second alert for the same question. Send one yourself for a question you ask in plain chat.
 - Write the title, body and thread title **in the language the user is writing to you in**.
 
 You do not need to pass `--agent` or a thread id: notipet reads `CODEX_SESSION_ID` from your environment, and in the Codex app a card can then open this exact conversation. Add `--agent codex` only if the escalated command no longer carries your environment and the card shows up as "manual". `--project` and `--thread-title` are optional too - a notification without them still arrives, filed under "Other".

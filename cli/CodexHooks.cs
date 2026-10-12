@@ -41,6 +41,11 @@ internal static class CodexHooks
         // The answer to request_user_input (the waiting one; the async one
         // returns before any answer). Codex matchers are regexes, unanchored.
         new("PostToolUse", true, "Notipet · 질문에 답하면 알람 정리", "Notipet · question answered; ending its alarm", "^request_user_input$"),
+        // The question box itself rings (1.9.0), rather than relying on the
+        // agent to send: the async box is up once its tool returns, the waiting
+        // one just before its tool runs.
+        new("PostToolUse", true, "Notipet · 질문 창 알림", "Notipet · question box; alerting you", "^request_user_input_async$"),
+        new("PreToolUse", true, "Notipet · 질문 창 알림", "Notipet · question box; alerting you", "^request_user_input$"),
     };
 
     private const int TimeoutSeconds = 10;
@@ -113,7 +118,7 @@ internal static class CodexHooks
     // A block written before the PostToolUse hook (1.8.0): its question alarms
     // end only with the turn.
     public static bool LacksAnswerHook(string toml) =>
-        MentionsNotipetHook(toml) && !toml.Contains("^request_user_input$", StringComparison.Ordinal);
+        MentionsNotipetHook(toml) && !toml.Contains("^request_user_input_async$", StringComparison.Ordinal);
 
     // A notipet hook whose command starts with a quoted exe - what 1.5.1 to
     // 1.6.3 wrote, and what a sandboxed Codex cannot run.

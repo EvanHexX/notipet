@@ -354,6 +354,15 @@
 - **재현**: `codex sandbox -- cmd /c "\"<exe>\" ping --no-launch"`는 "내부 또는 외부 명령이 아닙니다", 종료 코드 1이다. 따옴표 없이 실행하면 `ok`, 0이다.
 - **해결**: exe 경로에 따옴표를 쓰지 않는다. 공백이나 cmd 특수 문자가 있으면 8.3 짧은 이름을 쓴다(`CodexHooks.CommandLine`).
 
+### Codex 선택 창이 떴는데 알림이 없었다 — 에이전트가 보내지 않았다 (1.9.0)
+
+- **증상**: 1.8.2로 데몬이 정상인데도, Codex 스레드가 띄운 선택 창(`request_user_input_async`)에 알림이 오지 않았다.
+- **원인**: 그 스레드는 16:26, 16:27, 16:32에 선택 창을 세 번 띄웠다. 직전에 `user-confirm`과 notipet 스킬을 읽고도 `notipet send`는 한 번도 실행하지 않았다(세션 기록). 알림이 에이전트가 지시를 따르는지에 달려 있었다.
+- **해결**:
+  - Codex 훅이 질문 창 자체를 알린다. 비동기 창은 `PostToolUse(^request_user_input_async$)`, 동기 창은 `PreToolUse(^request_user_input$)`에서 알린다. 본문은 질문 문장이고 `untilReply`다.
+  - 비동기 창의 답(`<send_user_message_question_reply>…`)을 답으로 치도록 고쳤다. 전에는 `<`로 시작해 시스템 입력으로 걸러져서, 1.8.0의 `--until-reply`가 비동기 창 답에는 동작하지 않았을 것이다.
+- **확인**: 자체 테스트로 확인했다. 질문 제목이 본문이 되고 수준은 attention, `untilReply`이며, 다른 도구는 울리지 않고, 감싼 답은 답으로 친다. 실제 Codex 질문 창은 업데이트 뒤 확인한다.
+
 ### 데몬이 Claude 앱 패키지 안에서 돌아 Codex 알림이 모두 사라졌다 (1.8.2)
 
 - **증상**: Codex의 선택 메뉴가 떴는데 알람이 울리지 않았다. `notipet ping`은 `stale runtime.json, pid 29496`이었고 실제 데몬은 67576이었다. `daemon.log`에는 30초마다 두 줄이 반복됐다. "removed runtime.json kept by the Claude app package"와 "runtime.json named pid 29496, not this instance; rewritten"이다.
