@@ -110,7 +110,8 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
     "stayLevels": [],                // 클릭·닫기 전까지 유지할 레벨, 예: ["attention", "error", "critical"]
                                      // (1.2.0의 "stayUntilClicked": true는 모든 레벨로 한 번 옮겨 읽는다)
     "showOverFullscreen": false,     // 전체화면 앱 위에도 표시
-    "timeoutSec": 8                  // 유지하지 않을 때 스스로 닫히기까지 (3~120)
+    "timeoutSec": 8,                 // 유지하지 않을 때 스스로 닫히기까지 (3~120)
+    "position": "bottomRight"        // bottomRight(트레이 위, 새 것이 아래) | topRight(화면 위에서부터 아래로 쌓임). topRight는 notipet 알림 창을 쓴다
   },
 
   "links": {                         // `send --open`으로 카드가 열 수 있는 것

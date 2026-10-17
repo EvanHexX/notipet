@@ -63,6 +63,10 @@ internal sealed class PopupHost
         };
     }
 
+    // The position setting changed: cards already on screen move there.
+    // UI thread.
+    public void ApplyLayout() => Layout();
+
     public int OpenCount => _open.Count;
     public int OverflowCount => _overflowIds.Count;
 
@@ -195,8 +199,11 @@ internal sealed class PopupHost
         for (var i = 0; i < cards.Count; i++) cards[i].MoveTo(positions[i]);
     }
 
-    // One position per card in Cards() order: the newest sits at the bottom,
-    // older ones above it, the overflow card on top.
+    // One position per card in Cards() order (overflow card, then oldest to
+    // newest). Bottom right: the newest sits at the bottom, older ones above
+    // it, the overflow card on top. Top right (PopupSettings.Position): the
+    // same order read downward - the overflow card and the oldest at the top,
+    // each new card below the last.
     private List<PointInt32> Positions()
     {
         var cards = Cards();
@@ -206,6 +213,18 @@ internal sealed class PopupHost
         var gap = (int)(GapDip * scale);
 
         var positions = new PointInt32[cards.Count];
+        if (_settings().Popup.AtTop)
+        {
+            var y = work.Y + margin;
+            for (var i = 0; i < cards.Count; i++)
+            {
+                var size = cards[i].PixelSize;
+                positions[i] = new PointInt32(work.X + work.Width - size.Width - margin, y);
+                y += size.Height + gap;
+            }
+            return new List<PointInt32>(positions);
+        }
+
         var bottom = work.Y + work.Height - margin;
         for (var i = cards.Count - 1; i >= 0; i--)
         {

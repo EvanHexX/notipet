@@ -194,14 +194,25 @@ internal sealed class PopupSettings
     // How long a pop-up that does not stay waits before it closes itself.
     public int TimeoutSec { get; set; } = 8;
 
+    // Where the pop-ups go: "bottomRight" (above the tray, newest at the
+    // bottom) or "topRight" (top of the screen, stacking downward - the first
+    // on top, each new one below). Windows' own notification cannot be moved,
+    // so topRight uses notipet's pop-up.
+    public const string BottomRight = "bottomRight";
+    public const string TopRight = "topRight";
+    public string Position { get; set; } = BottomRight;
+
+    [JsonIgnore]
+    public bool AtTop => string.Equals(Position, TopRight, StringComparison.OrdinalIgnoreCase);
+
     public bool Stays(NotificationLevel level) =>
         StayLevels.Contains(NotificationLevelParser.ToWire(level), StringComparer.OrdinalIgnoreCase);
 
     // notipet's own pop-up is used for every notification as soon as any
-    // level stays or over-full-screen is on - mixing it with Windows'
-    // notification by level would look like two different apps.
+    // level stays, over-full-screen is on or it goes at the top - mixing it
+    // with Windows' notification by level would look like two different apps.
     [JsonIgnore]
-    public bool UseOwnPopup => StayLevels.Count > 0 || ShowOverFullscreen;
+    public bool UseOwnPopup => StayLevels.Count > 0 || ShowOverFullscreen || AtTop;
 }
 
 // What a notification's card may open (`send --open`). http(s) on this PC
@@ -351,6 +362,7 @@ internal sealed class AppSettings
             .Distinct()
             .ToList();
         Popup.TimeoutSec = Math.Clamp(Popup.TimeoutSec, 3, 120);
+        Popup.Position = Popup.AtTop ? PopupSettings.TopRight : PopupSettings.BottomRight;
         Popup.StayLevels ??= new List<string>();
         if (Popup.LegacyStayUntilClicked == true && Popup.StayLevels.Count == 0)
         {
@@ -559,6 +571,12 @@ internal sealed class AppSettings
             var none = new AppSettings();
             none.Normalize();
             if (none.Popup.UseOwnPopup || none.Popup.Stays(NotificationLevel.Critical)) return false;
+            // Position: bottom right by default, anything unknown back to it;
+            // the top needs notipet's own pop-up.
+            if (none.Popup.Position != PopupSettings.BottomRight) return false;
+            var top = Load(WriteTemp(path, "{\"popup\":{\"position\":\"TOPRIGHT\"}}"));
+            if (top.Popup.Position != PopupSettings.TopRight || !top.Popup.UseOwnPopup) return false;
+            if (Load(WriteTemp(path, "{\"popup\":{\"position\":\"middle\"}}")).Popup.Position != PopupSettings.BottomRight) return false;
             if (none.Links.AllowedSchemes.Count != 0) return false;
             if (none.Theme != "System") return false;
             // Updates are checked only on request unless the user opts in.
