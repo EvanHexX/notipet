@@ -217,6 +217,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         _history.Trim();
         ApplyThreadTitleSetting();
         ApplyHotkey();
+        OnUiThread(_popups.ApplyLayout);
         RefreshTray();
     }
 

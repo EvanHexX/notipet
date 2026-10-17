@@ -247,9 +247,26 @@ internal sealed class SettingsWindow
                 Changed();
             })));
 
-        // Either one switches from the Windows notification to notipet's own
-        // pop-up: the shell decides how long a balloon stays and holds it back
-        // over full-screen apps, so neither is possible with it.
+        // Any of these switches from the Windows notification to notipet's own
+        // pop-up: the shell decides where a balloon goes and how long it
+        // stays, and holds it back over full-screen apps.
+        var position = new ComboBox { MinWidth = 180 };
+        position.Items.Add(Loc.T("Bottom right", "오른쪽 아래"));
+        position.Items.Add(Loc.T("Top right", "오른쪽 위"));
+        position.SelectedIndex = Settings.Popup.AtTop ? 1 : 0;
+        position.SelectionChanged += (_, _) =>
+        {
+            var picked = position.SelectedIndex == 1 ? PopupSettings.TopRight : PopupSettings.BottomRight;
+            if (picked == Settings.Popup.Position) return;
+            Settings.Popup.Position = picked;
+            Changed();
+        };
+        page.Children.Add(Fluent.SettingCard(Glyphs.Pin,
+            Loc.T("Where notifications appear", "알림 위치"),
+            Loc.T("Top right stacks downward from the top, with notipet's own pop-up",
+                  "오른쪽 위는 화면 위에서부터 아래로 쌓입니다 (notipet 알림 창 사용)"),
+            position));
+
         page.Children.Add(BuildStayLevels());
 
         page.Children.Add(Fluent.SettingCard(Glyphs.FullScreen,
