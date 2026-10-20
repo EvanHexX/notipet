@@ -29,6 +29,7 @@ namespace Notipet.Shared;
 [JsonSerializable(typeof(OkResponse))]
 [JsonSerializable(typeof(ChannelsResponse))]
 [JsonSerializable(typeof(HealthResponse))]
+[JsonSerializable(typeof(VersionResponse))]
 [JsonSerializable(typeof(HistoryResponse))]
 [JsonSerializable(typeof(RuntimeInfo))]
 [JsonSerializable(typeof(AgentHookEvent))]

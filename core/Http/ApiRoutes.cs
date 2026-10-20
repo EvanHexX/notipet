@@ -95,7 +95,10 @@ internal static class ApiRoutes
             Ok = true,
             Name = "notipet",
             Version = api.Version,
-            InstanceId = api.InstanceId
+            InstanceId = api.InstanceId,
+            // Public on purpose: it says what the build can do, nothing the
+            // user is notified about.
+            Features = NotipetFeatures.All()
         };
 
         // An unauthenticated probe learns only that we are alive and who we are:
@@ -255,7 +258,12 @@ internal static class ApiRoutes
         AlertsRequest request;
         if (read)
         {
-            request = new AlertsRequest { Agent = QueryValue(ctx, "agent"), Thread = QueryValue(ctx, "thread"), Project = QueryValue(ctx, "project") };
+            request = new AlertsRequest
+            {
+                Agent = QueryValue(ctx, "agent"), Thread = QueryValue(ctx, "thread"), Project = QueryValue(ctx, "project"),
+                // ?event=Stop: would this thread's Stop ring.
+                Events = QueryValue(ctx, "event") is { Length: > 0 } ev ? new List<string> { ev } : null
+            };
         }
         else
         {
@@ -300,6 +308,13 @@ internal static class ApiRoutes
         var project = string.IsNullOrWhiteSpace(request.Project) ? null : request.Project.Trim();
         if (thread is not null && !AgentIdentity.IsThreadId(thread)) throw HttpApiException.Validation("not a thread id", "thread");
         if (project is { Length: > 200 }) throw HttpApiException.Validation("project name too long", "project");
+        List<string>? events = null;
+        if (request.Events is { Count: > 0 })
+        {
+            events = AlertScope.CleanEvents(request.Events);
+            if (events.Count != request.Events.Count || events.Count > AlertScope.MaxEvents)
+                throw HttpApiException.Validation($"events are hook event names (letters, digits, _ and -), each once, at most {AlertScope.MaxEvents}", "events");
+        }
 
         if (request.State is { Length: > 0 } stateText)
         {
@@ -315,11 +330,22 @@ internal static class ApiRoutes
             {
                 if (thread is null || agent is null || agent == PayloadMapper.SourceManual)
                     throw HttpApiException.Validation("a thread rule needs the agent and the thread id", "thread");
-                changed |= AlertScope.SetThread(scope, agent, thread, on, request.Label, project, now);
+                if (events is null)
+                {
+                    changed |= AlertScope.SetThread(scope, agent, thread, on, request.Label, project, now, request.By);
+                }
+                else
+                {
+                    // Turning a few events on would mean "ring only these" -
+                    // that is the whole thread on, or reset.
+                    if (on == true) throw HttpApiException.Validation("events can be turned off or reset, not on", "events");
+                    changed |= AlertScope.SetThreadEvents(scope, agent, thread, events, off: on == false, request.Label, project, now, request.By);
+                }
             }
             else if (target == "project")
             {
                 if (project is null) throw HttpApiException.Validation("a project rule needs the project name", "project");
+                if (events is not null) throw HttpApiException.Validation("events are for thread rules", "events");
                 changed |= AlertScope.SetProject(scope, project, on, now);
             }
             else
@@ -338,7 +364,7 @@ internal static class ApiRoutes
         };
         if (thread is not null || project is not null)
         {
-            var verdict = AlertScope.Decide(scope, agent == PayloadMapper.SourceManual ? null : agent, thread, project, NotificationLevel.Success);
+            var verdict = AlertScope.Decide(scope, agent == PayloadMapper.SourceManual ? null : agent, thread, project, NotificationLevel.Success, events?.FirstOrDefault());
             response.Rings = verdict.Rings;
             response.Because = verdict.Because;
         }
@@ -352,7 +378,9 @@ internal static class ApiRoutes
         On = e.On,
         Label = e.Label,
         Project = e.Project,
-        Since = e.Since?.ToString("o")
+        Since = e.Since?.ToString("o"),
+        Events = AlertScope.IsEventRule(e) ? e.Events!.ToList() : null,
+        By = e.By
     };
 
     private static async Task TestAsync(ApiContext api, HttpListenerContext ctx)

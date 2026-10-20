@@ -581,6 +581,15 @@ curl.exe -s -H "Authorization: Bearer $($rt.token)" "$($rt.baseUrl)/v1/history?l
 
 또는 훅 설정에서 `Notification`만 남기고 `Stop` / `SubagentStop`을 뺀다.
 
+**특정 대화의 턴 알림만 끄기.** 다른 도구(예: 여러 대화를 묶어 일을 맡기는 허브)가 턴마다 돌리는 대화라면, 그 대화의 `Stop`/`SubagentStop`만 끈다. 권한 요청·질문 창·실패 알림은 그대로 울리고, 다른 대화는 영향이 없다:
+
+```powershell
+notipet alerts off   --thread <스레드 ID> --agent codex --events Stop,SubagentStop --by my-tool --label "대화 이름"
+notipet alerts reset --thread <스레드 ID> --agent codex --events Stop,SubagentStop
+```
+
+설정 → 프로젝트·스레드 목록에 "끔: Stop, SubagentStop · my-tool 설정"으로 보이고, ✕로 지우면 다시 울린다. 최근 알림 카드의 ⋯ 메뉴에도 "Stop, SubagentStop 다시 울리기"가 생긴다. 도구에서 부를 때는 먼저 `notipet version --json`의 `features`에 `alerts.events`가 있는지 본다.
+
 반대로 `attention`의 2회 반복이 성가시면 `sound.byLevel.attention.repeat`를 `"once"`로 바꾼다.
 
 ### `notipet: daemon not running`

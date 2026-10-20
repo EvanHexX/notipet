@@ -79,5 +79,7 @@ internal interface INotipetHost
     // open Settings page follows.
     void SetThreadAlerts(HistoryEntry entry, bool? on);
     void SetProjectAlerts(string project, bool? on);
+    // Removes the thread's event rule (alerts --events): those events ring again.
+    void ClearThreadEventAlerts(HistoryEntry entry);
     event System.Action? AlertScopeChanged;
 }

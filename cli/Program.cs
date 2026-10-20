@@ -535,8 +535,24 @@ internal static class Program
 
     private static async Task<int> VersionAsync(string[] args)
     {
-        Console.WriteLine($"notipet cli {CliVersion}");
         var daemon = await RuntimeDiscovery.FindAsync(TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
+        if (HasFlag(args, "--json"))
+        {
+            // What a caller can rely on: both this CLI and the running daemon
+            // must know a feature. Without a daemon, one the CLI starts is the
+            // installed one, the same build.
+            var features = NotipetFeatures.All();
+            if (daemon is not null) features = features.Where(daemon.Supports).ToList();
+            Console.WriteLine(JsonSerializer.Serialize(new VersionResponse
+            {
+                Cli = CliVersion,
+                Daemon = daemon?.Info.Version,
+                DaemonPid = daemon?.Info.Pid,
+                Features = features
+            }, NotipetJson.Compact.VersionResponse));
+            return 0;
+        }
+        Console.WriteLine($"notipet cli {CliVersion}");
         Console.WriteLine(daemon is null ? "daemon      not running" : $"daemon      {daemon.Info.Version} (pid {daemon.Info.Pid})");
         return 0;
     }
@@ -863,11 +879,17 @@ internal static class Program
 
         var daemon = await RequireDaemon(args).ConfigureAwait(false);
         if (daemon is null) return 1;
+        // An older daemon would ignore the events and turn the whole thread off.
+        if (request.Events is not null && !daemon.Supports(NotipetFeatures.AlertEvents))
+        {
+            Console.Error.WriteLine($"notipet: the running daemon ({daemon.Info.Version}) does not know --events; restart or update notipet");
+            return 1;
+        }
 
         bool ok; int status; string body;
         if (request.State is null && request.Mode is null)
         {
-            var query = string.Join("&", new[] { ("agent", request.Agent), ("thread", request.Thread), ("project", request.Project) }
+            var query = string.Join("&", new[] { ("agent", request.Agent), ("thread", request.Thread), ("project", request.Project), ("event", request.Events?.FirstOrDefault()) }
                 .Where(p => p.Item2 is not null)
                 .Select(p => p.Item1 + "=" + Uri.EscapeDataString(p.Item2!)));
             (ok, status, body) = await RuntimeDiscovery.SendAsync(daemon.Info, HttpMethod.Get,
@@ -926,18 +948,33 @@ internal static class Program
         var project = projectNamed ?? probe.Source.Project;
         var wantsProject = projectIndex >= 0;
 
+        // --events Stop,SubagentStop: only those hook events of the thread.
+        List<string>? events = null;
+        if (OptionValue(args, "--events") is { } eventsText)
+        {
+            var listed = eventsText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            events = AgentIdentity.CleanEvents(listed);
+            if (events.Count == 0 || events.Count != listed.Length)
+                throw new ArgumentException("--events takes hook event names separated by commas, e.g. Stop,SubagentStop");
+            if (state == "on") throw new ArgumentException("events can be turned off or reset, not on - `alerts on` turns the whole thread on");
+            if (wantsProject) throw new ArgumentException("--events is for a thread, not a project");
+        }
+
         var request = new AlertsRequest
         {
             State = state,
             Agent = agent is null || agent == PayloadMapper.SourceManual ? null : agent,
             Thread = wantsProject ? null : thread,
             Project = project,
-            Label = NonEmpty(OptionValue(args, "--label"))
+            Label = NonEmpty(OptionValue(args, "--label")),
+            Events = events,
+            By = NonEmpty(OptionValue(args, "--by"))
         };
         if (state is not null)
         {
             request.Target = !wantsProject && thread is not null ? "thread" : "project";
             if (request.Target == "thread" && request.Agent is null) throw new ArgumentException("which agent's thread? add --agent codex|claude-code");
+            if (request.Target == "project" && events is not null) throw new ArgumentException("--events needs a thread - add --thread ID --agent codex|claude-code");
             if (request.Target == "project" && project is null) throw new ArgumentException("no thread or project here - use --project NAME or --thread ID");
         }
         return request;
@@ -955,6 +992,7 @@ internal static class Program
             {
                 "thread_on" => "this thread is turned on",
                 "thread_off" => "this thread is turned off",
+                "thread_event_off" => $"{request.Events?.FirstOrDefault()} is turned off in this thread",
                 "project_on" => $"project {request.Project} is turned on",
                 "project_off" => $"project {request.Project} is turned off",
                 "mode_all" => "everything rings unless turned off",
@@ -966,7 +1004,11 @@ internal static class Program
         if (listRules)
         {
             foreach (var p in r.Projects) lines.Add($"  project {p.Key}: {(p.On ? "on" : "off")}");
-            foreach (var t in r.Threads) lines.Add($"  thread  {t.Label ?? t.Key} ({t.Agent}{(t.Project is { } tp ? ", " + tp : "")}): {(t.On ? "on" : "off")}");
+            foreach (var t in r.Threads)
+            {
+                var state = t.Events is { Count: > 0 } ev ? "off: " + string.Join(", ", ev) : t.On ? "on" : "off";
+                lines.Add($"  thread  {t.Label ?? t.Key} ({t.Agent}{(t.Project is { } tp ? ", " + tp : "")}): {state}{(t.By is { } by ? " (by " + by + ")" : "")}");
+            }
             if (r.Projects.Count == 0 && r.Threads.Count == 0) lines.Add("  no project or thread rules");
         }
         return string.Join(Environment.NewLine, lines);
@@ -1301,7 +1343,15 @@ internal static class Program
         if (BuildAlerts(new[] { "alerts", "--json" }, Codex, Git, null, cwd).State is not null) return false;
         if (BuildAlerts(new[] { "alerts", "--project", "api" }, Codex, Git, null, cwd) is not { State: null, Thread: null, Project: "api" }) return false;
         if (BuildAlerts(new[] { "alerts", "mode", "Selected" }, Nobody, Git, null, cwd).Mode != "selected") return false;
-        foreach (var bad in new[] { new[] { "alerts", "mode", "loud" }, new[] { "alerts", "maybe" }, new[] { "alerts", "on", "--thread", thread } })
+        // --events: a thread's hook events, with who set it; on, a project or a
+        // bad name is refused before anything reaches the daemon.
+        var summit = BuildAlerts(new[] { "alerts", "off", "--thread", thread, "--agent", "claude-code", "--events", "Stop, SubagentStop", "--by", "agent-summit", "--label", "plan" }, Nobody, Git, null, cwd);
+        if (summit is not { Target: "thread", State: "off", Agent: "claude-code", Thread: thread, By: "agent-summit", Label: "plan" }
+            || summit.Events is not ["Stop", "SubagentStop"]) return false;
+        if (BuildAlerts(new[] { "alerts", "reset", "--events", "Stop" }, Codex, Git, null, cwd) is not { Target: "thread", State: "reset", Events: ["Stop"] }) return false;
+        foreach (var bad in new[] { new[] { "alerts", "mode", "loud" }, new[] { "alerts", "maybe" }, new[] { "alerts", "on", "--thread", thread },
+                     new[] { "alerts", "on", "--events", "Stop" }, new[] { "alerts", "off", "--project", "api", "--events", "Stop" },
+                     new[] { "alerts", "off", "--events", "Stop now" }, new[] { "alerts", "off", "--events", "," } })
         {
             try { BuildAlerts(bad, Nobody, Git, null, cwd); return false; }
             catch (ArgumentException) { }

@@ -62,7 +62,9 @@ public static class PayloadMapper
                 Label = LabelFor(sourceId),
                 Session = e.SessionId,
                 Cwd = e.Cwd,
-                ThreadTitle = AgentIdentity.Clean(e.SessionTitle, AgentIdentity.MaxThreadTitle)
+                ThreadTitle = AgentIdentity.Clean(e.SessionTitle, AgentIdentity.MaxThreadTitle),
+                // What a thread's event rule matches (alerts --events).
+                Event = AgentIdentity.Clean(eventName, AgentIdentity.MaxEvent)
             }
         };
     }
@@ -536,6 +538,8 @@ public static class PayloadMapper
 
         // A hint is normalised, so `--source claude` is the same agent.
         if (FromHookEvent(new AgentHookEvent { HookEventName = "Stop" }, "Claude").Source?.Id != SourceClaude) return false;
+        // The event goes along, for a thread's event rule (alerts --events).
+        if (FromHookEvent(new AgentHookEvent { HookEventName = "SubagentStop" }, SourceClaude).Source?.Event != "SubagentStop") return false;
         // turn_id only appears on Codex hooks.
         if (InferSource(new AgentHookEvent { HookEventName = "Stop", TurnId = "t1" }) != SourceCodex) return false;
 

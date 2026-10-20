@@ -256,6 +256,32 @@ internal static class HttpSelfTest
             Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token, "{\"mode\":\"all\",\"target\":\"thread\",\"state\":\"reset\",\"agent\":\"claude-code\",\"thread\":\"s-77\"}", null);
             if (settings.Alerts.Mode != "all" || settings.Alerts.Threads.Count != 0) return false;
 
+            // A thread's event rule (alerts --events): its Stop goes quiet with
+            // its own reason, its permission prompt still rings; the list shows
+            // the events and who set them; on is refused; reset by events
+            // takes the rule; health says the daemon can do it.
+            var events = Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token,
+                "{\"target\":\"thread\",\"state\":\"off\",\"agent\":\"codex\",\"thread\":\"s-78\",\"events\":[\"Stop\",\"SubagentStop\"],\"by\":\"agent-summit\"}", null);
+            if (events.Status != 200 || !events.Body.Contains("\"events\":[\"Stop\",\"SubagentStop\"]", StringComparison.Ordinal)
+                || !events.Body.Contains("\"by\":\"agent-summit\"", StringComparison.Ordinal)) return false;
+            var turn = Send(server.Port, "POST /v1/notify HTTP/1.1", host, token,
+                "{\"title\":\"t\",\"tag\":\"selftest:scope4\",\"source\":{\"id\":\"codex\",\"session\":\"s-78\",\"event\":\"Stop\"}}", null);
+            if (!turn.Body.Contains("\"suppressedReason\":\"thread_event_off\"", StringComparison.Ordinal)) return false;
+            var permission = Send(server.Port, "POST /v1/notify HTTP/1.1", host, token,
+                "{\"title\":\"t\",\"level\":\"attention\",\"tag\":\"selftest:scope5\",\"source\":{\"id\":\"codex\",\"session\":\"s-78\",\"event\":\"PermissionRequest\"}}", null);
+            if (!permission.Body.Contains("\"accepted\":true", StringComparison.Ordinal)) return false;
+            if (Send(server.Port, "POST /v1/ack HTTP/1.1", host, token, "{\"all\":true}", null).Status != 200) return false;
+            var askedEvent = Send(server.Port, "GET /v1/alerts?agent=codex&thread=s-78&event=stop HTTP/1.1", host, token, null, null);
+            if (!askedEvent.Body.Contains("\"because\":\"thread_event_off\"", StringComparison.Ordinal)) return false;
+            if (Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token,
+                "{\"target\":\"thread\",\"state\":\"on\",\"agent\":\"codex\",\"thread\":\"s-78\",\"events\":[\"Stop\"]}", null).Status != 400) return false;
+            if (Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token,
+                "{\"target\":\"thread\",\"state\":\"off\",\"agent\":\"codex\",\"thread\":\"s-78\",\"events\":[\"Stop now\"]}", null).Status != 400) return false;
+            Send(server.Port, "POST /v1/alerts HTTP/1.1", host, token,
+                "{\"target\":\"thread\",\"state\":\"reset\",\"agent\":\"codex\",\"thread\":\"s-78\",\"events\":[\"Stop\",\"SubagentStop\"]}", null);
+            if (settings.Alerts.Threads.Count != 0) return false;
+            if (!Send(server.Port, "GET /v1/health HTTP/1.1", host, null, null, null).Body.Contains("\"features\":[\"alerts.events\"", StringComparison.Ordinal)) return false;
+
             // Clearing history needs the token, empties the store, and reports
             // how many entries went.
             if (Send(server.Port, "DELETE /v1/history HTTP/1.1", host, null, null, null).Status != 401) return false;

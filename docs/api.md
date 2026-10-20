@@ -210,31 +210,44 @@ Claude Code의 네이티브 `http` 훅이 보내는 원본 JSON을 그대로 받
 
 ## `GET /v1/alerts`, `POST /v1/alerts`
 
-어떤 프로젝트·스레드의 **에이전트 알림**이 울릴지(설정의 `alerts`). 판정은 **스레드 규칙 → 프로젝트 규칙 → 모드** 순이고, 수동 알림(`source.id` = `manual`)과 `critical`은 항상 울린다. 막힌 알림은 다른 억제처럼 **200**에 `suppressedReason`: `thread_off` | `project_off` | `not_selected`.
+어떤 프로젝트·스레드의 **에이전트 알림**이 울릴지(설정의 `alerts`). 판정은 **스레드 규칙 → 스레드 이벤트 규칙 → 프로젝트 규칙 → 모드** 순이고, 수동 알림(`source.id` = `manual`)과 `critical`은 항상 울린다. 막힌 알림은 다른 억제처럼 **200**에 `suppressedReason`: `thread_off` | `thread_event_off` | `project_off` | `not_selected`.
 
 ```json
 // POST: 모드 바꾸기와 규칙 하나 바꾸기를 함께 또는 따로. 아무것도 없으면 읽기만.
 { "mode": "selected" }                                         // all | selected
 { "target": "thread", "state": "off", "agent": "codex", "thread": "019a2b3c-..." }
 { "target": "project", "state": "on", "project": "shop" }       // state: on | off | reset
+{ "target": "thread", "state": "off", "agent": "codex", "thread": "019a2b3c-...",
+  "events": ["Stop", "SubagentStop"], "label": "plan", "by": "agent-summit" }
 ```
+
+**이벤트 규칙** (`events`, 1.11.0): 스레드 전체가 아니라 그 스레드의 **훅 이벤트 몇 개만** 끈다. 다른 도구가 턴마다 돌리는 대화에서 `Stop`/`SubagentStop`만 끄고 권한 요청(`PermissionRequest`, `Notification` `permission_prompt`)과 질문 창(`PreToolUse`/`PostToolUse`)은 그대로 울리게 할 때 쓴다.
+
+- 맞춰 보는 것은 훅이 만든 알림의 `source.event`(훅 이벤트 이름, `PayloadMapper`가 채운다)뿐이다. 에이전트가 `notipet send`로 직접 보낸 알림에는 이벤트가 없어서 이벤트 규칙에 걸리지 않는다.
+- `state`는 `off`(그 이벤트를 규칙에 더한다)나 `reset`(그 이벤트만 규칙에서 뺀다. 마지막 이벤트가 빠지면 규칙이 사라진다)만 된다. `on`은 400 — 스레드 전체를 켜려면 `events` 없이 `on`.
+- 한 스레드에 전체 규칙과 이벤트 규칙이 함께 있을 수 있고, **전체 규칙이 이긴다**(전체 `on`이면 `Stop`도 울리고, 전체 `off`면 권한 요청도 막힌다). `events` 없는 `reset`은 그 스레드의 규칙을 **둘 다** 지운다.
+- 이벤트 이름은 영문자·숫자·`_`·`-`, 대소문자 무시, 스레드당 16개까지. 잘못된 이름이나 프로젝트 규칙에 `events`를 주면 400.
+- `by`는 누가 설정했는지 목록에 보이는 이름이다(설정 창, 최근 알림 ⋯ 메뉴의 "다시 울리기").
+- **1.11.0보다 오래된 데몬은 `events`를 모르고 무시해서 스레드 전체를 꺼 버린다.** 먼저 `GET /v1/health`의 `features`에 `alerts.events`가 있는지 확인한다(CLI는 스스로 확인한다).
 
 `target`을 빼면 `thread`가 있으면 스레드, 없으면 프로젝트. 스레드 규칙에는 `agent`와 `thread`가 필요하다(`label`·`project`는 목록 표시용이며, 빠지면 최근 알림에서 채운다). 잘못된 값은 `400 validation_failed`.
 
 ```
 GET /v1/alerts?agent=codex&thread=019a2b3c-...&project=shop     // 이 스레드는 울리나
+GET /v1/alerts?agent=codex&thread=019a2b3c-...&event=Stop       // 이 스레드의 Stop은 울리나
 ```
 
 ```json
 {
   "ok": true, "mode": "selected", "changed": false,
   "projects": [ { "key": "shop", "on": true, "since": "..." } ],
-  "threads":  [ { "key": "019a2b3c-...", "agent": "codex", "on": false, "label": "checkout", "project": "shop", "since": "..." } ],
+  "threads":  [ { "key": "019a2b3c-...", "agent": "codex", "on": false, "label": "checkout", "project": "shop", "since": "..." },
+                { "key": "019a2b3c-...", "agent": "codex", "on": false, "events": ["Stop", "SubagentStop"], "by": "agent-summit", "since": "..." } ],
   "rings": false, "because": "thread_off"
 }
 ```
 
-`because`: `thread_on` | `thread_off` | `project_on` | `project_off` | `mode_all` | `not_selected`. 음소거처럼 API로 바꿀 수 있다 — 사용자 자신의 에이전트를 조용하게 또는 시끄럽게 할 뿐이다.
+`because`: `thread_on` | `thread_off` | `thread_event_off`(읽을 때 `event`를 준 경우) | `project_on` | `project_off` | `mode_all` | `not_selected`. 음소거처럼 API로 바꿀 수 있다 — 사용자 자신의 에이전트를 조용하게 또는 시끄럽게 할 뿐이다.
 
 ## `POST /v1/presence`
 
@@ -269,10 +282,10 @@ GET /v1/alerts?agent=codex&thread=019a2b3c-...&project=shop     // 이 스레드
 미인증:
 
 ```json
-{ "ok": true, "name": "notipet", "version": "1.0.0", "instanceId": "4c1e..." }
+{ "ok": true, "name": "notipet", "version": "1.11.0", "instanceId": "4c1e...", "features": ["alerts.events"] }
 ```
 
-CLI가 stale `runtime.json`을 판별하기에는 충분하고, 사용자가 무엇을 알림받는지는 새지 않는다.
+CLI가 stale `runtime.json`을 판별하기에는 충분하고, 사용자가 무엇을 알림받는지는 새지 않는다. `features`는 오래된 데몬이 모르는 필드를 무시하는 기능의 목록이다(`alerts.events`: `/v1/alerts`의 `events`). 없으면 그 기능이 없는 데몬이다.
 
 인증하면 `pid`, `port`, `startedAt`, `uptimeSec`, `muted`, `atDesk`, `language`, `historyCount`, `quietHoursActive`, `presence`, `activeAlarms`, `soundEngine`, `warnings`가 추가된다.
 

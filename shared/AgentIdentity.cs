@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Notipet.Shared;
 
@@ -15,6 +17,7 @@ public static class AgentIdentity
     public const int MaxThreadId = 128;
     public const int MaxThreadTitle = 120;
     public const int MaxClient = 40;
+    public const int MaxEvent = 64;
 
     // One spelling per agent. An LLM writing `--source claude` must land in the
     // same rate-limit bucket, settings entry and colour as the hooks do.
@@ -59,6 +62,23 @@ public static class AgentIdentity
     }
 
     // Display text on one line, bounded. Null when there is nothing to show.
+    // A hook event name as a rule names it: Stop, SubagentStop, PermissionRequest.
+    public static bool IsEventName(string? value) =>
+        !string.IsNullOrEmpty(value) && value.Length <= MaxEvent
+        && value.All(c => c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_' or '-');
+
+    // Trimmed, valid names (IsEventName), once each ignoring case.
+    public static List<string> CleanEvents(IEnumerable<string?>? events)
+    {
+        var kept = new List<string>();
+        foreach (var e in events ?? Array.Empty<string?>())
+        {
+            var name = e?.Trim();
+            if (IsEventName(name) && !kept.Contains(name!, StringComparer.OrdinalIgnoreCase)) kept.Add(name!);
+        }
+        return kept;
+    }
+
     public static string? Clean(string? value, int max)
     {
         var flat = PayloadMapper.Summarize(value, max);

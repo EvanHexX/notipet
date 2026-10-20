@@ -618,13 +618,21 @@ internal sealed class SettingsWindow
         foreach (var entry in scope.Threads.OrderByDescending(t => t.Since ?? DateTimeOffset.MinValue).ToList())
         {
             var title = entry.Label ?? Loc.T($"Thread {Short(entry.Key)}", $"스레드 {Short(entry.Key)}");
+            // An event rule (alerts --events) says which events and who turned
+            // them off; it has no switch - removing it rings them again.
+            var eventRule = AlertScope.IsEventRule(entry);
+            var events = eventRule ? string.Join(", ", entry.Events!) : null;
             var details = string.Join(" · ", new[]
             {
+                eventRule ? Loc.T($"Off: {events}", $"끔: {events}") : null,
+                entry.By is { } by ? Loc.T($"set by {by}", $"{by} 설정") : null,
                 entry.Project,
                 entry.Agent is { } a ? PayloadMapper.LabelFor(a) : null,
                 entry.Since is { } since ? since.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : null
             }.Where(s => !string.IsNullOrWhiteSpace(s)));
-            page.Children.Add(Fluent.SettingCard(Glyphs.Thread, title, details, RuleControls(entry, () => scope.Threads.Remove(entry))));
+            page.Children.Add(Fluent.SettingCard(eventRule ? Glyphs.BellOff : Glyphs.Thread, title, details,
+                eventRule ? RemoveButton(() => scope.Threads.Remove(entry), Loc.T("Ring these again", "다시 울리기"))
+                          : RuleControls(entry, () => scope.Threads.Remove(entry))));
         }
     }
 
@@ -633,12 +641,15 @@ internal sealed class SettingsWindow
     // A rule's on/off switch and its remove button (back to the mode).
     private UIElement RuleControls(AlertScopeEntry entry, Action remove) =>
         Row(Fluent.Toggle(entry.On, on => { entry.On = on; entry.Since = DateTimeOffset.Now; Changed(); }),
-            Fluent.IconButton(Glyphs.Cancel, Loc.T("Remove", "삭제"), () =>
-            {
-                remove();
-                Changed();
-                ShowPage();
-            }));
+            RemoveButton(remove, Loc.T("Remove", "삭제")));
+
+    private UIElement RemoveButton(Action remove, string label) =>
+        Fluent.IconButton(Glyphs.Cancel, label, () =>
+        {
+            remove();
+            Changed();
+            ShowPage();
+        });
 
     private void BuildQuiet(StackPanel page)
     {

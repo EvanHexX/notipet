@@ -30,6 +30,10 @@ public sealed class SourceInfo
     [JsonPropertyName("hostSession")] public string? HostSession { get; set; }
     // Which front end ran the agent: claude-desktop, cli, codex-tui, ...
     [JsonPropertyName("client")] public string? Client { get; set; }
+    // The hook event that raised it (Stop, PermissionRequest, Notification...).
+    // Set by PayloadMapper only; a thread's event rule (alerts --events)
+    // matches on it, and a send without it is never caught by one.
+    [JsonPropertyName("event")] public string? Event { get; set; }
 }
 
 public sealed class SoundSpec
@@ -118,6 +122,13 @@ public sealed class AlertsRequest
     [JsonPropertyName("project")] public string? Project { get; set; }
     // The thread's name, for the settings list.
     [JsonPropertyName("label")] public string? Label { get; set; }
+    // Thread rules only: just these hook events (Stop, SubagentStop...), not
+    // the whole thread. off adds them to the thread's event rule, reset takes
+    // them out of it; on is not allowed. A daemon without the feature
+    // (health.features lacks "alerts.events") ignores the field - check first.
+    [JsonPropertyName("events")] public List<string>? Events { get; set; }
+    // Who set the rule ("agent-summit"), shown in the settings list.
+    [JsonPropertyName("by")] public string? By { get; set; }
 }
 
 public sealed class AlertRuleDto
@@ -128,6 +139,9 @@ public sealed class AlertRuleDto
     [JsonPropertyName("label")] public string? Label { get; set; }
     [JsonPropertyName("project")] public string? Project { get; set; }
     [JsonPropertyName("since")] public string? Since { get; set; }
+    // A thread's event rule: only these hook events are off. Null: the whole thread.
+    [JsonPropertyName("events")] public List<string>? Events { get; set; }
+    [JsonPropertyName("by")] public string? By { get; set; }
 }
 
 public sealed class AlertsResponse
@@ -138,7 +152,8 @@ public sealed class AlertsResponse
     [JsonPropertyName("projects")] public List<AlertRuleDto> Projects { get; set; } = new();
     [JsonPropertyName("threads")] public List<AlertRuleDto> Threads { get; set; } = new();
     // For the thread/project the request named: does it ring, and why
-    // (thread_on | thread_off | project_on | project_off | mode_all | not_selected).
+    // (thread_on | thread_off | thread_event_off | project_on | project_off |
+    // mode_all | not_selected). thread_event_off only when the read named an event.
     [JsonPropertyName("rings")] public bool? Rings { get; set; }
     [JsonPropertyName("because")] public string? Because { get; set; }
 }
@@ -253,6 +268,9 @@ public sealed class HealthResponse
     [JsonPropertyName("name")] public string Name { get; set; } = "notipet";
     [JsonPropertyName("version")] public string Version { get; set; } = "";
     [JsonPropertyName("instanceId")] public string InstanceId { get; set; } = "";
+    // What this daemon understands beyond the 1.x baseline (NotipetFeatures),
+    // so a caller can tell before sending a field an older one would ignore.
+    [JsonPropertyName("features")] public List<string>? Features { get; set; }
     // Everything below is only populated for an authenticated caller: an
     // unauthenticated probe must not leak state.
     [JsonPropertyName("pid")] public int? Pid { get; set; }
@@ -321,4 +339,27 @@ public sealed class RuntimeInfo
     [JsonPropertyName("version")] public string Version { get; set; } = "";
     [JsonPropertyName("exePath")] public string ExePath { get; set; } = "";
     [JsonPropertyName("startedAtUtc")] public string StartedAtUtc { get; set; } = "";
+}
+
+// Capabilities a caller may need to check before using them: an older daemon
+// or CLI ignores a field or option it does not know, and for `alerts --events`
+// that would silence the whole thread instead of a few events. Listed by
+// GET /v1/health (features) and `notipet version --json`.
+public static class NotipetFeatures
+{
+    // Thread rules scoped to hook events: AlertsRequest.events / `alerts --events`.
+    public const string AlertEvents = "alerts.events";
+
+    public static List<string> All() => new() { AlertEvents };
+}
+
+// `notipet version --json`. features: what this CLI and the running daemon
+// both support - the CLI's own when no daemon is running (one it starts is
+// the installed one, the same version).
+public sealed class VersionResponse
+{
+    [JsonPropertyName("cli")] public string Cli { get; set; } = "";
+    [JsonPropertyName("daemon")] public string? Daemon { get; set; }
+    [JsonPropertyName("daemonPid")] public int? DaemonPid { get; set; }
+    [JsonPropertyName("features")] public List<string> Features { get; set; } = new();
 }
