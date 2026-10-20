@@ -12,8 +12,12 @@ using Notipet.Shared;
 
 namespace Notipet.Cli;
 
-internal sealed record Daemon(RuntimeInfo Info)
+// Features: what the daemon said it can do (health.features); empty for one
+// older than the list.
+internal sealed record Daemon(RuntimeInfo Info, IReadOnlyList<string>? Features = null)
 {
+    public bool Supports(string feature) => Features?.Contains(feature) == true;
+
     public string BaseUrl => Info.BaseUrl;
 }
 
@@ -97,7 +101,7 @@ internal static class RuntimeDiscovery
         // and something else now holds the port.
         if (!string.Equals(health.InstanceId, info.InstanceId, StringComparison.Ordinal)) return null;
 
-        return new Daemon(info);
+        return new Daemon(info, health.Features ?? new List<string>());
     }
 
     // Starting the daemon from a hook is convenient, and the alternative -

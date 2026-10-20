@@ -56,7 +56,11 @@ internal static class Help
         new("test", "notipet test [--level L]", "Send a test notification (default: attention).", ""),
         new("status", "notipet status [--json]", "Daemon state: muted, at desk, quiet hours, alarms, sound engine.", ""),
         new("ping", "notipet ping", "One line: is the daemon up, which port, which pid.", ""),
-        new("version", "notipet version", "CLI and daemon versions.", ""),
+        new("version", "notipet version [--json]", "CLI and daemon versions.",
+            """
+              --json   {"cli","daemon","daemonPid","features"}; features lists what both
+                       this CLI and the running daemon support (alerts.events: alerts --events)
+            """),
         new("doctor", "notipet doctor",
             "Check everything that matters when an alert did not arrive.",
             "Checks the daemon, the sound engine, mute/quiet hours, and whether Claude Code / Codex hooks and the skill are installed."),
@@ -81,7 +85,7 @@ internal static class Help
               notipet resolve
               notipet resolve --tag "api:needs-input"
             """),
-        new("alerts", "notipet alerts [on | off | reset | mode all|selected] [--project [NAME] | --thread ID]",
+        new("alerts", "notipet alerts [on | off | reset | mode all|selected] [--project [NAME] | --thread ID] [--events E,F]",
             "Which projects and threads ring. Without arguments: this thread or project, and the rules.",
             """
               on | off          this thread (inside Claude Code / Codex), else this project
@@ -90,6 +94,13 @@ internal static class Help
               --thread ID       another thread (with --agent codex|claude-code)
               mode all          everything rings, except what is turned off (default)
               mode selected     only what is turned on rings
+              --events E,F      off / reset only these hook events of the thread
+                                (Stop,SubagentStop); its permission prompts and
+                                questions still ring. Check `version --json` for
+                                alerts.events first: an older notipet ignores it
+              --label NAME      the thread's name in the list
+              --by NAME         who set the rule, shown in the list
+              --json            the daemon's answer as JSON
               Manual sends and critical alerts always ring.
             """),
         new("mute", "notipet mute [30m | 2h | off]", "Mute for a while, until unmuted, or turn mute off.", ""),

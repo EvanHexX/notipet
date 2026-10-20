@@ -252,6 +252,12 @@ internal sealed class AlertScopeEntry
     public string? Label { get; set; }
     public string? Project { get; set; }
     public DateTimeOffset? Since { get; set; }
+    // Threads only, always off: just these hook events (Stop, SubagentStop),
+    // not the whole thread. A thread can have one whole rule and one event
+    // rule; the whole rule wins.
+    public List<string>? Events { get; set; }
+    // Who set it, for the list ("agent-summit"); null: the user.
+    public string? By { get; set; }
 }
 
 internal sealed class AppSettings

@@ -559,6 +559,16 @@ internal sealed class HistoryWindow
             menu.Items.Add(MenuItem(rings ? Glyphs.BellOff : Glyphs.Bell,
                 rings ? Loc.T("Turn off alerts for this thread", "이 스레드 알림 끄기") : Loc.T("Turn on alerts for this thread", "이 스레드 알림 켜기"),
                 () => { _host.SetThreadAlerts(entry, !rings); Refresh(); }));
+            // Some of its events turned off (alerts --events, e.g. by Agent
+            // Summit): say which and by whom, and offer to ring them again.
+            if (AlertScope.FindThreadEvents(scope, e.SourceId, e.SourceSession) is { } eventRule)
+            {
+                var events = string.Join(", ", eventRule.Events!);
+                var by = eventRule.By is { } who ? $" ({who})" : "";
+                menu.Items.Add(MenuItem(Glyphs.Bell,
+                    Loc.T($"Ring {events} again{by}", $"{events} 다시 울리기{by}"),
+                    () => { _host.ClearThreadEventAlerts(entry); Refresh(); }));
+            }
             added = true;
         }
 

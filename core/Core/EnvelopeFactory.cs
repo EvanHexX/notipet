@@ -124,6 +124,7 @@ internal static class EnvelopeFactory
             ThreadTitle = threadTitle,
             HostSession = hostSession,
             Client = AgentIdentity.Clean(source?.Client, AgentIdentity.MaxClient),
+            SourceEvent = AgentIdentity.IsEventName(source?.Event?.Trim()) ? source!.Event!.Trim() : null,
             OpenUri = OpenLinks.Accept(request.Open, allowedSchemes, warnings),
             Sound = request.Sound,
             RequestedChannels = channels,

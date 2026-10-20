@@ -33,6 +33,9 @@ internal sealed class NotificationEnvelope
     // Claude Desktop's local_ session id, validated; the claude:// link key.
     public string? HostSession { get; init; }
     public string? Client { get; init; }
+    // The hook event that raised it (Stop, PermissionRequest...); null for a
+    // send. A thread's event rule (AlertScope) matches on it.
+    public string? SourceEvent { get; init; }
     // What a click on the card opens instead of the thread; already checked
     // against OpenLinks when the notification arrived.
     public string? OpenUri { get; init; }

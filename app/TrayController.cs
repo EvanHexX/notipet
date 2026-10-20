@@ -548,6 +548,13 @@ internal sealed class TrayController : IDisposable, INotipetHost
         if (AlertScope.SetThread(_settings.Alerts, e.SourceId, e.SourceSession, on, label, e.Project, DateTimeOffset.Now)) AlertScopeSaved();
     }
 
+    public void ClearThreadEventAlerts(HistoryEntry entry)
+    {
+        var e = entry.Envelope;
+        if (AlertScope.FindThreadEvents(_settings.Alerts, e.SourceId, e.SourceSession) is not { } rule) return;
+        if (AlertScope.SetThreadEvents(_settings.Alerts, rule.Agent ?? e.SourceId, rule.Key, rule.Events!.ToList(), off: false, null, null, DateTimeOffset.Now)) AlertScopeSaved();
+    }
+
     public void SetProjectAlerts(string project, bool? on)
     {
         if (string.IsNullOrWhiteSpace(project)) return;

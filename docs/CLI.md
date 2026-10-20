@@ -138,7 +138,13 @@ sound        mediaplayer (ok)
 
 ### `version`
 
-CLI 버전과 실행 중인 데몬 버전.
+CLI 버전과 실행 중인 데몬 버전. `--json`이면 기계가 읽을 수 있게:
+
+```json
+{ "cli": "1.11.0", "daemon": "1.11.0", "daemonPid": 4120, "features": ["alerts.events"] }
+```
+
+`features`는 이 CLI와 실행 중인 데몬이 **둘 다** 지원하는 기능이다(데몬이 없으면 CLI 것 — CLI가 띄우는 데몬은 같이 설치된 같은 버전이다). 다른 도구는 새 옵션을 쓰기 전에 이걸 본다: 1.11.0보다 오래된 CLI는 `--json`을 무시하고 두 줄짜리 텍스트를 내므로, JSON으로 읽히지 않으면 기능이 없는 것으로 친다.
 
 ### `doctor` — "소리가 안 났다"면 제일 먼저
 
@@ -205,6 +211,7 @@ notipet alerts                                   # 이 스레드(또는 프로�
 notipet alerts on | off | reset                  # 에이전트 안에서: 이 스레드. 밖에서: 이 프로젝트
 notipet alerts on | off | reset --project [NAME] # 이 프로젝트(또는 NAME)
 notipet alerts on | off | reset --thread ID --agent codex|claude-code
+notipet alerts off | reset --thread ID --agent codex|claude-code --events Stop,SubagentStop [--label 이름] [--by agent-summit] [--json]
 notipet alerts mode all | selected               # 전부(끈 것만 빼고) | 켠 것만
 ```
 
@@ -215,7 +222,9 @@ mode: selected (only what is turned on)
 this thread: rings - this thread is turned on
 ```
 
-막힌 알림은 기록에 `thread_off` / `project_off` / `not_selected`로 남는다(`notipet history`). 설정 창 "프로젝트·스레드"와 최근 알림 카드의 ⋯ 메뉴에서도 바꿀 수 있다.
+`--events`는 스레드 전체가 아니라 그 스레드의 훅 이벤트 몇 개만 끄고(`off`) 되돌린다(`reset`). 권한 요청·질문 창·실패 알림은 그대로 울리고, `on`과 `--project`에는 쓸 수 없다. 같은 스레드의 전체 규칙이 이기고, `--events` 없는 `reset`은 둘 다 지운다. 실행 중인 데몬이 이 기능을 모르면(1.11.0 이전) 아무것도 바꾸지 않고 1로 끝난다. 자세한 규칙은 [api.md](api.md#get-v1alerts-post-v1alerts). 종료 코드는 다른 `alerts`와 같다(잘못된 옵션·데몬 오류면 1).
+
+막힌 알림은 기록에 `thread_off` / `thread_event_off` / `project_off` / `not_selected`로 남는다(`notipet history`). 설정 창 "프로젝트·스레드"와 최근 알림 카드의 ⋯ 메뉴에서도 바꿀 수 있다.
 
 ---
 

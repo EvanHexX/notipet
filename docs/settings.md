@@ -126,7 +126,9 @@ exe 옆에 `settings.json`이 있으면 그쪽을 우선한다(포터블 모드)
       { "key": "shop", "on": false, "since": "2026-10-11T09:00:00+09:00" }
     ],
     "threads": [                     // 스레드 id별 규칙. 프로젝트 규칙보다 우선. 최대 200개(오래된 것부터 빠짐)
-      { "key": "019a2b3c-...", "agent": "codex", "on": true, "label": "checkout", "project": "shop", "since": "..." }
+      { "key": "019a2b3c-...", "agent": "codex", "on": true, "label": "checkout", "project": "shop", "since": "..." },
+      // 이벤트 규칙: 그 스레드의 이 훅 이벤트만 끈다(항상 off). 전체 규칙이 이긴다. by: 누가 설정했는지
+      { "key": "019a2b3c-...", "agent": "codex", "on": false, "events": ["Stop", "SubagentStop"], "by": "agent-summit", "since": "..." }
     ]
   },                                 // 수동 알림과 critical은 항상 울린다. API·CLI(`notipet alerts`)로도 바꿀 수 있다
 
