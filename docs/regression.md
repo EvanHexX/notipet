@@ -43,6 +43,13 @@
 
 ## 기록된 문제
 
+### 자동 검토 중인 Codex 스레드에서 "Permission needed"가 울렸다 (1.11.2)
+
+- **증상**: Codex 스레드가 권한 요청을 사용자에게 묻지 않고 몇 초 만에 스스로 승인했는데, notipet은 "Permission needed" 알림을 울렸다(병렬 명령 둘이면 카드 둘).
+- **원인**: 데스크톱 앱에서 그 스레드의 검토자를 자동 검토(`approvals_reviewer = "auto_review"`)로 켜 두었다. 앱은 이 값을 스레드 설정에만 두고 `config.toml`(최상위 `approvals_reviewer = "user"`)은 건드리지 않는다. CLI는 config.toml만 읽어서 사용자에게 묻는 것으로 판단했다.
+- **해결**: PermissionRequest가 오면 먼저 훅 입력의 `transcript_path`(그 스레드의 rollout) 끝 512KB에서 마지막으로 기록된 `approvals_reviewer`를 읽는다(`CodexHooks.ThreadReviewer`). 턴마다 다시 기록되므로 끝부분이면 충분하다. 없을 때만 config.toml을 본다.
+- **확인**: 자체 테스트가 큰 rollout의 끝에서 값을 찾는 것, 스레드 값이 config.toml보다 우선하는 것을 고정한다. 실제 자동 검토 스레드의 rollout으로 훅 입력을 넣으면 아무것도 보내지 않는다.
+
 ### 1.11.1 리뷰에서 잡은 것들
 
 1.11.0 뒤의 코드 리뷰에서 나와 코드로 확인한 것. 맨 끝의 `ttlSec` 말고는 1.11.1에서 고쳤다.
