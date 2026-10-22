@@ -249,7 +249,7 @@ internal static class Program
             }
 
             var hook = JsonSerializer.Deserialize(json, NotipetJson.Compact.AgentHookEvent);
-            return hook is null ? null : PayloadMapper.PlanForHookEvent(hook, sourceHint, CodexHooks.ApprovalsAutoReviewed);
+            return hook is null ? null : PayloadMapper.PlanForHookEvent(hook, sourceHint, () => CodexHooks.ApprovalsAutoReviewedIn(hook.TranscriptPath));
         }
         catch (JsonException)
         {
@@ -259,7 +259,7 @@ internal static class Program
             // its caller's Codex fallback.
             if (kebab) return null;
             var lenient = LenientHookEvent(json);
-            return lenient is null ? null : PayloadMapper.PlanForHookEvent(lenient, sourceHint, CodexHooks.ApprovalsAutoReviewed);
+            return lenient is null ? null : PayloadMapper.PlanForHookEvent(lenient, sourceHint, () => CodexHooks.ApprovalsAutoReviewedIn(lenient.TranscriptPath));
         }
     }
 

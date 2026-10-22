@@ -189,7 +189,7 @@ notipet install-hooks --codex --write
 | 훅 | 하는 일 |
 |---|---|
 | `[[hooks.Stop]]` | 턴 완료 알림. 그 스레드의 승인 대기 알람을 먼저 끈다 |
-| `[[hooks.PermissionRequest]]` | 승인 대기 알림. 단, config.toml의 `approvals_reviewer`가 `user`가 아닌 값이면 울리지 않는다 — 그때는 Codex가 스스로 검토한다 |
+| `[[hooks.PermissionRequest]]` | 승인 대기 알림. 단, 그 스레드의 검토자(`approvals_reviewer`, 앱에서 스레드마다 바꾸는 자동 검토 포함 — 없으면 config.toml)가 `user`가 아니면 울리지 않는다 — 그때는 Codex가 스스로 검토한다 |
 | `[[hooks.UserPromptSubmit]]` | 알림 없음. 지난 턴의 "완료"를 끄고, 입력한 답이면 `--until-reply` 질문과 질문 창 알람을 끝낸다 |
 | `[[hooks.PostToolUse]]` `^request_user_input$` | 알림 없음. 질문 창에 답하면 그 알람을 끈다 |
 | `[[hooks.PostToolUse]]` `^request_user_input_async$` | 질문 창 알림(질문 내용으로, 답할 때까지) |

@@ -156,7 +156,7 @@
 
 CLI를 거칠 때와 다른 점:
 
-- `/hooks/codex`는 Codex `config.toml`의 `approvals_reviewer`를 읽지 않는다. 검토자가 켜져 있어 사용자에게 묻지 않는 `PermissionRequest`도 울린다. CLI 훅은 이를 확인하고 아무것도 하지 않는다.
+- `/hooks/codex`는 그 스레드나 Codex `config.toml`의 `approvals_reviewer`를 읽지 않는다. 검토자가 켜져 있어 사용자에게 묻지 않는 `PermissionRequest`도 울린다. CLI 훅은 이를 확인하고 아무것도 하지 않는다.
 - 본문은 엄격하게 읽는다. 필드 타입이 바뀐 페이로드(문자열 자리에 객체·배열)는 `400 invalid_json`이다. CLI는 문자열 필드만 골라 읽고 그대로 처리한다(1.11.1).
 
 ```json

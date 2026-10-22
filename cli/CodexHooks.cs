@@ -140,10 +140,16 @@ internal static class CodexHooks
     // user (`approvals_reviewer` other than "user", at the top of config.toml
     // or in the active `profile`). Then a PermissionRequest hook is not a
     // moment the user is needed (PayloadMapper.PlanForHookEvent). Read only
-    // when such a hook arrives. A thread whose reviewer was changed in the app
-    // without touching config.toml is not seen.
-    public static bool ApprovalsAutoReviewed()
+    // when such a hook arrives.
+    //
+    // The thread's own setting comes first: the desktop app sets the reviewer
+    // per thread (auto_review) without touching config.toml, and records it in
+    // the thread's rollout (transcript_path) with every turn. A thread on
+    // auto review rang "Permission needed" for requests Codex approved by
+    // itself seconds later, while config.toml said "user".
+    public static bool ApprovalsAutoReviewedIn(string? transcriptPath)
     {
+        if (ThreadReviewer(transcriptPath) is { } reviewer) return !reviewer.Equals("user", StringComparison.OrdinalIgnoreCase);
         try
         {
             var path = Path.Combine(CodexHome(), "config.toml");
@@ -153,6 +159,38 @@ internal static class CodexHooks
         {
             return false;
         }
+    }
+
+    // The last "approvals_reviewer" the rollout recorded, read from its tail
+    // only: a long thread's file runs to tens of megabytes, and the setting is
+    // written again with every turn. Null when there is no file or no mention.
+    public static string? ThreadReviewer(string? transcriptPath)
+    {
+        const int Tail = 512 * 1024;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(transcriptPath) || !File.Exists(transcriptPath)) return null;
+            using var stream = new FileStream(transcriptPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var start = Math.Max(0, stream.Length - Tail);
+            stream.Seek(start, SeekOrigin.Begin);
+            var buffer = new byte[stream.Length - start];
+            stream.ReadExactly(buffer);
+            return LastReviewer(Encoding.UTF8.GetString(buffer));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    internal static string? LastReviewer(string text)
+    {
+        const string Key = "\"approvals_reviewer\":\"";
+        var at = text.LastIndexOf(Key, StringComparison.Ordinal);
+        if (at < 0) return null;
+        var from = at + Key.Length;
+        var end = text.IndexOf('"', from);
+        return end > from ? text[from..end] : null;
     }
 
     public static bool ApprovalsAutoReviewed(string toml)
@@ -552,6 +590,21 @@ internal static class CodexHooks
         // From another marketplace too, and only the tables that are on.
         if (EnabledPluginMarketplaces("[plugins.\"notipet@openai-curated\"]\n[plugins.\"notipet@notipet\"]\nenabled = false\n") is not ["openai-curated"]) return false;
         if (VersionOf("1.12.0-rc.1") != new Version(1, 12, 0) || VersionOf("latest") != new Version(0, 0)) return false;
+        // The thread's own reviewer, as its rollout last recorded it, wins over
+        // config.toml (the app sets it per thread).
+        if (LastReviewer("{\"approvals_reviewer\":\"user\"}\n{\"thread_settings\":{\"approvals_reviewer\":\"auto_review\"}}") != "auto_review" || LastReviewer("{}") is not null) return false;
+        var rollout = Path.Combine(Path.GetTempPath(), "notipet-rollout-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        try
+        {
+            File.WriteAllText(rollout, new string('x', 600 * 1024) + "\n{\"approval_policy\":\"on-request\",\"approvals_reviewer\":\"auto_review\"}\n");
+            if (ThreadReviewer(rollout) != "auto_review" || !ApprovalsAutoReviewedIn(rollout)) return false;
+            File.WriteAllText(rollout, "{\"approvals_reviewer\":\"user\"}\n");
+            if (ApprovalsAutoReviewedIn(rollout) || ThreadReviewer(rollout + ".missing") is not null) return false;
+        }
+        finally
+        {
+            try { File.Delete(rollout); } catch { }
+        }
         // A comment after the table header does not hide the profile.
         if (ApprovalsAutoReviewed("approvals_reviewer = \"guardian_subagent\"\nprofile = \"careful\"\n[profiles.careful] # strict\napprovals_reviewer = \"user\"\n")) return false;
         // A block from before 1.9.0 lacks the question-box hooks; this one has them.
