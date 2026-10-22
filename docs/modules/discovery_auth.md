@@ -79,7 +79,9 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
 토큰이 실제로 막는 것은 두 가지고, 둘 다 현실적인 위협이다:
 
 1. **브라우저발 CSRF / DNS 리바인딩.** 방문한 웹페이지가 `fetch('http://127.0.0.1:5523/v1/notify', {method:'POST'})`를 할 수 있다. 토큰이 없으면 그게 통한다.
-2. **같은 머신의 다른 사용자 계정 / 저무결성 프로세스.** 데이터 디렉터리를 현재 사용자 SID만 허용하는 명시적 DACL로 만드는 이유다.
+2. **같은 머신의 다른 사용자 계정.** 루프백 포트는 모든 계정에 열려 있지만 토큰은 `runtime.json`에만 있다. `%LOCALAPPDATA%`의 상속 권한이 이미 그 사용자(와 SYSTEM, Administrators)만 접근하게 하므로 다른 일반 계정은 그 파일을 못 읽는다. 데이터 디렉터리를 새로 만들 때는 현재 사용자 SID만 허용하는 명시적 DACL도 걸지만, 늘 걸리는 것은 아니다(Known Problems).
+
+막지 **못하는** 것: 같은 사용자로 도는 프로세스는 무결성 수준이 낮아도 토큰을 읽는다. Windows 무결성 수준은 기본적으로 위로 쓰기만 막고 읽기는 막지 않으며, DACL은 사용자 SID에 권한을 준다.
 
 ### 적용되는 검사
 
@@ -103,7 +105,8 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
 
 ### 그 외
 
-- 미인증 `/v1/health`는 `{ok, name, version, instanceId}`만 준다. CLI가 stale 파일을 판별하기엔 충분하고, 사용자가 무엇을 알림받는지는 새지 않는다.
+- 미인증 `/v1/health`는 `{ok, name, version, instanceId, features}`만 준다. CLI가 stale 파일을 판별하기엔 충분하고, 사용자가 무엇을 알림받는지는 새지 않는다. `features`(1.11.0)는 이 빌드가 할 수 있는 것(`alerts.events`)이지 사용자의 상태가 아니다.
+- 토큰을 끄는 설정은 없다. 토큰은 시작할 때마다 새로 생기고 `runtime.json`에만 있으므로, 설정 파일에 고정해 적는 클라이언트(Claude Code의 `http` 훅)는 이 API를 쓸 수 없다.
 - `Local\` 뮤텍스는 **로그온 세션 범위**다. RDP + 콘솔이 동시에 붙으면 데몬이 둘 뜬다. 그건 올바른 동작이지만 `%LOCALAPPDATA%`를 공유하므로 `runtime-{sessionId}.json`을 함께 쓰고, CLI는 자기 세션 파일을 우선한다.
 - 포트 충돌로 **시작 실패하지 않는다.** 고정 포트가 점유되면 `port`~`port+9` → 임의 포트 순으로 떨어지고 경고를 남긴다. 조용히 안 뜨는 알림 데몬이 최악이다.
 
@@ -118,6 +121,7 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
 ## Known Problems
 
 - **토큰이 평문 파일에 있다.** 같은 사용자 루프백 IPC의 본질적 한계이고, 완화책은 위 검사들과 이 문서다.
+- **사용자 전용 DACL은 폴더가 없을 때 만들면서만 건다**(`Paths.EnsureDataDir`는 폴더가 있으면 그냥 돌아간다). 설치판에서는 설치 훅(`Installation.OnInstalled`)이 `daemon.log`를 쓰면서 폴더를 먼저 만들므로 한 번도 걸리지 않는다. 예전 버전이 만든 폴더도 그대로다. 그때는 상속된 `%LOCALAPPDATA%` 권한(그 사용자, SYSTEM, Administrators)이 남는다. 다른 일반 계정은 그것으로도 막히므로 실제 차이는 Administrators와 SYSTEM뿐이고, 둘은 DACL이 있어도 (소유권을 가져와서라도) 읽을 방법이 있다.
 - 다중 세션 동작을 실제 RDP로 검증하지 않았다.
 - 패키지 앱(Claude 데스크톱)의 훅이 데몬을 띄우면 그 데몬은 패키지 안에서 시작한다. 그래픽 재시작처럼 그런 데몬이 다시 띄운 데몬도 마찬가지다. 1.8.2부터는 시작할 때와 30초 점검 때 자기 pid의 사본을 찾으면 explorer로 패키지 밖에서 다시 시작한다. 그래서 길어야 30초 남짓, 보통은 시작한 그 초에만 다른 앱이 데몬을 못 찾는다. 그 사이의 알림은 잃을 수 있다. "Windows 시작 시 실행"을 켜 두면 처음부터 밖에서 뜬다.
 - 토큰 회전 경로가 아직 없다 (2단계).
@@ -127,7 +131,7 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
 
 - 작업 관리자로 강제 종료한 뒤 `notipet ping --no-launch`가 `stale runtime.json, pid N`을 보고해야 한다. `--no-launch` 없이는 새 인스턴스를 띄워야 한다.
 - 유효한 토큰 + `Origin: http://evil.test` → **401**. 이게 깨지면 브라우저 CSRF 방어가 사라진 것이다. `HttpSelfTest`가 고정한다.
-- 미인증 `/v1/health` 응답에 `soundEngine`이 들어가면 안 된다.
+- 미인증 `/v1/health` 응답은 `ok`, `name`, `version`, `instanceId`, `features`뿐이다. `soundEngine` 같은 인증 필드가 들어가면 안 된다.
 
 ## Rejected Approaches
 
@@ -135,7 +139,7 @@ Task<Daemon?> RuntimeDiscovery.FindOrLaunchAsync(bool allowLaunch, TimeSpan budg
 - **토큰 없이 루프백만 신뢰** — 브라우저 CSRF가 그대로 통한다.
 - **포트 0을 `HttpListener`에 직접** — 지원하지 않는다. `TcpListener`로 빈 포트를 뽑아 넘기고, 그 사이 경합에 대비해 재시도한다.
 - **`netsh http add urlacl` + `http://+:port/`** — 관리자 권한이 필요하고, 애초에 오프머신 노출은 원하지 않는다.
-- **고정 포트를 기본값으로** — 충돌 처리가 항상 필요해진다. 임의 포트를 기본으로 두고 `http` 훅을 쓰는 사람만 고정하게 했다.
+- **고정 포트를 기본값으로** — 충돌 처리가 항상 필요해진다. 임의 포트를 기본으로 두고 고정 URL이 필요한 도구만 고정하게 했다(토큰은 그래도 `runtime.json`에서 읽어야 한다).
 
 ## TODO
 

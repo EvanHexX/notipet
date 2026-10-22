@@ -33,7 +33,7 @@ Fluent.IsInFront(Window)      // 보이고, 최소화 아니고, 위에 겹친 �
 INotipetHost.ThreadLink(entry) / OpenThread(entry)
 
 SettingsWindow(INotipetHost host)
-void Activate(string? page = null)   // "general" | "sound" | "desk" | "quiet" | "history" | "about"
+void Activate(string? page = null)   // "general" | "sound" | "desk" | "alerts" | "quiet" | "history" | "about"
 void Relocalize()
 ```
 
@@ -52,14 +52,15 @@ XAML 파일 없이 코드로 구성한다. 테마를 따라야 하는 브러시�
 
 `Refresh()`는 필터 → 페이지(100개) → `HistoryGrouping.Group()` 순서다. 페이지는 **카드 수**로 센다(그룹 수가 아니라). 그룹 순서는 새 카드가 있는 프로젝트가 위, 프로젝트 없음("기타", 키 `"\0other"`)은 항상 맨 아래. 대소문자가 달라도 같은 프로젝트다. 접힌 그룹은 컨트롤이 아니라 `_collapsed` 필드에 둔다 — `Refresh`가 새 알림마다, 30초마다 카드를 전부 다시 만들기 때문이다.
 
-카드 열: 레벨 배지 | 내용 | 동작(⋯, X). 내용은 네 줄이다: 제목, 스레드, 본문, 아래 줄(에이전트 칩 · 예외 칩 · 시각 · `×N`).
+카드 열: 내용 | 동작(안 읽었으면 ✓, ⋯, X). 레벨 아이콘은 제목 줄 앞에 있다(아래 "레벨 표시"). 내용은 네 줄이다: 제목, 스레드, 본문, 아래 줄(에이전트 칩 · 예외 칩 · "해결됨" 칩 · 읽음 칩 · 시각 · `×N`).
 
 - **에이전트**는 아래 줄의 칩 하나로만 표시한다(`Fluent.AgentChip` = 색 점 + 이름). 점 색은 고정 중간 톤(Claude `#D97757`, Codex `#8E6CEF`), 그 외는 `ControlStrongStrokeColorDefaultBrush`. 레벨 배지가 쓰는 상태색(초록·노랑·빨강·강조 파랑)은 쓰지 않는다 — 에이전트 색이 심각도로 읽히면 안 된다. 알림 창도 같은 점(`Fluent.AgentDot`)을 쓴다.
 - **전달 칩은 예외일 때만**: `delivered`와 `disabled`(사용자가 끈 채널)는 칩을 만들지 않는다. `failed`, `skipped`, `pending`과 차단 이유만 보인다.
 - 레벨 이름은 배지의 툴팁·접근성 이름, 경로는 ⋯ 메뉴 "폴더 열기"의 툴팁에 있다.
 - ⋯ 메뉴와 카드의 `ContextFlyout`(우클릭)은 같은 항목을 `BuildMenu`로 **두 번 만든다** — 플라이아웃 하나를 두 소유자에 붙일 수 없다.
 - 에이전트 카드의 ⋯ 메뉴 첫 묶음은 "이 스레드 알림 끄기/켜기", "<프로젝트> 프로젝트 알림 끄기/켜기"(`AddAlertScopeItems`). 항목은 **지금 그 대상이 하는 것의 반대**를 보인다 — 스레드 항목은 스레드의 실제 판정, 프로젝트 항목은 스레드 규칙을 뺀 프로젝트 자체의 판정으로. 누르면 `INotipetHost.SetThreadAlerts/SetProjectAlerts`. `AlertScopeChanged`(CLI·API로 바뀐 것 포함)에 창이 다시 그려진다.
-- 설정 창 "프로젝트·스레드" 페이지(`BuildAlerts`): 모드 콤보, 프로젝트 규칙과 스레드 규칙(켜기 토글 + 삭제), 최근 알림에 나온 규칙 없는 프로젝트를 켜기/끄기로 추가. `AlertScopeChanged`에 그 페이지가 열려 있으면 다시 그린다.
+- 그 스레드에 **이벤트 규칙**(`alerts --events`, 1.11.0)이 있으면 스레드 항목 아래에 "<이벤트> 다시 울리기 (<by>)"가 하나 더 붙는다(`AlertScope.FindThreadEvents`). 누르면 `INotipetHost.ClearThreadEventAlerts`가 이벤트 규칙만 지운다 — 스레드 전체 규칙은 그대로다.
+- 설정 창 "프로젝트·스레드" 페이지(`BuildAlerts`): 모드 콤보, 프로젝트 규칙과 스레드 규칙(켜기 토글 + 삭제), 최근 알림에 나온 규칙 없는 프로젝트를 켜기/끄기로 추가. 이벤트 규칙 행은 끈 이벤트("끔: Stop, SubagentStop")와 `by`를 보이고, **토글 없이** "다시 울리기" 버튼 하나다 — 이벤트 규칙은 늘 off라 켜는 상태가 없고, 지우면 그 이벤트가 다시 울린다. `AlertScopeChanged`에 그 페이지가 열려 있으면 다시 그린다.
 
 카드 클릭이 여는 것은 **보낸 쪽 링크(`send --open`) → 스레드** 순이다(`INotipetHost.SenderLink` / `ThreadLink`). 보낸 쪽 링크가 있으면 카드 툴팁과 ⋯ 메뉴 "링크 열기"(툴팁에 URI)가 그것을 보여 주고, 알림 창의 열기 아이콘도 "링크 열기"가 되며 카드 클릭이 알람 정지 + 링크 열기 + 닫기가 된다. 링크는 클릭 순간 `OpenLinks.IsAllowed`로 지금 설정에 다시 비춰 본다. 실행은 `TrayController.Launch` 하나 — `AllowSetForegroundWindow` 후 URI를 ShellExecute.
 
@@ -72,6 +73,17 @@ XAML 파일 없이 코드로 구성한다. 테마를 따라야 하는 브러시�
 그룹 머리글을 접으면 `Refresh`가 머리글까지 다시 만든다. 새 머리글로 포커스를 돌려놓는다(`_headers`) — 안 그러면 키보드 사용자는 포커스를 잃고 화면 낭독기는 바뀐 상태를 읽지 않는다.
 
 이름 없는 스레드는 ID의 **끝** 8자리로 표시한다. Codex ID는 UUIDv7이라 앞자리가 시각이어서, 같은 분에 시작한 스레드가 전부 같은 이름이 된다.
+
+### 읽음 상태 (1.8.0)
+
+`HistoryEntry.SeenAt`/`SeenBy`(`HistoryStore.MarkSeen`). 알림이 여러 개 쌓였을 때 어느 것을 이미 처리했는지 보이려는 것이라, **사용자가 한 일만** 읽음이 된다. 처음 읽은 방법이 남는다.
+
+- 읽음이 되는 것: 알림 창 카드 클릭이나 X(`popup`), 풍선 클릭(`popup`, 마지막 에이전트 풍선 — [tray_shell.md](tray_shell.md)), 카드·알림 창에서 링크나 스레드 열기(`link`), 그 스레드에서의 답(`reply` — 훅이 직접 친 프롬프트나 질문 도구의 답을 보고 resolve할 때), 최근 알림 창의 ✓, ⋯ "읽음으로 표시", "모두 읽음"(`recent`).
+- 읽음이 아닌 것: 시간이 지나 스스로 닫힌 알림 창, 보낸 쪽의 resolve(답이 아닌 것), 트레이 클릭으로 알람만 멈춘 것, notipet 자체 풍선(업데이트·레이트 리밋·경고) 클릭.
+- 같은 알림이 다시 와서 카드에 합쳐지면(`NoteCollapse`) 다시 안 읽음이 된다 — 새 소식이다. ⋯ "안 읽음으로 표시"로 되돌릴 수도 있다(`MarkUnseen`).
+- 안 읽음 = 전달됐고(`Accepted`) `SeenAt`이 없음. 차단된 알림은 사용자에게 닿지 않았으니 안 읽음으로 치지 않는다.
+
+창에서는: 필터 "안 읽음", 필터 옆 개수("안 읽음 N / 전체"), 머리글의 "모두 읽음", 안 읽은 카드의 강조색 테두리(`Fluent.Card(accent: true)`, 왼쪽 3px)와 ✓ 버튼, 읽은 카드의 칩("알림 창에서 확인", "열어 봄", "답함", "읽음", 툴팁에 시각).
 
 ### 트레이 토글
 
@@ -100,7 +112,7 @@ TrayController (INotipetHost) ──보유──> SettingsWindow ──수정─
 HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상대 시간 갱신)
 ```
 
-여는 경로: 전역 단축키(`settings.history.hotkey`, 기본 `Ctrl+Shift+Win+N`) · 트레이 우클릭 메뉴 · 두 번째 인스턴스 실행(`NotipetTray.exe` = 최근, `--settings` = 설정) · `notipet open [recent|settings]`. 프로그램이 띄우는 실행(`--background`: CLI 자동 기동, 자동 시작; `--restart-after`)은 창을 열지 않는다([tray_shell.md](tray_shell.md)).
+여는 경로: 전역 단축키(`settings.history.hotkey`, 기본 `Ctrl+Shift+Win+N`) · 트레이 우클릭 메뉴 · 두 번째 인스턴스 실행(`NotipetTray.exe` = 최근, `--settings` = 설정) · `notipet open [recent|settings]`. `NotipetTray.exe --settings`는 떠 있는 것이 없으면 notipet을 띄우고 트레이가 올라오면 설정을 연다(1.11.1 — 전에는 띄우기만 했다). 프로그램이 띄우는 실행(`--background`: CLI 자동 기동, 자동 시작; `--restart-after`)은 창을 열지 않는다([tray_shell.md](tray_shell.md)).
 
 ## Important Constraints
 
@@ -108,6 +120,7 @@ HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상�
   - 구성: `app/Hotkeys/HotkeyWindow.cs`(UI 스레드의 메시지 전용 창, `RegisterHotKey` + `MOD_NOREPEAT`), `core/Hotkeys/HotkeyDefinition.cs`(문자열 ↔ 키), `app/Windows/HotkeyCaptureBox.cs`(키 입력 칸). 셋 다 quota-scope에서 복사했다.
   - 동작은 트레이 좌클릭과 같은 토글(`ToggleHistory`)이다. 단, 알람은 멈추지 않는다.
   - 입력 칸에 포커스가 있는 동안 호스트가 등록을 풀었다가(`SuspendHotkey`) 포커스가 빠지면 다시 건다. 그러지 않으면 지금 키를 칸에 누르는 순간 창이 토글될 뿐, 입력되지 않는다.
+  - 설정 창을 숨기거나(X는 숨기기다) 다른 앱으로 넘어가면 `LostFocus` 없이 포커스가 칸에 남는다. 1.11.0까지는 그대로 단축키가 꺼진 채였다. 지금은 창의 `Activated`마다 다시 판단한다: 비활성이 되면 다시 걸고, 돌아왔는데 포커스가 아직 칸에 있으면 다시 푼다(1.11.1).
   - 다른 프로그램이 먼저 등록한 키는 등록되지 않는다(Win32 1409). 그 이유를 설정 줄에 빨간 글씨로 보이고, `daemon.log`에도 남긴다.
   - 기본값은 `Ctrl+Shift+Win+N`이다. `Ctrl+Alt+N`은 JetBrains Inline·VS Code Code Runner와 겹치고 AltGr 자판의 글자 입력을 막는다. `Win+Shift+N`·`Win+Alt+N`은 OneNote, `Win+N`은 알림 센터가 쓴다.
   - 시험: 데몬이 떠 있을 때 다른 프로세스에서 같은 키로 `RegisterHotKey`를 시도하면 1409로 실패해야 한다. 입력 칸에 포커스를 주면 같은 시도가 성공해야 한다.
@@ -161,7 +174,7 @@ HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상�
 
 ## 알림 창 (NotificationPopup / PopupHost)
 
-`PopupSettings.StayLevels`에 레벨이 하나라도 있거나 `ShowOverFullscreen`이 켜져 있으면 시각 채널(`TrayBalloonChannel`)이 셸 풍선 대신 `PopupHost.Show`를 부른다. 풍선으로는 둘 다 불가능하다 — 표시 시간은 Windows가 정하고, 전체화면 앱 앞에서는 셸이 알림을 보류한다. 채널 ID는 그대로라 켜고 끄기, 기록의 전달 결과, 규칙이 모두 같다.
+`PopupSettings.StayLevels`에 레벨이 하나라도 있거나, `ShowOverFullscreen`이 켜져 있거나, `Position`이 `topRight`(1.10.0)이면(`PopupSettings.UseOwnPopup`) 시각 채널(`TrayBalloonChannel`)이 셸 풍선 대신 `PopupHost.Show`를 부른다. 풍선으로는 셋 다 불가능하다 — 표시 시간과 위치는 Windows가 정하고, 전체화면 앱 앞에서는 셸이 알림을 보류한다. 레벨마다 풍선과 알림 창을 섞지 않는다: 하나라도 켜지면 모든 레벨이 알림 창이다. 채널 ID는 그대로라 켜고 끄기, 기록의 전달 결과, 규칙이 모두 같다.
 
 - **포커스를 뺏지 않는다**: `AppWindow.Show(false)` — 활성화 없이 표시. 입력 중인 창의 커서가 그대로다. 검증: 표시 전후 `GetForegroundWindow`가 같다.
 - **창 모양**: `OverlappedPresenter` + `SetBorderAndTitleBar(true, false)`(제목 표시줄 없는 둥근 카드), `IsShownInSwitchers = false`(작업 표시줄·Alt+Tab에 없음), `ThemedAcrylicBackdrop`.
@@ -182,8 +195,8 @@ HistoryStore.Changed ──> HistoryWindow.Refresh()  (+30초 타이머로 상�
 `AppSettings.Theme`(System/Light/Dark) → `Fluent.SetTheme` → 창마다 `Fluent.ApplyTheme(window)`: 루트 `RequestedTheme`(모든 `{ThemeResource}`가 다시 풀린다)와 `AppWindow.TitleBar.PreferredTheme`(캡션 버튼은 XAML이 아니라 시스템이 그린다). 창을 다시 만들 때마다 부른다. 바꾸면 `INotipetHost.ThemeChanged`가 열린 창, 떠 있는 알림 창, 트레이 메뉴(`MenuGlyphs.SetMenuTheme` — uxtheme `SetPreferredAppMode` 2/3, 메뉴 아이콘 색도 그에 맞춤)를 한 번에 바꾼다. Mica는 루트 테마를 따라가서 따로 할 일이 없다.
 - **전체화면 위**: `IsAlwaysOnTop` + `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE)`로 topmost 띠의 맨 위에. 전체화면 영상 플레이어도 topmost인 경우가 많아서, 열린 창이 있는 동안 2초마다 다시 올린다(나중에 전체화면이 된 창이 덮는 경우). 독점 전체화면 D3D는 불가능.
 - **전체화면 위 끔 + 전체화면 앞**: topmost가 아니고 포그라운드 창 **바로 뒤**에 넣는다(`SetWindowPos(hwnd, foreground)`). 전체화면을 나오면 보인다.
-- **클릭**: 카드 클릭 = 알람 정지 + 닫기(풍선 클릭과 같음). X = 닫기만. X 옆 열기 아이콘("Claude/Codex에서 열기") = 스레드 열기 + 알람 정지 + 닫기. 예전엔 이름이 붙은 버튼이 한 줄을 차지해서 링크가 있는 창이 148px, 4개 쌓이면 화면 절반이었다. 지금은 모두 116px.
-- **쌓기**: 주 모니터 작업 영역 오른쪽 아래부터 위로, 새 것이 아래. 최대 4개. 넘치면 가장 오래된 것부터 빠지는데, **유지하는 레벨의 창은 맨 위 오버플로 카드("외 N개")에 수를 더하고** 빠진다 — 아무 표시 없이 사라지면 "클릭할 때까지 유지"가 깨지고, 가장 오래 기다린 요청이 먼저 사라진다. 오버플로 카드가 있으면 슬롯 하나를 차지한다(카드 3 + 요약 1). 누르면 최근 알림 창을 열고 수를 0으로. 스스로 닫히는 레벨의 창은 세지 않는다.
+- **클릭**: 카드 클릭 = 읽음 + 알람 정지 + 닫기(풍선 클릭과 같음). X = 읽음 + 닫기(알람은 그대로). X 옆 열기 아이콘("Claude/Codex에서 열기") = 스레드 열기 + 알람 정지 + 닫기. 예전엔 이름이 붙은 버튼이 한 줄을 차지해서 링크가 있는 창이 148px, 4개 쌓이면 화면 절반이었다. 지금은 모두 116px.
+- **쌓기**(`PopupSettings.Position`, 설정 → 일반): 기본 `bottomRight`는 주 모니터 작업 영역 오른쪽 아래부터 위로, 새 것이 아래. `topRight`는 같은 순서를 아래로 읽는다 — 오버플로 카드와 가장 오래된 것이 맨 위, 새 것은 마지막 것 아래. 모르는 값은 `bottomRight`로 돌아간다. 바꾸면 떠 있는 창도 옮겨진다(`PopupHost.ApplyLayout`). 최대 4개. 넘치면 가장 오래된 것부터 빠지는데, **유지하는 레벨의 창은 맨 위 오버플로 카드("외 N개")에 수를 더하고** 빠진다 — 아무 표시 없이 사라지면 "클릭할 때까지 유지"가 깨지고, 가장 오래 기다린 요청이 먼저 사라진다. 오버플로 카드가 있으면 슬롯 하나를 차지한다(카드 3 + 요약 1). 누르면 최근 알림 창을 열고 수를 0으로. 스스로 닫히는 레벨의 창은 세지 않는다.
 - **보낸 쪽이 끝냄**(`/v1/resolve`): `PopupHost.CloseFor(ids)`가 그 알림의 창만 닫고, "외 N개"에 접혀 있던 것이면 수에서 뺀다(0이 되면 요약 카드도 닫힌다). 그래서 요약 카드는 수가 아니라 **알림 id 집합**을 기억한다. 실제로 닫거나 뺀 id만 돌려주고, 그게 기록의 "해결됨" 여부를 정한다.
 - **자동 닫힘**: 그 레벨이 `StayLevels`에 없으면 `timeoutSec`(기본 8초) 뒤. 마우스가 올라가 있는 동안은 멈춘다.
 

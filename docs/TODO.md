@@ -2,11 +2,12 @@
 
 ## Short Term
 
-- [ ] `CrashLog`의 출력 경로를 주입 가능하게 만들어 `--self-test`가 사용자 `crash.log`에 쓰지 않게 한다 ([regression.md](regression.md) 참고)
+- [x] `CrashLog`의 출력 경로를 주입 가능하게 만들어 `--self-test`가 사용자 `crash.log`에 쓰지 않게 한다 (1.4.1, `CrashLog.OverridePath` — `SelfTestRunner`가 임시 파일로 돌린다. [regression.md](regression.md) 참고)
 - [ ] 레벨별 기본 사운드를 며칠 실제로 써보고 조정한다. 특히 `attention`(권한 대기) 2회 반복이 유용한지 성가신지 — 이 설정 하나가 도구의 인상을 가른다
-- [ ] `sources[].levelFloor`를 `SourceRule`에 실제로 연결한다 (모델에만 있고 읽히지 않음)
+- [ ] `sources[].levelFloor`: `SourceRule`에 연결하거나 모델에서 지운다. 지금은 설정 파일에 쓸 수 있는데 아무것도 읽지 않는다 — 문서가 "아직 읽지 않음"이라고 적어 둬도, 설정에 있는 값은 동작한다고 믿기 쉽다. 연결한다면 "이 에이전트는 attention 이상만"을 알림 범위(`alerts`)와 겹치지 않게 정의해야 한다
 - [x] `notipet install-hooks --codex --write` (1.5.1, `config.toml`), `--claude --write/--remove` (1.6.1, `settings.json`)
-- [ ] Codex `Stop` 훅 페이로드에 `last_assistant_message`가 있는지 실제로 찍어 확인하고 `PayloadMapper`를 맞춘다 (조사 단계에서 확인하지 못한 항목)
+- [x] Codex `Stop` 훅 페이로드에 `last_assistant_message`가 있는지 확인 — 있다. 1.6.5·1.8.1의 입력 제안 턴(`{"suggestion":…}`)이 그 필드로 왔다
+- [ ] `ttlSec`: 지금은 효과가 없다(`ReceivedAt`이 도착 시각이고 규칙이 곧바로 돈다, [rules_engine.md](modules/rules_engine.md)). 보낸 시각을 와이어로 받아 의미를 주거나, 필드를 문서에서 "효과 없음"으로 계속 둔다
 - [x] 최근 알림 카드에서 cwd 폴더 열기 (1.1)
 
 ## 2단계 — UI
@@ -16,7 +17,7 @@
 - [ ] `WindowsToastChannel`: `AppNotificationManager`로 버튼 있는 리치 토스트
   - 위험: unpackaged에서는 AUMID와 시작 메뉴 바로가기가 필요하고 HKCU에 COM 액티베이터를 등록한다. 앱 이름이 틀리게 뜨거나 활성화 콜백이 안 오는 조용한 실패가 가능하다. **채널로 분리해 기본 off를 유지하고**, MVP의 시각 알림은 검증된 풍선이 계속 담당한다
 - [x] 최근 알림 전역 단축키 (1.7.0, 기본 `Ctrl+Shift+Win+N`, 설정에서 변경)
-- [ ] "알람 정지" 전역 단축키 — 같은 `HotkeyWindow`에 id 하나 더
+- [ ] "알람 정지" 전역 단축키 — 다음에 할 가치가 큰 것. 지금 알람을 끄려면 트레이·풍선·알림 창을 누르거나 `notipet ack`을 쳐야 한다. `HotkeyWindow.TryRegister`가 id를 받으므로 최근 알림 단축키 옆에 id 하나를 더 등록하면 된다. 기본값은 **비워 둔다**(설정에서 고를 때만) — 다른 프로그램의 키를 빼앗지 않게
 - [ ] `PATCH /v1/settings` (허용 목록 방식). `outboundNetworkApproved`는 **절대 포함하지 않는다**
 - [ ] 토큰 회전을 트레이 메뉴에서
 

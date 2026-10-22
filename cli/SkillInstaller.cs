@@ -76,7 +76,9 @@ internal static class SkillInstaller
     private static bool LooksLikeOurs(string existing, bool codex)
     {
         var template = Render(Placeholder, codex);
-        var firstLine = template.Split('\n', 2)[0];
+        // Without the line ending: a checkout may give the two templates
+        // different ones (CRLF or LF), and that is not an edit.
+        var firstLine = template.Split('\n', 2)[0].TrimEnd('\r');
         return existing.StartsWith(firstLine, StringComparison.Ordinal)
                && existing.Contains("name: notipet", StringComparison.Ordinal)
                && existing.Length > template.Length / 2;

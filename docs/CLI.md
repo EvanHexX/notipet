@@ -36,6 +36,8 @@ notipet <명령> --help           위와 같음
 notipet send --title T --body B [--level L] [--tag T] [옵션]
 ```
 
+`alert`는 Codex `notify` 설정이 부르는 이름이라 별칭으로 남아 있다. 다만 `notipet alert on|off|reset|mode|status|list`는 `alerts`를 잘못 친 것으로 보고, 보내지 않은 채 stderr에 ``did you mean `notipet alerts ...`?``를 쓰고 1로 끝난다.
+
 | 옵션 | 설명 |
 |---|---|
 | `--title T` | 제목. **프로젝트 이름으로 시작하라** — 세션을 여러 개 돌릴 때 어디서 온 건지 알 수 있다 |
@@ -51,11 +53,11 @@ notipet send --title T --body B [--level L] [--tag T] [옵션]
 | `--volume V` | 0~1. 설정의 볼륨에 곱해진다 |
 | `--silent` | 소리 없이 알림만 |
 | `--channels LIST` | `sound,notification` — 범위를 **좁히기만** 한다. 꺼 둔 채널을 켤 수는 없다 |
-| `--ttl SEC` | 그 시간 안에 전달 못 하면 버린다 |
+| `--ttl SEC` | **지금은 효과가 없다.** 데몬은 받는 즉시 처리하고 만료 시각도 받은 순간부터 세므로 만료될 틈이 없다. 호환을 위해 받기만 한다 |
 | `--until-reply` | 질문용. 사용자가 그 스레드에서 답하면(직접 입력, 또는 에이전트 질문 도구의 답) 알람이 멈추고 "답함"으로 읽음 처리된다. 스레드가 필요하다(에이전트 안에서는 자동) |
-| `--open URI` | 카드를 클릭하면 스레드 대신 이 URI를 연다. 이 PC의 http(s), 또는 settings.json `links.allowedSchemes`에 등록된 스킴만. 아니면 알림은 가고 링크만 버려진다(`warnings`). 명령은 받지 않는다 — [api.md](api.md#post-v1notify) |
+| `--open URI` | 카드를 클릭하면 스레드 대신 이 URI를 연다. 이 PC의 http(s), 또는 settings.json `links.allowedSchemes`에 등록된 스킴만. 공백, 따옴표, `<` `>` `^` `\|` `` ` ``(http(s)가 아니면 `&`도)가 든 링크도 거부한다 — 셸이 링크를 처리기의 명령줄에 그대로 넣기 때문이다(`%20`, `%22`처럼 이스케이프한다). 거부되면 알림은 가고 링크만 버려진다(`warnings`). 명령은 받지 않는다 — [api.md](api.md#post-v1notify) |
 | `--cwd PATH` | 카드에 표시할 폴더. 기본은 현재 폴더 |
-| `--fire-and-forget` | 응답을 기다리지 않고 바로 반환 |
+| `--fire-and-forget` | 응답 내용을 기다리지 않는다. 요청이 실제로 나가도록 최대 0.4초만 기다린 뒤 0으로 끝난다(1.11.1 전에는 보내기도 전에 프로세스가 끝났다) |
 
 출력:
 
@@ -141,7 +143,7 @@ sound        mediaplayer (ok)
 CLI 버전과 실행 중인 데몬 버전. `--json`이면 기계가 읽을 수 있게:
 
 ```json
-{ "cli": "1.11.0", "daemon": "1.11.0", "daemonPid": 4120, "features": ["alerts.events"] }
+{ "cli": "1.11.1", "daemon": "1.11.1", "daemonPid": 4120, "features": ["alerts.events"] }
 ```
 
 `features`는 이 CLI와 실행 중인 데몬이 **둘 다** 지원하는 기능이다(데몬이 없으면 CLI 것 — CLI가 띄우는 데몬은 같이 설치된 같은 버전이다). 다른 도구는 새 옵션을 쓰기 전에 이걸 본다: 1.11.0보다 오래된 CLI는 `--json`을 무시하고 두 줄짜리 텍스트를 내므로, JSON으로 읽히지 않으면 기능이 없는 것으로 친다.
@@ -150,19 +152,29 @@ CLI 버전과 실행 중인 데몬 버전. `--json`이면 기계가 읽을 수 �
 
 ```
 [ok  ] daemon exe         C:\src\notipet\bin\NotipetTray.exe
-[ok  ] daemon running     pid 59796, port 4954, v1.1.0
+[ok  ] daemon running     pid 59796, port 4954, v1.11.1
 [ok  ] package copies     none
 [ok  ] sound engine       mediaplayer
 [ok  ] muted              no
 [ok  ] quiet hours        not active
 [ok  ] at desk            no
-[warn] claude hooks       not configured - `notipet install-hooks --claude`
+[ok  ] claude hooks       plugin notipet@notipet
 [warn] codex hooks        not configured - `notipet install-hooks --codex --write`
-[warn] claude skill       not installed - `notipet install-skill`
+[ok  ] claude skill       plugin notipet@notipet
+[ok  ] codex skill        plugin: %USERPROFILE%\.codex\plugins\cache\notipet\notipet\1.11.1\skills\notipet\SKILL.md (refer to it by name, `notipet` - the path changes with each version)
 [ok  ] cli                C:\src\notipet\bin\notipet.exe
+
+no problems found
 ```
 
-`FAIL`은 알림이 안 오는 원인, `warn`은 설정하지 않은 것(또는 지금 소리가 줄어드는 상태)이다.
+`FAIL`은 알림이 안 오는 원인이고 마지막 줄의 개수에 들어간다(`--strict`면 1로 끝난다). `warn`은 설정하지 않은 것(또는 지금 소리가 줄어드는 상태)이다. 경로는 실제 전체 경로로 나온다.
+
+| 줄 | 보는 것 |
+|---|---|
+| `claude hooks` | notipet Claude Code 플러그인, 또는 `settings.json`의 notipet 훅. 둘 다 있으면 두 번 울린다고 경고. `settings.json`의 훅이 예전 버전 것이면(이벤트가 빠졌거나 matcher가 옛것, 예: MCP 입력 요청 없음) `install-hooks --claude --write`를 다시 하라고 경고 |
+| `codex hooks` | `config.toml`의 notipet 블록. 예전 `hooks.json`에 있거나, 1.6.4 전의 따옴표 붙은 exe 경로이거나, 1.9.0 전의 블록(질문 창 훅이 없다)이면 경고 — `install-hooks --codex --write`를 다시 실행하고 새 훅을 신뢰한다 |
+| `claude skill` | 플러그인의 스킬, 또는 `install-skill`로 깐 `%USERPROFILE%\.claude\skills\notipet\SKILL.md`. 둘 다면 두 번 보인다고 경고 |
+| `codex skill` | 켜져 있는 Codex notipet 플러그인(`notipet@<마켓플레이스>`)의 스킬(가장 새 버전 폴더의 `SKILL.md`), 또는 `install-skill --codex`로 깐 `%USERPROFILE%\.codex\skills\notipet\SKILL.md`. 둘 다면 두 번 보인다고, 둘 다 없으면 없다고 경고. 플러그인 스킬은 버전 이름의 폴더에 있어 업데이트마다 경로가 바뀌므로, `AGENTS.md`에서는 경로가 아니라 이름(`notipet`)으로 가리킨다 |
 
 ### `history`
 
@@ -215,7 +227,7 @@ notipet alerts off | reset --thread ID --agent codex|claude-code --events Stop,S
 notipet alerts mode all | selected               # 전부(끈 것만 빼고) | 켠 것만
 ```
 
-판정은 **스레드 규칙 → 프로젝트 규칙 → 모드** 순. `reset`은 규칙을 지워 모드를 따르게 한다. 수동 알림과 `critical`은 항상 울린다. 스레드와 프로젝트는 `send`와 같은 방식으로 정한다(에이전트의 환경 변수, cwd를 감싼 저장소 이름). 출력 예:
+`alerts`에는 별칭이 없다. `alert`는 `send`의 별칭이고, `alert on|off|...`는 보내지 않고 `alerts`를 쓰라고 알린다([위](#send-별칭-alert)). 판정은 **스레드 규칙 → 프로젝트 규칙 → 모드** 순. `reset`은 규칙을 지워 모드를 따르게 한다. 수동 알림과 `critical`은 항상 울린다. 스레드와 프로젝트는 `send`와 같은 방식으로 정한다(에이전트의 환경 변수, cwd를 감싼 저장소 이름). 출력 예:
 
 ```
 mode: selected (only what is turned on)
@@ -252,7 +264,7 @@ this thread: rings - this thread is turned on
 notipet install-hooks [--claude] [--codex]
 ```
 
-Claude Code / Codex 훅 설정 블록을 출력한다(`--write` 없이는 설정 파일을 건드리지 않는다). 옵션 없이 부르면 둘 다. 자세한 설명은 [USAGE.md 3절](USAGE.md#3-에이전트-연동).
+Claude Code / Codex 훅 설정 블록을 출력한다(`--write` 없이는 설정 파일을 건드리지 않는다). 옵션 없이 부르면 둘 다. Claude Code의 `http` 훅 블록은 1.11.1부터 출력하지 않는다 — 토큰이 데몬이 뜰 때마다 바뀌어, 붙여 넣은 `http` 훅은 매번 401을 받았다([USAGE.md 경로 B](USAGE.md#경로-b--claude-code의-http-훅은-쓸-수-없다)). 자세한 설명은 [USAGE.md 3절](USAGE.md#3-에이전트-연동).
 
 ```
 notipet install-hooks --codex --write [--command EXE]   # ~/.codex/config.toml에 직접 넣는다
@@ -299,15 +311,37 @@ notipet --source claude-code          ← stdin으로 훅 JSON (Claude Code / Co
 notipet alert --source codex '{...}'  ← 마지막 인자가 JSON (Codex 레거시 notify)
 ```
 
-- **stdout에 아무것도 쓰지 않는다.** 일부 훅 이벤트(UserPromptSubmit, SessionStart)는 stdout을 에이전트 컨텍스트에 그대로 넣기 때문이다. 확인이 필요하면 `--verbose`.
+- **stdout에 아무것도 쓰지 않는다.** 일부 훅 이벤트(UserPromptSubmit, SessionStart)는 stdout을 에이전트 컨텍스트에 그대로 넣기 때문이다. 읽을 페이로드가 없어도 마찬가지다(1.11.1 전에는 도움말을 stdout에 썼다). 도움말은 터미널에서 `notipet`만 쳤을 때 나온다. 확인이 필요하면 `--verbose` — 페이로드가 없으면 stderr에 한 줄 쓴다.
+- 필드 형식이 바뀐 페이로드(문자열이던 자리에 객체나 배열)도 버리지 않는다. 문자열인 필드만 골라 읽고, 이벤트 이름이 있으면 그 이벤트로 처리한다.
 - stdin 읽기는 1초로 제한된다. 닫히지 않는 stdin이 에이전트를 붙잡지 않게.
 - Codex `notify`의 JSON이 윈도우 명령줄 길이를 넘어 깨져도 크래시하지 않고 "Turn complete (payload unreadable)" 알림으로 떨어진다 (openai/codex#25141).
 - 매핑 규칙(어떤 이벤트가 어떤 레벨이 되는지)은 [USAGE.md 4절](USAGE.md#4-신호가-어떻게-해석되는가).
 - 훅 페이로드에 없는 것(Claude Desktop 세션 ID, 저장소 이름)은 [위의 자동 채우기](#에이전트-안에서-부를-때--자동으로-채워지는-것)로 보충한다. 훅은 에이전트의 환경을 물려받는다.
 - Codex 레거시 `notify`는 `thread-id`만 스레드로 쓴다. `turn-id`는 턴마다 바뀌어서 스레드로 쓰면 카드가 턴마다 갈라진다.
-- `Stop`·`UserPromptSubmit`·`SessionEnd`는 알림을 보내기 전에 **같은 세션의 끝난 알림**을 먼저 해제한다(`/v1/resolve`). 무엇이 해제되는지는 [api.md](api.md#post-hooksclaude-code). `UserPromptSubmit`은 알림을 보내지 않는다. 해제는 데몬이 떠 있을 때만 — 꺼져 있으면 울리는 것도 없다.
+- 일부 이벤트는 알림을 보내기 전에 **같은 세션의 끝난 알림**을 먼저 해제한다(`/v1/resolve`). 해제는 데몬이 떠 있을 때만 — 꺼져 있으면 울리는 것도 없다. 자세한 규칙은 [api.md](api.md#post-hooksclaude-code).
+
+| 이벤트 | 알림 | 먼저 해제하는 것 (같은 세션) |
+|---|---|---|
+| `Stop`, `StopFailure` | 보낸다 | 권한 요청(Claude `permission_prompt`, Codex `PermissionRequest`)과 MCP 입력 양식(`elicitation_dialog`, `elicitation_url_dialog`) |
+| `SessionEnd` | 보낸다 | 위의 것 + 지난 턴 "완료"와 idle 알림 |
+| `UserPromptSubmit` | 없음 | 지난 턴 "완료"와 idle 알림. 사용자가 입력한 답이면 `--until-reply` 알림도 "답함"으로. `[agent-summit]`이나 `<`로 시작하는 프롬프트(작업 알림, 시스템 메시지)는 답이 아니다 — Codex 질문 창의 답(`<send_user_message_question_reply>`)만 예외 |
+| `PostToolUse` — Claude `AskUserQuestion`·`ExitPlanMode`, Codex `request_user_input` | 없음 | 권한 요청과 MCP 입력 양식, 그리고 `--until-reply` 알림 — "답함"으로 |
+| `PostToolUse` Codex `request_user_input_async`, `PreToolUse` Codex `request_user_input` | 질문 창 알림(`attention`, 본문은 질문, `--until-reply`처럼 답하면 끝남) | 없음 |
+| 그 밖의 `PostToolUse` / `PreToolUse` | 없음 | 없음 |
 
 ---
+
+## 버전 1.11.1에서 바뀐 것
+
+| 전 | 후 | 이유 |
+|---|---|---|
+| `notipet alert off`는 `alerts off`가 아니라 `send`로 처리됐다 | `alert on`·`off`·`reset`·`mode`·`status`·`list`는 보내지 않고 `alerts`를 쓰라고 알린 뒤 1로 끝난다. 그 밖의 `alert`는 계속 `send` | 규칙을 바꾸려던 명령이 `send`로 갔다 |
+| `--fire-and-forget`이 바로 끝났다 | 최대 0.4초 기다린다 | 요청을 보내기도 전에 프로세스가 끝났다 |
+| 훅 모드에서 읽을 페이로드가 없으면 stdout에 도움말 | 아무것도 쓰지 않는다(`--verbose`면 stderr에 한 줄) | Codex의 동기 훅은 stdout을 에이전트에 넘긴다 |
+| 필드 형식이 바뀐 훅 페이로드는 버렸다 | 문자열 필드만 읽어 처리한다 | 에이전트가 페이로드를 바꿔도 notipet이 조용해지면 안 된다 |
+| `install-hooks`가 Claude `http` 훅 블록도 출력 | 출력하지 않는다 | 토큰이 매번 바뀌어 401만 받았다 |
+| `doctor`에 Codex 스킬 줄이 없었다 | `codex skill` 줄 | `AGENTS.md`가 버전 폴더 경로로 스킬을 가리키면 업데이트 뒤 틀어진다 |
+| `--open`의 공백·따옴표 | 거부(`%20`, `%22`로 이스케이프) | 셸이 링크를 처리기 명령줄에 그대로 넣는다 |
 
 ## 버전 1.4에서 바뀐 것
 

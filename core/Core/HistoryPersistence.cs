@@ -141,7 +141,7 @@ internal sealed class HistoryPersistence : IDisposable
             if (e.Envelope.Title != "shop: 테스트 통과" || e.Envelope.Level != NotificationLevel.Success || e.Envelope.Tag != "shop:done") return false;
             if (e.Envelope.SourceSession != entry.Envelope.SourceSession || e.Envelope.Project != "shop" || e.Envelope.OpenUri != entry.Envelope.OpenUri) return false;
             if (e.Accepted || e.SuppressedReason != "thread_off" || e.Count != 3 || e.AppThreadTitle != "Checkout refactor" || e.ResolvedAt is null) return false;
-            if (e.Deliveries.Single().ReferenceId != "alm_1" || e.Envelope.DedupeKey != entry.Envelope.DedupeKey) return false;
+            if (e.Deliveries.Single() is not { Channel: "windows_sound", Status: "delivered", ReferenceId: null } || e.Envelope.DedupeKey != entry.Envelope.DedupeKey) return false;
             if (!e.Envelope.UntilReply || e.SeenAt is null || e.SeenBy != HistoryStore.SeenLink) return false;
             if (back[1].SeenAt is not null || back[1].Envelope.UntilReply) return false;
 
@@ -208,6 +208,7 @@ internal sealed class HistoryFile
         public int Count { get; set; } = 1;
         public string? AppThreadTitle { get; set; }
         public DateTimeOffset? ResolvedAt { get; set; }
+        public DateTimeOffset? EndedAt { get; set; }
         public DateTimeOffset? SeenAt { get; set; }
         public string? SeenBy { get; set; }
         public bool UntilReply { get; set; }
@@ -238,6 +239,7 @@ internal sealed class HistoryFile
             Count = e.Count,
             AppThreadTitle = e.AppThreadTitle,
             ResolvedAt = e.ResolvedAt,
+            EndedAt = e.EndedAt,
             SeenAt = e.SeenAt,
             SeenBy = e.SeenBy,
             UntilReply = e.Envelope.UntilReply,
@@ -273,10 +275,17 @@ internal sealed class HistoryFile
                 LastAt = LastAt == default ? ReceivedAt : LastAt,
                 AppThreadTitle = AppThreadTitle,
                 ResolvedAt = ResolvedAt,
+                EndedAt = EndedAt,
                 SeenAt = SeenAt,
                 SeenBy = SeenAt is null ? null : SeenBy
             };
-            if (Deliveries is not null) entry.Deliveries.AddRange(Deliveries);
+            // An alarm id belongs to the run that rang it: the next run numbers
+            // its own alarms again, and a resolve naming this card must not stop
+            // whichever new alarm now has the same id.
+            if (Deliveries is not null)
+                entry.Deliveries.AddRange(Deliveries.Select(d => d.Channel == Notipet.Settings.AppSettings.Channels_WindowsSound
+                    ? new DeliveryResult { Channel = d.Channel, Status = d.Status, Detail = d.Detail }
+                    : d));
             return entry;
         }
     }

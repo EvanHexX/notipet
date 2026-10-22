@@ -11,7 +11,8 @@
 - [core/Rules/RuleEngine.cs](../../core/Rules/RuleEngine.cs) — 순서, TTL/소스/음소거/방해금지/중복
 - [core/Rules/RateLimitRule.cs](../../core/Rules/RateLimitRule.cs) — 토큰 버킷
 - [core/Rules/AlertScope.cs](../../core/Rules/AlertScope.cs) — 어떤 프로젝트·스레드가 울릴지(판정·규칙 변경·자체 테스트)
-- [core/Core/HistoryStore.cs](../../core/Core/HistoryStore.cs) — 중복 판정의 조회 대상
+- [core/Core/HistoryStore.cs](../../core/Core/HistoryStore.cs) — 중복 판정의 조회 대상(`FindRecent`), 끝난 표시(`EndedAt`)
+- [core/Core/AlarmResolver.cs](../../core/Core/AlarmResolver.cs) — `/v1/resolve`가 이름 댄 기록을 끝난 것으로(`MarkEnded`)
 - [app/Presence/PresenceMonitor.cs](../../app/Presence/PresenceMonitor.cs) — Focus Assist 조회
 
 ## Public APIs
@@ -28,12 +29,12 @@ bool RateLimitRule.ShouldAnnounceThrottle(DateTimeOffset now)
 
 고정 순서. 싸고 호출자 범위인 검사가 먼저라서, 꺼진 소스는 레이트 리밋 토큰을 소비하지 않는다.
 
-1. `TtlRule` — 큐에 앉아 있다 기한이 지난 알림은 낡은 소식이다
+1. `TtlRule` — 큐에 앉아 있다 기한이 지난 알림은 낡은 소식이다. **지금은 아무것도 막지 않는다**: `ReceivedAt`이 데몬이 봉투를 만든 순간이고 규칙이 곧바로 돌아서, `ttlSec`이 지날 틈이 없다(아래 Known Problems)
 2. `SourceRule` — `sources[id].enabled`
 3. `AlertScopeRule` — 어떤 프로젝트·스레드가 울릴지(`alerts`, [core/Rules/AlertScope.cs](../../core/Rules/AlertScope.cs)). 스레드 규칙 → 스레드 이벤트 규칙 → 프로젝트 규칙 → 모드(`all` | `selected`). `manual`과 `critical`은 제외. 억제 이유 `thread_off` | `thread_event_off` | `project_off` | `not_selected`
 4. `MuteRule` — 전역 음소거와 `mute.until`. `allowCritical`이면 critical은 통과
 5. `QuietHoursRule` — 시간대 + Focus Assist
-6. `DedupeRule` — `tag`(없으면 내용 해시) 기준 윈도우 내 중복
+6. `DedupeRule` — `tag`(없으면 내용 해시) 기준 윈도우 내 중복. 무엇을 중복으로 치는지는 아래 Important Constraints
 7. `RateLimitRule` — 소스별 + 전역 토큰 버킷
 
 ## State-Data Flow
@@ -59,10 +60,16 @@ NotificationEnvelope ──> [7개 규칙 순차] ──> RuleDecision
 - 레이트 리밋 안내 풍선은 10분에 최대 1회. 억제한 홍수를 "억제했습니다" 홍수로 바꾸면 의미가 없다.
 - **알림 범위(`AlertScopeRule`)는 소스 다음, 음소거 앞이다.** 사용자가 "이 프로젝트·스레드는 울리지 마"라고 한 것이라 레이트 리밋 토큰도 쓰지 않는다. 가장 구체적인 규칙이 이긴다(스레드 → 프로젝트 → 모드). 수동 알림(`manual`, 트레이 테스트 포함)은 지금 그 소리를 원하는 사람이 보낸 것이고, `critical`은 놓치면 안 되는 것이라 둘 다 범위 밖이다. 스레드는 에이전트+id로, 프로젝트는 이름(대소문자 무시)으로 찾는다. 규칙은 종류별 최대 200개, 넘으면 오래된 것부터 빠진다. 스레드에는 전체 규칙 하나와 **이벤트 규칙**(`events`, 항상 off, `by`) 하나가 따로 있을 수 있다. 이벤트 규칙은 훅이 만든 알림의 `SourceEvent`(`source.event`)만 맞춰 보므로 `Stop`/`SubagentStop`을 꺼도 같은 스레드의 권한 요청·질문 창과 에이전트가 직접 보낸 알림은 울린다. 전체 규칙이 이긴다.
 - 규칙은 `Continue`가 아닌 첫 결정에서 멈춘다. 따라서 응답의 `suppressedReason`은 항상 **가장 먼저 걸린** 이유다.
+- **중복은 "같은 순간이 다시 온 것"만이다**(1.11.1). `DedupeRule`은 `HistoryStore.FindRecent(DedupeKey, dedupe.windowSec)`(기본 30초, `LastAt` 기준)가 찾은 기록에만 접는다(`collapse`가 꺼져 있으면 `deduped`로 버린다). `FindRecent`가 건너뛰는 것:
+  - **끝난 기록** — `ResolvedAt` 또는 `EndedAt`이 있는 것. `/v1/resolve`는 이름 댄 전달된 기록을 소리가 이미 끝났어도 모두 `EndedAt`으로 표시한다(`AlarmResolver` → `HistoryStore.MarkEnded`, history.json에 저장). 턴의 "끝남" 차임은 다음 프롬프트가 시작되는 순간 끝난 것이고, 30초 안에 끝난 다음 턴의 것은 울려야 한다. 카드의 "해결됨" 칩(`ResolvedAt`, 응답의 `resolved`)은 그대로 아직 울리거나 떠 있던 것에만 붙는다.
+  - **사용자가 바꿀 수 있는 상태로 막힌 기록** — `Accepted == false`인 것(음소거, 방해금지, `thread_off`·`project_off`·`not_selected` 등). 음소거를 풀거나 스레드를 다시 켠 뒤의 다음 알림은 한 번도 울리지 않은 카드에 접히지 않고 울린다. 예외는 `rate_limited`와 `deduped`(collapse를 끈 경우): 같은 폭주라 계속 한 카드로 접힌다. resolve는 막혔던 기록에도 `EndedAt`을 붙인다 — 그러지 않으면 레이트 리밋에 막힌 Stop이 다음 턴의 Stop을 계속 삼킨다.
+  - 창 밖의 기록. 단 앞에서 끊지 않는다 — 접힌 카드는 `LastAt`만 움직이고 자리는 그대로라, 창 밖의 새 카드 뒤에 창 안의 옛 카드가 있을 수 있다.
+- **수준이 올라가면 중복이 아니다.** 같은 키로 더 높은 레벨이 오면(`error` 다음 `critical`) 접지 않고 울린다. 같거나 낮으면 접는다.
 
 ## Known Problems
 
 - `sources[].levelFloor`가 모델에만 있고 `SourceRule`이 아직 읽지 않는다.
+- **`ttlSec`은 지금 효과가 없다.** `TtlRule`은 `ReceivedAt + ttlSec`이 지났는지 보는데, `ReceivedAt`은 데몬이 요청을 받아 봉투를 만든 순간이고 규칙은 곧바로 돈다. 큐가 없으니 `ttl_expired`가 나올 수 없다. 필드와 규칙은 와이어 호환을 위해 남겨 둔다 — 보낸 쪽의 시각을 와이어로 받거나 대기열이 생기면 의미가 생긴다.
 - `PresenceRule`은 1단계에서 기록만 한다 (3단계에서 라우팅).
 - 버킷 상태는 메모리에만 있다. 데몬을 재시작하면 리밋이 초기화되는데, 실용적으로는 문제가 안 된다.
 
@@ -70,6 +77,7 @@ NotificationEnvelope ──> [7개 규칙 순차] ──> RuleDecision
 
 - 같은 태그로 5회 → 소리 1번, 히스토리 `count` 5.
 - 1.2부터 병합 키는 `NotificationEnvelope.DedupeKey` = 태그 + 스레드(있을 때). 두 대화가 같은 태그를 써도 각각 울린다. 스레드가 없으면 태그만 — 예전과 같다.
+- 1.11.1 중복 판정(`DedupeRule` 자체 테스트가 고정): 창 안의 반복은 접힘 / resolve가 이름 댄 기록 다음의 같은 태그는 울림 / 음소거로 막힌 기록 다음의 같은 태그는 울림 / `rate_limited` 폭주는 계속 접힘 / `error` 다음 같은 태그 `critical`은 울리고 `info`는 접힘 / 창 밖 새 카드 뒤의 옛 카드도 찾음. `AlarmResolver` 자체 테스트: 이미 끝난 기록은 `resolved` 0이지만 `EndedAt`이 붙고 같은 태그가 다시 울린다.
 - 30건 연속 → 대부분 `rate_limited`로 억제되고 안내 풍선은 1번.
 - 알림 범위: 스레드를 끄면 `thread_off`, `selected` 모드에서 켜지 않은 프로젝트는 `not_selected`, 같은 프로젝트의 수동 알림은 통과 — `AlertScope` 자체 테스트와 HTTP 자체 테스트(`/v1/alerts`)가 고정한다. 이벤트 규칙(Codex·Claude 각각): `Stop`·`SubagentStop`은 `thread_event_off`, 권한 요청·질문 창·직접 보낸 알림은 통과, 전체 규칙이 이김, `reset --events`는 그 이벤트만, 이벤트 없는 `reset`은 둘 다.
 - 방해금지 중 `info`는 억제, `critical`은 통과.
@@ -83,5 +91,5 @@ NotificationEnvelope ──> [7개 규칙 순차] ──> RuleDecision
 
 ## TODO
 
-- `levelFloor` 연결
+- `levelFloor`: `SourceRule`에 연결하거나 모델에서 지운다 — 읽지 않는 설정이 있는 것보다는 둘 중 하나가 낫다([TODO.md](../TODO.md))
 - 3단계의 `PresenceRule` 라우팅

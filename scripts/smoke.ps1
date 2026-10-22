@@ -1,6 +1,6 @@
 # End-to-end smoke test against a real running daemon.
 #
-# Automates steps 1-8 of the checklist in docs\regression.md. Steps 9-14 need a
+# Automates steps 1-9 of the checklist in docs\regression.md. Steps 10-18 need a
 # human (is there actually a sound? did the balloon appear? does unplugging the
 # audio device behave?) and are listed at the end.
 #

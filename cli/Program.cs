@@ -83,6 +83,13 @@ internal static class Program
                 return 0;
             case "--version" or "version": return await VersionAsync(args).ConfigureAwait(false);
             case "send" or "alert":
+                // `alert` stays a send (Codex notify configs call it), but
+                // `notipet alert off` meant the rules: say so, send nothing.
+                if (verb == "alert" && args.Length > 1 && args[1].ToLowerInvariant() is "on" or "off" or "reset" or "mode" or "status" or "list")
+                {
+                    Console.Error.WriteLine($"notipet: did you mean `notipet alerts {args[1]}`? (`alert` sends a notification)");
+                    return 1;
+                }
                 // `alert` with no title/body is how some hook configs call us
                 // (Codex's notify appends its JSON after our own args), so a
                 // trailing payload or piped stdin wins over an empty send.
@@ -102,7 +109,7 @@ internal static class Program
             case "doctor": return await DoctorAsync(args).ConfigureAwait(false);
             case "ack": return await AckAsync(args).ConfigureAwait(false);
             case "resolve": return await ResolveAsync(args).ConfigureAwait(false);
-            case "alerts" or "alert": return await AlertsAsync(args).ConfigureAwait(false);
+            case "alerts": return await AlertsAsync(args).ConfigureAwait(false);
             case "mute": return await MuteAsync(args).ConfigureAwait(false);
             case "unmute": return await MuteAsync(new[] { "mute", "off" }.Concat(args.Skip(1)).ToArray()).ConfigureAwait(false);
             case "desk" or "at-desk": return await DeskAsync(args).ConfigureAwait(false);
@@ -127,7 +134,11 @@ internal static class Program
         var plan = await ReadHookPayloadAsync(args).ConfigureAwait(false);
         if (plan is null)
         {
-            Help.Print(null);
+            // `notipet` typed on its own: the help. From a hook (options, or
+            // a pipe that brought nothing readable) never a word on stdout -
+            // Codex's synchronous hooks hand it to the agent.
+            if (args.Length == 0 && !Console.IsInputRedirected) Help.Print(null);
+            else if (HasFlag(args, "--verbose")) Console.Error.WriteLine("notipet: no hook payload to read");
             return Fail(args);
         }
 
@@ -226,11 +237,12 @@ internal static class Program
         // Claude Code hooks and Codex hooks both use snake_case on stdin; Codex's
         // legacy notify uses kebab-case with a "type" field. Try the kebab shape
         // only when it actually looks like one.
+        var kebab = json.Contains("\"last-assistant-message\"", StringComparison.Ordinal)
+                    || json.Contains("\"turn-id\"", StringComparison.Ordinal)
+                    || json.Contains("\"thread-id\"", StringComparison.Ordinal);
         try
         {
-            if (json.Contains("\"last-assistant-message\"", StringComparison.Ordinal)
-                || json.Contains("\"turn-id\"", StringComparison.Ordinal)
-                || json.Contains("\"thread-id\"", StringComparison.Ordinal))
+            if (kebab)
             {
                 var codex = JsonSerializer.Deserialize(json, NotipetJson.Compact.CodexNotifyEvent);
                 if (codex is not null) return new HookPlan { Notify = PayloadMapper.FromCodexNotify(codex) };
@@ -238,6 +250,54 @@ internal static class Program
 
             var hook = JsonSerializer.Deserialize(json, NotipetJson.Compact.AgentHookEvent);
             return hook is null ? null : PayloadMapper.PlanForHookEvent(hook, sourceHint, CodexHooks.ApprovalsAutoReviewed);
+        }
+        catch (JsonException)
+        {
+            // Valid JSON whose field types changed (an array where a string
+            // was) still says which event it was: an agent changing its payload
+            // must not silence notipet. Codex's kebab-case notify is left to
+            // its caller's Codex fallback.
+            if (kebab) return null;
+            var lenient = LenientHookEvent(json);
+            return lenient is null ? null : PayloadMapper.PlanForHookEvent(lenient, sourceHint, CodexHooks.ApprovalsAutoReviewed);
+        }
+    }
+
+    // A prompt that is no longer a plain string (content blocks): its text, so
+    // that a relay or a system message is still told apart from a typed reply
+    // (PayloadMapper.IsTypedPrompt). Unreadable is never taken for a reply.
+    private static string? PromptText(JsonElement root)
+    {
+        if (!root.TryGetProperty("prompt", out var prompt)) return null;
+        if (prompt.ValueKind == JsonValueKind.String) return prompt.GetString();
+        var text = new System.Text.StringBuilder();
+        void Collect(JsonElement e)
+        {
+            if (e.ValueKind == JsonValueKind.String) text.Append(e.GetString());
+            else if (e.ValueKind == JsonValueKind.Array) foreach (var item in e.EnumerateArray()) Collect(item);
+            else if (e.ValueKind == JsonValueKind.Object && e.TryGetProperty("text", out var t)) Collect(t);
+        }
+        Collect(prompt);
+        return text.Length > 0 ? text.ToString() : "<unreadable prompt>";
+    }
+
+    // The string fields one by one; whatever is not a string is left out.
+    private static AgentHookEvent? LenientHookEvent(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return null;
+            string? S(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            return new AgentHookEvent
+            {
+                SessionId = S("session_id"), TranscriptPath = S("transcript_path"), Cwd = S("cwd"),
+                HookEventName = S("hook_event_name"), TurnId = S("turn_id"), SessionTitle = S("session_title"),
+                Prompt = PromptText(root), NotificationType = S("notification_type"), Message = S("message"),
+                StopReason = S("stop_reason"), LastAssistantMessage = S("last_assistant_message"),
+                AgentId = S("agent_id"), AgentType = S("agent_type"), ToolName = S("tool_name")
+            };
         }
         catch (JsonException)
         {
@@ -481,7 +541,11 @@ internal static class Program
 
         if (HasFlag(args, "--fire-and-forget"))
         {
-            _ = RuntimeDiscovery.PostAsync(daemon.Info, "/v1/notify", request, NotipetJson.Compact.NotifyRequest, DefaultBudget);
+            // Not quite forget: a process that returns at once ends before the
+            // request is even sent. Wait a short moment, never for the answer's
+            // content.
+            var post = RuntimeDiscovery.PostAsync(daemon.Info, "/v1/notify", request, NotipetJson.Compact.NotifyRequest, DefaultBudget);
+            await Task.WhenAny(post, Task.Delay(FireAndForgetWait)).ConfigureAwait(false);
             return 0;
         }
 
@@ -532,6 +596,8 @@ internal static class Program
     };
 
     // ----- read-only commands -----
+
+    private static readonly TimeSpan FireAndForgetWait = TimeSpan.FromMilliseconds(400);
 
     private static async Task<int> VersionAsync(string[] args)
     {
@@ -732,9 +798,11 @@ internal static class Program
         var claudeText = ReadOrNull(claudeSettings);
         var claudePlugin = ClaudeHooks.PluginEnabled(claudeText);
         var claudeHooked = ClaudeHooks.HasOurs(claudeText);
-        Check(claudePlugin != claudeHooked, "claude hooks",
+        var claudeStale = !claudePlugin && claudeHooked && ClaudeHooks.IsStale(claudeText);
+        Check(claudePlugin != claudeHooked && !claudeStale, "claude hooks",
             claudePlugin && claudeHooked ? $"set twice (the {ClaudeHooks.PluginId} plugin and settings.json) - `notipet install-hooks --claude --remove`"
             : claudePlugin ? $"plugin {ClaudeHooks.PluginId}"
+            : claudeStale ? $"{claudeSettings} has hooks from an older notipet (an MCP input form or a question answer may not ring or end) - run `notipet install-hooks --claude --write`"
             : claudeHooked ? claudeSettings
             : "not configured - install the notipet Claude Code plugin, or `notipet install-hooks --claude --write`", warnOnly: true);
 
@@ -751,7 +819,7 @@ internal static class Program
         Check(inToml && !inJson && !quoted && !noAnswerHook, "codex hooks",
             inJson ? $"in {codexHooksJson}, which Codex does not run everywhere - `notipet install-hooks --codex --write` moves them to config.toml"
             : quoted ? "written before 1.6.4 with a quoted exe path, which a sandboxed Codex breaks (hook exited with code 1) - run `notipet install-hooks --codex --write`, then trust the hooks again"
-            : noAnswerHook ? "written before 1.8.0, without the hook that ends a question's alarm when you answer - run `notipet install-hooks --codex --write` and trust the new PostToolUse hook"
+            : noAnswerHook ? "written before 1.9.0, without the question-box hooks (a question box does not ring) - run `notipet install-hooks --codex --write` and trust the new PostToolUse/PreToolUse hooks"
             : inToml ? codexConfig
             : "not configured - `notipet install-hooks --codex --write`", warnOnly: true);
 
@@ -763,6 +831,18 @@ internal static class Program
             : claudePlugin ? $"plugin {ClaudeHooks.PluginId}"
             : skillFile ? skill
             : "not installed - the notipet Claude Code plugin, or `notipet install-skill`", warnOnly: true);
+
+        // Codex: the plugin's skill lives in a folder named after its version,
+        // so an AGENTS.md that names a path to it goes stale with every update
+        // - refer to the skill by name (`notipet`).
+        var codexPluginSkill = CodexHooks.PluginSkillPath(ReadOrNull(codexConfig) ?? "");
+        var codexSkill = SkillInstaller.CodexSkillPath();
+        var codexSkillFile = File.Exists(codexSkill);
+        Check((codexPluginSkill is not null) != codexSkillFile, "codex skill",
+            codexPluginSkill is not null && codexSkillFile ? $"twice (the plugin and {codexSkill}) - delete {Path.GetDirectoryName(codexSkill)}"
+            : codexPluginSkill is not null ? $"plugin: {codexPluginSkill} (refer to it by name, `notipet` - the path changes with each version)"
+            : codexSkillFile ? codexSkill
+            : "not installed - the notipet Codex plugin, or `notipet install-skill --codex`", warnOnly: true);
 
         Check(true, "cli", exe);
         Console.WriteLine(problems == 0 ? "\nno problems found" : $"\n{problems} problem(s) found");
@@ -1208,10 +1288,9 @@ internal static class Program
             Console.WriteLine("# this block (both would ring twice). Without it: %USERPROFILE%\\.claude\\settings.json,");
             Console.WriteLine("# or `notipet install-hooks --claude --write` to add it for you.");
             Console.Write(ClaudeHooks.Serialize(new System.Text.Json.Nodes.JsonObject { ["hooks"] = ClaudeHooks.EventMap(exe) }));
-            Console.WriteLine();
-            Console.WriteLine("# Or, with the daemon's port pinned in settings.json (server.port),");
-            Console.WriteLine("# the leaner http hook that skips this CLI entirely:");
-            Console.WriteLine(HookSnippets.ClaudeHttpHook(RuntimeDiscovery.ReadFile()?.Port ?? 47811));
+            // No http hook here: every request needs the token, which is new
+            // on each start and lives only in runtime.json - a hook pasted
+            // into settings.json cannot send it, and got 401 every time.
             Console.WriteLine();
         }
 
@@ -1224,7 +1303,7 @@ internal static class Program
         }
 
         Console.WriteLine();
-        Console.WriteLine("Printed only. Paste these in yourself, or for Codex use --write.");
+        Console.WriteLine("Printed only. Paste these in yourself, or use --claude --write / --codex --write.");
         return 0;
     }
 
@@ -1481,6 +1560,18 @@ internal static class Program
 
         // Broken JSON is a null, not a crash.
         if (ParseHookJson("{ broken", null) is not null) return false;
+
+        // A field whose type changed upstream (an object where a string was)
+        // still rings, as the event it says it is; a prompt that became an
+        // array still only ends what is over.
+        var reshaped = ParseHookJson("{\"session_id\":\"s\",\"hook_event_name\":\"Notification\",\"notification_type\":\"permission_prompt\",\"message\":{\"text\":\"x\"}}", "claude-code");
+        if (reshaped?.Level != "attention") return false;
+        if (ParseHookPlan("{\"session_id\":\"s\",\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":[{\"type\":\"text\"}]}", "claude-code") is not { Notify: null, Resolve: not null, Replied: null }) return false;
+        // ...its text still tells a relay from a typed reply.
+        if (ParseHookPlan("{\"session_id\":\"s\",\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":[{\"type\":\"text\",\"text\":\"[agent-summit] hi\"}]}", "claude-code") is not { Replied: null }) return false;
+        if (ParseHookPlan("{\"session_id\":\"s\",\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":[{\"type\":\"text\",\"text\":\"yes, go\"}]}", "claude-code") is not { Replied: not null }) return false;
+        // Codex's kebab notify that no longer fits keeps the Codex fallback.
+        if (ParseHookPlan("{\"type\":\"agent-turn-complete\",\"turn-id\":\"7\",\"input-messages\":[{\"a\":1}]}", null) is not null) return false;
 
         // stdin is UTF-8 whatever the console code page says (hooks), with or
         // without a BOM; bytes that are not UTF-8 use the fallback instead.

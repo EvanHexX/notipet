@@ -33,6 +33,12 @@ internal sealed class HistoryEntry
     // or pop-up was still live. Set at most once, under the store's lock.
     public DateTimeOffset? ResolvedAt { get; set; }
 
+    // When a resolve named it, live or not: the moment is over, so the same
+    // tag again is a new one (FindRecent). Unlike ResolvedAt this is set even
+    // when its sound had already finished - a turn's "finished" chime is over
+    // the moment the next prompt starts, and the next turn's must ring.
+    public DateTimeOffset? EndedAt { get; set; }
+
     // When the user dealt with it, and how (SeenBy). Unlike ResolvedAt, which
     // says the moment ended, this says the user saw it: several alerts pile
     // up, and Recent has to show which ones they already handled.
@@ -67,7 +73,8 @@ internal sealed class HistoryEntry
 // (unless history.persist is off) so restarts, updates and reboots do not empty
 // Recent. It holds titles and short bodies that can quote prompts - the agents
 // themselves keep whole transcripts under the user's profile, and this file
-// sits in the user-only data folder (Paths.EnsureDataDir).
+// sits in the user's own data folder (Paths.EnsureDataDir), out of other
+// ordinary accounts' reach.
 internal sealed class HistoryStore
 {
     private readonly LinkedList<HistoryEntry> _entries = new();
@@ -103,14 +110,39 @@ internal sealed class HistoryStore
         {
             foreach (var entry in _entries)
             {
-                if (entry.LastAt < cutoff) break;
+                // No early break: entries are in arrival order, but a collapse
+                // moves LastAt without moving the entry, so an older card can
+                // still be inside the window behind a newer one that is not.
+                if (entry.LastAt < cutoff) continue;
                 // A resolved moment is over: the same tag again is a new one
                 // and must sound, not collapse into the one that ended.
-                if (entry.ResolvedAt is not null) continue;
+                if (entry.ResolvedAt is not null || entry.EndedAt is not null) continue;
+                // Held back because of a state the user can change (muted, a
+                // thread turned off...): once they change it, the next one
+                // must ring, not fold into the card that never did. A rate
+                // limit and a dropped repeat (dedupe.collapse off) are the
+                // exceptions - both belong to the burst they came in.
+                if (!entry.Accepted && entry.SuppressedReason is not (RateLimited or Deduped)) continue;
                 if (string.Equals(entry.Envelope.DedupeKey, dedupeKey, StringComparison.Ordinal)) return entry;
             }
         }
         return null;
+    }
+
+    // RateLimitRule's and DedupeRule's reasons.
+    private const string RateLimited = "rate_limited";
+    private const string Deduped = "deduped";
+
+    // Marks entries over (EndedAt), once each, live or not.
+    public void MarkEnded(IEnumerable<HistoryEntry> entries, DateTimeOffset at)
+    {
+        lock (_gate)
+        {
+            foreach (var entry in entries)
+            {
+                if (entry.EndedAt is null && _entries.Contains(entry)) entry.EndedAt = at;
+            }
+        }
     }
 
     // Entries a resolve request names, newest first. Matching is in

@@ -51,18 +51,19 @@ settings.sound      ─┼─> SoundResolver ─> ResolvedSound ─> AlarmSessio
 레벨 기본값          ─┘                         │
                                                └─> AlarmRegistry (반복 알람만)
                                                         │
-                            /v1/ack, 트레이 클릭, 풍선 클릭, 메뉴, 종료 ──> Stop()
+        /v1/ack, /v1/resolve(알람 id), 트레이 클릭, 풍선 클릭, 메뉴, 종료 ──> Stop()
 ```
 
 `ResolvedSound`는 불변 레코드다. 한번 결정되면 재생 중에 설정이 바뀌어도 그 알람은 원래대로 끝난다.
 
 ## Important Constraints
 
-- **MediaPlayer는 UI 스레드(STA)에서 만들지도, 버리지도 않는다.** STA에서 만든 MediaPlayer는 생성·`Dispose` 중에 메시지 루프를 돌리며 기다리고, 그 틈에 들어온 작업(장치 변경 메시지 등)이 또 MediaPlayer를 만들면 서로를 기다리며 UI 스레드가 영원히 멈춘다 — 실제로 그렇게 멈췄다([regression.md](../regression.md)). 그래서: 장치 변경은 `RequestProbe`(스레드 풀), 미리듣기와 테스트 알림은 `Task.Run`, 그리고 엔진 자체가 STA에서 불리면 스레드 풀로 넘긴다(`MediaPlayerSoundEngine.OnSta` — 마지막 방어선).
+- **MediaPlayer는 UI 스레드(STA)에서 만들지도, 버리지도 않는다.** STA에서 만든 MediaPlayer는 생성·`Dispose` 중에 메시지 루프를 돌리며 기다리고, 그 틈에 들어온 작업(장치 변경 메시지 등)이 또 MediaPlayer를 만들면 서로를 기다리며 UI 스레드가 영원히 멈춘다 — 실제로 그렇게 멈췄다([regression.md](../regression.md)). 그래서: 장치 변경은 `RequestProbe`(스레드 풀), 미리듣기와 테스트 알림은 `Task.Run`, 그리고 엔진 자체가 STA에서 불리면 스레드 풀로 넘긴다(`MediaPlayerSoundEngine.OnSta` — 마지막 방어선). 정지도 같다: 트레이 클릭·음소거·알림 창 클릭은 UI 스레드에서 알람을 멈추므로, `Handle.Stop`은 완료 신호를 바로 준 뒤 STA이면 `Pause`/`Dispose`를 스레드 풀에 넘긴다(1.11.1 — 전에는 그 자리에서 버렸다).
 
 - **`MediaPlayer.CommandManager.IsEnabled = false`는 선택이 아니다.** unpackaged 프로세스에서 기본 SMTC 통합이 시스템 미디어 전송 컨트롤 등록을 시도하다 던지거나, 던지지 않으면 사용자의 미디어 키를 가로챈다.
 - `AudioCategory = MediaPlayerAudioCategory.Alerts` — 윈도우가 알림 스트림으로 취급해 음악/통화에 대해 올바르게 더킹한다.
-- **지속 시간 상한은 코드에서 강제된다.** `AppSettings.AbsoluteMaxAlarmSeconds`(600초)이고, 요청의 `maxDurationSec`은 이 값을 **줄이기만** 할 수 있다. 상한은 `until_ack`뿐 아니라 모든 반복 모드에 적용된다.
+- **지속 시간 상한은 코드에서 강제된다.** `AppSettings.AbsoluteMaxAlarmSeconds`(600초)이고, 요청의 `maxDurationSec`은 이 값을 **줄이기만** 할 수 있다. 상한은 `until_ack`뿐 아니라 모든 반복 모드에 적용된다. 예외는 사용자가 설정 창에서 고르는 `sound.maxDurationSec = 0`(`UnlimitedAlarmSeconds`) 하나로, 지속 시간을 정하지 않은 `until_ack` 알람에만 마감이 없다. 요청이나 레벨 기본값이 정한 지속 시간, 자리 착석 단축(30초)은 그대로 적용된다([regression.md](../regression.md)).
+- **알람 id는 실행마다 다르다**(1.11.1): `alm_<실행 토큰, 16진 6자리>_<순번 4자리>`(예: `alm_3f9c2a_0002`). 토큰은 `SoundService`가 시작할 때 한 번 만든다. 최근 알림은 재시작을 넘어 남는데(history.json) 순번은 실행마다 1부터 다시 세서, 1.11.0까지는 복원된 카드의 `alm_0002`가 이번 실행의 다른 알람을 가리켰다 — 재시작 뒤 스레드 A의 Stop 훅이 A의 옛 카드를 resolve하면서 스레드 B의 알람을 끌 수 있었다. 그래서 history.json에서 복원한 카드의 `windows_sound` 전달은 `referenceId` 없이 읽는다(`HistoryFile`) — 그 실행의 알람은 이미 없다.
 - **`sound.file`은 `allowedRoots` 안에서만 허용된다.** 루프백 API 호출자가 데몬으로 임의 파일을 열게 해선 안 된다.
 - **별칭에 경로 구분자가 있으면 거부한다.** 별칭은 HTTP 호출자에게서 올 수 있고, 레지스트리 키 경로를 벗어나면 안 된다.
 - **`intervalMs`는 소리가 끝난 뒤의 공백이지 재생 주기가 아니다.** 루프는 `ISoundHandle.Completion`을 기다린 뒤 간격만큼 쉬고 다시 재생한다. 고정 주기로 돌렸더니 간격보다 긴 소리가 잘려서 계속 다시 시작됐다 — 기본 알람이 5초짜리라 정확히 그 상태였고, [regression.md](../regression.md)에 기록돼 있다.

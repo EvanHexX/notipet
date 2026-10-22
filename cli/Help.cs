@@ -28,7 +28,7 @@ internal static class Help
               --volume V         0..1, multiplied by the configured volume
               --silent           notification only, no sound
               --channels LIST    sound,notification (narrows, never enables)
-              --ttl SEC          drop it if it could not be delivered in time
+              --ttl SEC          accepted, but has no effect for now
               --open URI         a click on the card opens this instead of the thread:
                                  http(s) on this PC, or a scheme listed in
                                  settings.json links.allowedSchemes (else ignored,

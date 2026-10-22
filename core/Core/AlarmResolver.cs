@@ -56,9 +56,15 @@ internal sealed class AlarmResolver
         var session = NonEmpty(request.Session);
         var untilReply = request.UntilReply == true;
 
+        // Everything named is over, sounding or not, and held back or not: the
+        // same tag again is a new moment (HistoryStore.FindRecent). A turn's
+        // Stop that a rate limit held back would otherwise keep swallowing the
+        // next turn's.
+        bool Named(HistoryEntry e) => Matches(e, id, tags, source, session) && (!untilReply || e.Envelope.UntilReply);
+        _history.MarkEnded(_history.Where(e => e.EndedAt is null && Named(e)), DateTimeOffset.Now);
+
         // Suppressed notifications never rang or showed; resolved ones are done.
-        var matched = _history.Where(e => e.Accepted && e.ResolvedAt is null && Matches(e, id, tags, source, session)
-                                          && (!untilReply || e.Envelope.UntilReply));
+        var matched = _history.Where(e => e.Accepted && e.ResolvedAt is null && Named(e));
         if (matched.Count == 0) return response;
 
         // The user answered: they have seen these, live or not.
@@ -175,9 +181,10 @@ internal sealed class AlarmResolver
             if (alarms.Count != 2 || open.Contains(a.Envelope.Id)) return false;
             if (!open.Contains(aOther.Envelope.Id) || !open.Contains(b.Envelope.Id)) return false;
             if (a.ResolvedAt is null || aOther.ResolvedAt is not null || b.ResolvedAt is not null) return false;
-            // A notification that was held back never rang: nothing to end.
+            // A notification that was held back never rang: nothing to stop -
+            // but it is over, so it cannot swallow the next one.
             if (resolver.ResolveAsync(new ResolveRequest { Session = "thread-c" }).Result.Resolved != 0) return false;
-            if (suppressed.ResolvedAt is not null) return false;
+            if (suppressed.ResolvedAt is not null || suppressed.EndedAt is null) return false;
 
             // Again: already over, so a quiet no-op.
             var again = resolver.ResolveAsync(new ResolveRequest { Tag = "shop:needs-input", Session = "thread-a" }).Result;
@@ -189,6 +196,8 @@ internal sealed class AlarmResolver
             open.Remove(b.Envelope.Id);
             var late = resolver.ResolveAsync(new ResolveRequest { Session = "thread-b" }).Result;
             if (late.Resolved != 0 || b.ResolvedAt is not null) return false;
+            // ...but it is over all the same: the next one with its tag rings.
+            if (b.EndedAt is null || history.FindRecent(b.Envelope.DedupeKey, TimeSpan.FromMinutes(1)) is not null) return false;
 
             // A resolved moment no longer swallows the next one through dedupe.
             if (history.FindRecent(a.Envelope.DedupeKey, TimeSpan.FromMinutes(1)) is not null) return false;

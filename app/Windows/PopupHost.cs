@@ -9,9 +9,11 @@ using Windows.Graphics;
 
 namespace Notipet.Windows;
 
-// Shows notipet's own pop-ups, stacked upward from the bottom-right corner of
-// the primary screen's work area (above the taskbar), newest at the bottom
-// like Windows' own. When one closes the rest close the gap.
+// Shows notipet's own pop-ups in the primary screen's work area: by default
+// stacked upward from the bottom-right corner (above the taskbar), newest at
+// the bottom like Windows' own; with popups.position = topRight, downward
+// from the top-right corner, newest at the top. When one closes the rest
+// close the gap.
 //
 // Bounded: a burst of notifications must not cover the screen. Past
 // MaxVisible the oldest card goes - but a card that was meant to stay until

@@ -107,12 +107,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         // First look a few minutes after start, then every few hours; the
         // check itself enforces "on, and a day since the last one".
         _updateTimer = new System.Threading.Timer(_ => AutoCheckForUpdates(), null, TimeSpan.FromMinutes(3), TimeSpan.FromHours(3));
-        if (Program.RecoveredFromHang)
-        {
-            _trayIcon?.ShowNotification("Notipet", Loc.T(
-                "Notipet stopped responding and restarted itself.",
-                "Notipet이 응답하지 않아 스스로 다시 시작했습니다."), BalloonLevel.Warning);
-        }
+        ShowStartupWarnings();
 
         // Watched from the runtime-file timer; see GraphicsAdapters.
         _adapters = GraphicsAdapters.TryCreate(allowSimulation: !Program.RestartedForGraphics);
@@ -421,13 +416,49 @@ internal sealed class TrayController : IDisposable, INotipetHost
     public void InstallUpdate()
     {
         if (_updater.State.Available is null) return;
-        _ = Task.Run(() => _updater.DownloadAndRestartAsync(PrepareForUpdate));
+        _ = Task.Run(async () =>
+        {
+            var state = await _updater.DownloadAndRestartAsync(PrepareForUpdate).ConfigureAwait(false);
+            if (state.Phase != Notipet.Update.UpdatePhase.Failed) return;
+            if (_preparedForUpdate)
+            {
+                // The tray icon, runtime.json and the watchdog are already put
+                // away, but this process still holds the single-instance mutex:
+                // left like this it would swallow every notification, unseen.
+                // A fresh start is simpler than putting each piece back.
+                RestartAfterFailedUpdate(state.Error);
+            }
+            else
+            {
+                OnUiThread(() => ShowSystemBalloon(Loc.T($"Could not install the update: {state.Error}", $"업데이트를 설치하지 못했습니다: {state.Error}"), BalloonLevel.Warning));
+            }
+        });
+    }
+
+    private volatile bool _preparedForUpdate;
+
+    private void RestartAfterFailedUpdate(string? error)
+    {
+        DaemonLog.Write($"update failed after shutting down ({error}); restarting");
+        try
+        {
+            if (Environment.ProcessPath is { } exe)
+            {
+                Process.Start(new ProcessStartInfo(exe, $"--restart-after {Environment.ProcessId} update-failed") { UseShellExecute = false });
+            }
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("Updater.RestartAfterFailure", ex);
+        }
+        OnUiThread(() => Quit("update failed; restarting"));
     }
 
     // Velopack is about to end this process and start the new version. On a
     // pool thread: only things that need no UI thread.
     private void PrepareForUpdate()
     {
+        _preparedForUpdate = true;
         DaemonLog.Write($"quit: updating to v{_updater.State.AvailableVersion}");
         _historyFile.Flush();
         _watchdog?.Dispose();
@@ -452,17 +483,17 @@ internal sealed class TrayController : IDisposable, INotipetHost
         {
             _settings.Updates.NotifiedVersion = state.AvailableVersion;
             _settings.Save();
-            _trayIcon?.ShowNotification("Notipet", Loc.T(
+            ShowSystemBalloon(Loc.T(
                 $"Version {state.AvailableVersion} is available. Install it from the tray menu or Settings > About.",
                 $"새 버전 {state.AvailableVersion}이 있습니다. 트레이 메뉴나 설정 > 정보에서 설치하세요."), BalloonLevel.Info);
         }
         else if (manual && state.Phase == Notipet.Update.UpdatePhase.UpToDate)
         {
-            _trayIcon?.ShowNotification("Notipet", Loc.T($"Notipet {AppVersion} is up to date.", $"Notipet {AppVersion}이 최신 버전입니다."), BalloonLevel.Info);
+            ShowSystemBalloon(Loc.T($"Notipet {AppVersion} is up to date.", $"Notipet {AppVersion}이 최신 버전입니다."), BalloonLevel.Info);
         }
         else if (manual && state.Phase == Notipet.Update.UpdatePhase.Failed)
         {
-            _trayIcon?.ShowNotification("Notipet", Loc.T($"Could not check for updates: {state.Error}", $"업데이트를 확인하지 못했습니다: {state.Error}"), BalloonLevel.Warning);
+            ShowSystemBalloon(Loc.T($"Could not check for updates: {state.Error}", $"업데이트를 확인하지 못했습니다: {state.Error}"), BalloonLevel.Warning);
         }
     }
 
@@ -680,7 +711,8 @@ internal sealed class TrayController : IDisposable, INotipetHost
             InstanceId = _instanceId,
             Version = AppVersion,
             Port = () => _server?.Port ?? port,
-            Warnings = () => _server?.Warnings ?? (IReadOnlyList<string>)Array.Empty<string>(),
+            Warnings = () => (_server?.Warnings ?? (IReadOnlyList<string>)Array.Empty<string>())
+                .Concat(_settings.LoadProblem is { } problem ? new[] { problem } : Array.Empty<string>()).ToList(),
             SettingsChanged = () => OnUiThread(() =>
             {
                 RefreshTray();
@@ -724,7 +756,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
         }
         _runtime = RuntimeFile.Describe(_server.Port, token, _instanceId, sessionId, AppVersion);
         RuntimeFile.Write(_runtime);
-        DaemonLog.Write($"started v{AppVersion}, port {_server.Port}{(Program.RecoveredFromHang ? ", replacing an instance whose UI thread hung" : "")}");
+        DaemonLog.Write($"started v{AppVersion}, port {_server.Port}{(Program.RecoveredFromHang ? ", replacing an instance whose UI thread hung" : Program.RestartedAfterFailedUpdate ? ", after an update that could not be installed" : "")}");
         _package = PackageShadows.CurrentPackage();
         if (_package is not null)
         {
@@ -737,10 +769,24 @@ internal sealed class TrayController : IDisposable, INotipetHost
         // Notipet was down. Whatever does that next time, it lasts 30 s.
         _runtimeHeal = new System.Threading.Timer(_ => HealRuntimeFile(), null, RuntimeHealInterval, RuntimeHealInterval);
 
-        if (_server.Warnings.Count > 0)
-        {
-            _trayIcon?.ShowNotification("Notipet", string.Join("; ", _server.Warnings), BalloonLevel.Warning);
-        }
+    }
+
+    // Everything worth saying at start, in one balloon: the shell shows one at
+    // a time, so a second would hide the first (a port warning used to hide
+    // the news that settings.json had been set aside).
+    private void ShowStartupWarnings()
+    {
+        var lines = new List<string>();
+        if (Program.RecoveredFromHang)
+            lines.Add(Loc.T("Notipet stopped responding and restarted itself.", "Notipet이 응답하지 않아 스스로 다시 시작했습니다."));
+        if (Program.RestartedAfterFailedUpdate)
+            lines.Add(Loc.T("The update could not be installed, so Notipet restarted on the current version.", "업데이트를 설치하지 못해 지금 버전으로 다시 시작했습니다."));
+        if (_settings.LoadProblem is not null)
+            lines.Add(Loc.T("settings.json could not be used, so Notipet started with default settings. See daemon.log.", "settings.json을 쓸 수 없어 기본 설정으로 시작했습니다. daemon.log를 확인하세요."));
+        if (_server is null)
+            lines.Add(Loc.T("The local API could not start, so agents cannot reach Notipet. See crash.log.", "로컬 API를 시작하지 못해 에이전트가 Notipet에 알릴 수 없습니다. crash.log를 확인하세요."));
+        else lines.AddRange(_server.Warnings);
+        if (lines.Count > 0) ShowSystemBalloon(string.Join("\n", lines), BalloonLevel.Warning);
     }
 
     private static readonly TimeSpan RuntimeHealInterval = TimeSpan.FromSeconds(30);
@@ -954,6 +1000,14 @@ internal sealed class TrayController : IDisposable, INotipetHost
     // The shell shows one balloon at a time, so a click is on the last one.
     private volatile string? _lastBalloonId;
 
+    // notipet's own balloons (updates, rate limits, warnings). A click on one
+    // is not a click on the agent card shown before it.
+    private void ShowSystemBalloon(string text, BalloonLevel level)
+    {
+        _lastBalloonId = null;
+        _trayIcon?.ShowNotification("Notipet", text, level);
+    }
+
     private void OnBalloonClicked()
     {
         if (_lastBalloonId is { } id && _history.Find(id) is { } entry)
@@ -1043,8 +1097,7 @@ internal sealed class TrayController : IDisposable, INotipetHost
 
     private void OnThrottleAnnouncement(string sourceId)
     {
-        OnUiThread(() => _trayIcon?.ShowNotification(
-            "Notipet",
+        OnUiThread(() => ShowSystemBalloon(
             Loc.T($"Rate-limiting notifications from {sourceId}", $"{sourceId} 알림을 제한하는 중"),
             BalloonLevel.Warning));
     }

@@ -4,7 +4,7 @@
 
 ## 수동 스모크 체크리스트
 
-1~8번은 [scripts/smoke.ps1](../scripts/smoke.ps1)이 자동화한다. 9~14번은 사람이 해야 한다 — 스크립트는 소리를 들을 수 없다.
+1~9번은 [scripts/smoke.ps1](../scripts/smoke.ps1)이 자동화한다(그 앞에 두 exe의 `--self-test`도 돈다). 10~18번은 사람이 해야 한다 — 스크립트는 소리를 들을 수 없다. 스모크가 끝에 출력하는 수동 목록이 이 10~18번이다. 19·20번은 이 문서에만 있는 추가 확인이다.
 
 ```powershell
 .\scripts\smoke.ps1                                      # bin\ 기준
@@ -21,23 +21,44 @@
 6. 같은 태그로 5번 → 소리 1번, 히스토리 `count` 5
 7. 30건 연속 → 레이트 리밋이 걸린다 (기관총이 되지 않는다)
 8. `until_ack` 알람이 등록되고 태그로 ack하면 멈춘다
+9. 반복 알람이 소리마다 끝까지 재생한다 (`Notification.Looping.Alarm` 2회 + 간격 0.7초가 8~20초 안에 끝남. 잘리면 8초가 안 된다 — 아래 "긴 알람이 끝나기 전에 계속 다시 시작됐다")
 
 8·9번(긴 알람의 시간을 재는 검사)은 **"PC 앞에 있음"이 켜져 있으면 `[SKIP]`**으로 건너뛴다. 그 모드는 설계상 모든 반복 알람을 한 번으로 줄이기 때문이다. 테스트가 사용자의 설정을 바꾸지는 않는다 — 돌리려면 직접 끄고 실행한다. 또 스모크를 1분 안에 두 번 돌리면 첫 번째의 7번(폭주)이 레이트 리밋 버킷을 비워 두 번째의 5·7번이 막힌다. 1분 쉬고 돌린다.
 
 ### 수동
 
-9. **소리가 실제로 난다.** `--test-sound info` / `attention` / `critical`을 각각 돌려 레벨마다 다르게 들리는지, `attention`이 2번 반복하는지, `critical`이 계속 반복하다 `maxDurationSec`에 자동으로 멈추는지 확인
-10. 방해금지 시간대를 지금 시각을 포함하도록 켜면 `info`는 `suppressedReason: quiet_hours`로 억제되고 `critical`은 통과한다
-11. 트레이에서 음소거 → 아무 소리도 안 남, 아이콘이 회색+빗금. 해제하면 복구
-12. **사운드 설정에서 모든 오디오 장치를 비활성화** → 알림 풍선은 그대로 뜨고, 응답의 `windows_sound`는 `failed`, 트레이 아이콘이 주황색 경고로 바뀌고 툴팁이 이유를 설명한다. 다시 활성화하면 **재시작 없이** 다음 알림부터 소리가 난다
-13. `explorer.exe`를 작업 관리자에서 재시작 → 트레이 아이콘이 돌아온다 (`TaskbarCreated` 경로)
-14. Codex hooks를 붙인 뒤 **기존 `notify` 통합(computer-use)이 여전히 동작한다**
-15. 작업 관리자로 데몬을 강제 종료(정상 종료 아님) → `notipet ping --no-launch`가 `stale runtime.json, pid N`을 보고한다. `--no-launch` 없이 부르면 새 인스턴스를 띄운다
-16. 앱을 재시작해도 설정(음소거, 방해금지, 자동 시작)이 유지된다
+10. **소리가 실제로 난다.** `--test-sound info` / `attention` / `critical`을 각각 돌려 레벨마다 다르게 들리는지, `attention`이 2번 반복하는지, `critical`이 계속 반복하다 `maxDurationSec`에 자동으로 멈추는지 확인
+11. 설정 창이 열리고 모든 페이지가 그려진다 (`NotipetTray.exe --settings`, 페이지별 스크린샷은 [scripts/ui-check.ps1](../scripts/ui-check.ps1))
+12. 트레이 좌클릭으로 최근 알림 창이 열리고 본문이 잘리지 않고 다 보인다
+13. 트레이 메뉴의 "PC 앞에 있음"을 켜면 `critical` 알람이 한 번 재생으로 줄어든다
+14. 방해금지 시간대를 지금 시각을 포함하도록 켜면 `info`는 `suppressedReason: quiet_hours`로 억제되고 `critical`은 통과한다
+15. 트레이에서 음소거 → 아무 소리도 안 남, 아이콘이 회색+빗금. 해제하면 복구
+16. **사운드 설정에서 모든 오디오 장치를 비활성화** → 알림 풍선은 그대로 뜨고, 응답의 `windows_sound`는 `failed`, 트레이 아이콘이 주황색 경고로 바뀌고 툴팁이 이유를 설명한다. 다시 활성화하면 **재시작 없이** 다음 알림부터 소리가 난다
+17. `explorer.exe`를 작업 관리자에서 재시작 → 트레이 아이콘이 돌아온다 (`TaskbarCreated` 경로)
+18. Codex hooks를 붙인 뒤 **기존 `notify` 통합(computer-use)이 여전히 동작한다**
+19. 작업 관리자로 데몬을 강제 종료(정상 종료 아님) → `notipet ping --no-launch`가 `stale runtime.json, pid N`을 보고한다. `--no-launch` 없이 부르면 새 인스턴스를 띄운다
+20. 앱을 재시작해도 설정(음소거, 방해금지, 자동 시작)과 최근 알림이 유지된다
 
 ---
 
 ## 기록된 문제
+
+### 1.11.1 리뷰에서 잡은 것들
+
+1.11.0 뒤의 코드 리뷰에서 나와 코드로 확인한 것. 맨 끝의 `ttlSec` 말고는 1.11.1에서 고쳤다.
+
+- **재시작 뒤 한 스레드의 훅이 다른 스레드의 알람을 껐다.** 알람 id가 실행마다 `alm_0001`부터 다시 셌는데, history.json에서 복원한 카드는 옛 실행의 id를 `windows_sound` 전달에 그대로 갖고 있었다. 스레드 A의 Stop 훅이 A의 옛 카드를 resolve하면, 이번 실행에서 같은 번호를 받은 스레드 B의 알람이 멈췄다. → id에 실행 토큰을 넣고(`alm_3f9c2a_0002`), 복원한 카드는 `referenceId` 없이 읽는다([sound_engine.md](modules/sound_engine.md)). `HistoryPersistence` 자체 테스트가 고정한다.
+- **resolve된 카드에 다음 알림이 접혀 조용했다.** resolve는 아직 울리거나 떠 있던 것에만 `ResolvedAt`을 붙였고, 중복 판정은 그것만 건너뛰었다. 소리가 이미 끝난 턴의 "끝남" 카드는 다음 프롬프트에서 resolve돼도 열린 채라, 30초 안에 끝난 다음 턴의 완료 알림이 거기에 접혔다. 음소거 중 막힌 카드도 같아서, 풀고 나서 온 같은 태그가 한 번도 울리지 않은 카드에 접혔다. → resolve가 이름 댄 기록은 모두 `EndedAt`(저장됨)이고 중복이 아니다. 사용자가 바꿀 수 있는 상태로 막힌 기록에도 접지 않는다(레이트 리밋만 예외). 같은 태그로 레벨이 오르면(`error` → `critical`) 울린다. `FindRecent`가 창 밖 카드에서 멈춰 그 뒤의 접힌 옛 카드를 놓치던 것도 고쳤다. `DedupeRule` 자체 테스트([rules_engine.md](modules/rules_engine.md)).
+- **`settings.json`이 조용히 기본값으로 덮일 수 있었다.** 읽지 못하면(문법 오류, 잠김) 기본값으로 돌았고, 다음 저장(음소거, `alerts`)이 사용자의 파일 위에 기본값을 썼다. 쓰는 도중 프로세스가 끝나면(감시 장치, 로그오프) 반쪽 파일이 남아 다음 시작이 기본값이었다. [settings.md](settings.md)의 예시는 `//` 주석이 있어 그대로 붙여 넣으면 깨졌다. → 주석과 끝 쉼표를 받는다. 깨진 파일은 `settings.json.bad`로 남기고 기본값으로 돌며, `daemon.log`·트레이 풍선·`/v1/health` 경고로 알린다. 다음 저장이 새 파일을 쓴다. 세 번 읽어도 잠겨 있으면 그 실행은 저장하지 않는다. 저장은 `settings.json.tmp`에 쓰고 옮기며, 한 번에 하나다. `AppSettings` 자체 테스트.
+- **MCP 서버의 입력 창이 울리지 않았다.** `PayloadMapper`는 `elicitation_dialog`·`elicitation_url_dialog`를 사용자를 기다리는 것으로 다뤘지만, Claude 훅의 Notification matcher에 없어서 훅이 실행되지 않았다. → matcher에 추가. 플러그인은 업데이트로, settings.json 훅은 `notipet install-hooks --claude --write`를 다시 실행해서 바뀐다.
+- **훅으로 불린 CLI가 도움말을 stdout에 찍었다.** 읽을 페이로드가 없으면 도움말 전체를 stdout에 냈다. Codex의 동기 훅은 stdout을 에이전트에게 넘긴다. → 터미널에서 인수 없이 친 `notipet`만 도움말을 보인다. 그 밖에는 아무것도 찍지 않는다(`--verbose`면 stderr에 한 줄). 필드 타입이 바뀐 페이로드(문자열 자리에 객체·배열)는 버리지 않고 문자열 필드만 읽는다.
+- **`notipet alert off`가 "off"라는 알림을 보냈다.** `alert`는 `send`의 별칭이면서(Codex notify 설정이 쓴다) `alerts`의 별칭이기도 해서, 먼저 걸린 `send`가 이겼다. → `alert on|off|reset|mode|status|list`는 stderr에 "did you mean `notipet alerts …`?"를 내고 아무것도 보내지 않고 1로 끝난다. `alerts`의 별칭 `alert`는 없앴다.
+- **openai/codex 저장소의 클론이 통째로 조용했다.** Codex 앱 폴더 판별(`IsCodexAppFolder`)이 경로 어디든 `\OpenAI\Codex\`(대소문자 무시)가 있으면 맞아서, `C:\src\openai\codex\codex-rs`의 훅도 앱 자체 작업으로 보고 버렸다. → `%LOCALAPPDATA%\OpenAI\Codex\`, `\AppData\Local\OpenAI\Codex\`, `\LocalCache\Local\OpenAI\Codex\` 아래만.
+- **`[profiles.x] # 주석`이 그 프로필의 `approvals_reviewer`를 가렸다.** 주석까지 표 이름으로 읽어 프로필을 못 찾았고, 최상위 검토자 설정으로 PermissionRequest를 버렸다. → `]`까지만 이름이다.
+- **카드 링크가 핸들러에 인수를 더할 수 있었다.** 셸은 링크를 핸들러 명령줄(`"%1"`)에 쓰인 그대로 넣는다. → 공백, `"`, `<>^|`, 백틱이 든 링크는 거절한다(`%20`, `%22`로 이스케이프해야 한다).
+- **`--fire-and-forget`이 요청을 보내기 전에 끝날 수 있었다.** 요청을 시작만 하고 바로 반환해, 프로세스가 끝나면서 요청이 나가지 못할 수 있었다. → 답의 내용은 기다리지 않고 최대 400ms만 기다린다.
+- **`install-hooks`가 쓸 수 없는 Claude http 훅을 안내했다.** 토큰은 데몬이 뜰 때마다 새로 만들어 `runtime.json`에만 있으므로, settings.json에 붙인 http 훅은 매번 401이었다. → 그 출력과 `settings.hooks.http.example.json`을 지웠다. 읽힌 적 없는 `server.requireAuth`도 문서에서 뺐다(토큰을 끌 방법은 없다).
+- 그 밖에: 업데이트 적용 실패 뒤 보이지 않는 프로세스가 남던 것([installer.md](modules/installer.md)), notipet 자체 풍선 클릭이 앞의 에이전트 카드를 읽음으로 만들던 것([tray_shell.md](modules/tray_shell.md)), 트레이 클릭·음소거·알림 창 클릭으로 멈춘 `MediaPlayer`를 UI 스레드에서 버리던 것([sound_engine.md](modules/sound_engine.md)), 설정 창을 숨기면 최근 알림 단축키가 꺼진 채이던 것, 떠 있는 것이 없을 때 `NotipetTray.exe --settings`가 설정을 열지 않던 것([windows.md](modules/windows.md)). `ttlSec`은 지금 아무 효과가 없다는 것도 확인했다 — 고치지 않고 문서에 그렇게 적었다([rules_engine.md](modules/rules_engine.md)).
 
 ### 긴 알람이 끝나기 전에 계속 다시 시작됐다
 
@@ -120,8 +141,8 @@
 - **원인**: `HttpSelfTest`의 스텁 채널이 채널 격리를 검증하려고 일부러 예외를 던지는데, `Dispatcher.SendSafelyAsync`가 그걸 정상적으로 `CrashLog`에 기록한다.
 - **증상**: `--self-test`를 돌릴 때마다 `%LOCALAPPDATA%\notipet\crash.log`에 `Channel:stub / stub failure` 항목이 쌓인다.
 - **영향 모듈**: `SelfTest`, `Core` (Dispatcher)
-- **상태**: 동작은 정상이다 — 격리 경로가 실제로 돌았다는 증거이기도 하다. 다만 헤드리스 검사가 사용자 데이터 폴더에 쓰는 건 깔끔하지 않다. [TODO.md](TODO.md)에 올려뒀다.
-- **재발 방지**: `CrashLog`의 출력 경로를 주입 가능하게 만들고 self-test에서 임시 폴더로 돌린다.
+- **상태**: 동작은 정상이다 — 격리 경로가 실제로 돌았다는 증거이기도 하다. 다만 헤드리스 검사가 사용자 데이터 폴더에 쓰는 건 깔끔하지 않았다.
+- **해결**(1.4.1): `CrashLog.OverridePath`(와 나중의 `DaemonLog.OverridePath`)를 두고, `SelfTestRunner`가 검사 동안 임시 파일로 돌렸다가 끝나면 되돌린다.
 
 ### `dotnet run`이 데몬의 콘솔 출력을 삼킨다
 

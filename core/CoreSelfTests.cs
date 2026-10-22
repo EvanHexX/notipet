@@ -32,6 +32,7 @@ public static class CoreSelfTests
         ("HistoryStore", HistoryStore.RunSelfTest),
         ("HistoryPersistence", HistoryPersistence.RunSelfTest),
         ("QuietHoursRule", QuietHoursRule.RunSelfTest),
+        ("DedupeRule", DedupeRule.RunSelfTest),
         ("AlertScope", AlertScope.RunSelfTest),
         ("RateLimitRule", RateLimitRule.RunSelfTest),
         ("SoundResolver", SoundResolver.RunSelfTest),

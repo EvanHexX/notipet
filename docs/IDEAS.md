@@ -14,13 +14,13 @@
 
 비용: 작다 (규칙 엔진에 타이머 하나).
 
-### 2. 최근 알림을 재시작 후에도 유지 (옵트인)
+### 2. ~~최근 알림을 재시작 후에도 유지 (옵트인)~~ — 완료 (1.6.2)
 
 **문제:** 기록이 메모리에만 있어서 재배포·재부팅·`notipet restart` 때마다 사라진다. 이번 작업 중에도 몇 번이나 날아갔다.
 
 **제안:** 옵션 "재시작해도 기록 유지" (기본 꺼짐). 켜면 `%LOCALAPPDATA%\notipet\history.json`(이미 사용자 전용 DACL 폴더)에 보관 개수만큼 저장. 본문에 프롬프트 내용이 들어갈 수 있어서 기본값은 꺼 두는 게 맞다.
 
-비용: 작다.
+**결과:** `history.persist`로 넣었는데 **기본은 켬**이다. 에이전트들이 대화 전체를 이미 사용자 폴더에 평문으로 두므로 꺼 두어 막는 것이 거의 없었고, 업데이트·재시작마다 비는 쪽이 더 큰 문제였다([regression.md](regression.md)).
 
 ### 3. 알림을 누르면 그 터미널로
 
@@ -29,6 +29,8 @@
 **제안:** 알림 클릭 → 그 알림을 보낸 에이전트의 창을 앞으로. 훅 페이로드의 `cwd`와 CLI의 부모 프로세스 체인(터미널 → 셸 → claude/codex)으로 창 핸들을 찾을 수 있다. CLI가 알림을 보낼 때 부모 프로세스 ID를 `source.pid`로 실어 보내면(필드는 이미 있다) 데몬이 그 프로세스의 최상위 창을 찾아 `SetForegroundWindow`한다.
 
 비용: 중간. 지금 풍선 클릭은 "알람 정지"에 쓰이므로 2단계의 버튼 있는 토스트("정지" / "열기")와 같이 하는 게 자연스럽다.
+
+**일부 완료 (1.2):** 터미널 창 대신 **에이전트 앱의 스레드**로 간다 — 최근 알림 카드와 알림 창의 열기 아이콘이 `codex://threads/<id>`, Claude Desktop 세션 링크를 연다([windows.md](modules/windows.md)). 터미널(CLI) 창을 앞으로 가져오는 것은 아직 없다.
 
 ### 4. 화상회의 중에는 자동으로 조용히
 
@@ -70,13 +72,17 @@ Claude Code와 Codex, 또는 저장소마다 다른 소리. 귀로 "아, 그 프
 
 "알람 정지", "PC 앞에 있음 전환". quota-scope의 `HotkeyWindow.cs`를 가져오면 된다.
 
+**일부 완료 (1.7.0):** `HotkeyWindow`를 가져와 최근 알림 단축키(기본 `Ctrl+Shift+Win+N`)를 넣었다. "알람 정지"와 "PC 앞에 있음 전환"은 남았다 — id를 하나씩 더 등록하면 되고, 기본값은 비워 둔다([TODO.md](TODO.md)).
+
 ### 10. 내 소리 파일 관리
 
 설정 창에서 파일 선택 → `%LOCALAPPDATA%\notipet\sounds`로 복사 → `sound.library`에 등록 → 레벨별 선택지에 나타남. 지금은 JSON을 직접 고쳐야 한다.
 
-### 11. `install-hooks --write`
+### 11. ~~`install-hooks --write`~~ — 완료 (Codex 1.5.1, Claude 1.6.1)
 
 지금은 출력만 한다. 기존 `settings.json` / `config.toml`을 **파싱해서 병합**하고, 바꾸기 전 백업과 diff를 보여주는 방식이면 안전하다. Codex `notify` 슬롯은 절대 건드리지 않는다.
+
+**결과:** `install-hooks --codex --write`는 `config.toml`에, `--claude --write/--remove`는 `settings.json`에 notipet 훅만 넣고 뺀다. 나머지 내용과 Codex `notify`는 그대로 둔다.
 
 ---
 
@@ -97,3 +103,5 @@ Claude Code와 Codex, 또는 저장소마다 다른 소리. 귀로 "아, 그 프
 ### 14. 설정 백업
 
 `settings.json`을 쓸 때 직전 버전을 `settings.bak.json`으로 남긴다. 이번에 테스트가 설정을 덮어쓴 사고(regression.md)가 있었는데, 백업이 있었다면 사용자 설정을 그대로 되살릴 수 있었다.
+
+**일부 (1.11.1):** 쓸 수 없는 파일은 덮지 않고 `settings.json.bad`로 남기고, 저장은 임시 파일에 쓴 뒤 옮겨서 반쪽 파일이 남지 않는다. 정상 파일의 직전 버전을 남기는 백업은 아직 없다.

@@ -15,7 +15,7 @@ Codex에 notipet을 붙이는 두 부분을 다룬다.
 - [integrations/codex/plugin/skills/notipet/SKILL.md](../../integrations/codex/plugin/skills/notipet/SKILL.md) — **생성물.** 원본은 [integrations/codex/skills/notipet/SKILL.md](../../integrations/codex/skills/notipet/SKILL.md)
 - [.agents/plugins/marketplace.json](../../.agents/plugins/marketplace.json) — 이 저장소를 Codex 마켓플레이스로 만든다
 - [cli/CodexHooks.cs](../../cli/CodexHooks.cs) — 훅 블록, config.toml 넣기·빼기, 예전 위치 정리, 자체 테스트
-- [cli/Program.cs](../../cli/Program.cs) — `install-hooks`, `doctor`의 `codex hooks` 줄, `RestoreSystemRoot`
+- [cli/Program.cs](../../cli/Program.cs) — `install-hooks`, `doctor`의 `codex hooks`·`codex skill` 줄, `RestoreSystemRoot`
 - [cli/SkillInstaller.cs](../../cli/SkillInstaller.cs) — `install-skill --command notipet`이 플러그인 스킬을 만든다
 - [scripts/check-codex-plugin.ps1](../../scripts/check-codex-plugin.ps1) — 아래 제약을 기계로 확인한다. `pack.ps1`이 릴리스마다 부른다
 
@@ -33,6 +33,7 @@ notipet install-hooks --codex --write [--command EXE]   # config.toml에 notipet
 notipet install-hooks --codex --remove                  # 다시 뺀다
 notipet install-hooks --codex                           # 넣을 블록을 출력만
 notipet doctor                                          # [ok] codex hooks ...config.toml
+                                                        # [ok] codex skill plugin: ...\SKILL.md
 
 # 유지보수
 codex plugin marketplace add C:\src\notipet           # 작업 폴더를 그대로 마켓플레이스로
@@ -73,6 +74,13 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 
 **스킬**: Codex가 플러그인 스킬로 읽는다. 스킬은 `notipet`(PATH)을 부르고, 없으면 설치 경로를 쓰라고 안내한다. 한 파일이 모든 PC에서 쓰여야 하므로 사용자별 절대 경로를 넣을 수 없다. 훅 안내 절은 "사용자가 원할 때만, 동의를 받고, 직접 편집하지 말고 명령으로"다.
 
+**스킬은 경로가 아니라 이름(`notipet`)으로 가리킨다.** 플러그인 스킬의 파일은 `plugins\cache\notipet\notipet\<version>\skills\notipet\SKILL.md`라서 업데이트할 때마다 경로가 바뀐다. 프로젝트 `AGENTS.md`가 그 경로를 "이 스킬을 써라"로 적어 두면, 업데이트 뒤에는 없거나 지난 버전의 파일을 가리킨다. 그런 AGENTS.md를 따르던 에이전트가 "지정한 notipet 스킬 경로가 설치되어 있지 않다"며 알림을 보내지 않은 일이 있었다. `install-skill --codex`로 깐 스킬(`~/.codex/skills/notipet/SKILL.md`)은 경로가 고정이지만, 플러그인과 함께 두면 스킬이 두 번 보인다.
+
+**`doctor`의 `codex skill`**(1.11.1): 지금 Codex가 쓰는 notipet 스킬을 보여 준다.
+- 플러그인: `config.toml`에 `[plugins."notipet@notipet"]`가 있고 `enabled = false`가 아니면, 캐시에서 버전이 가장 높은 폴더의 `SKILL.md`. 이름으로 가리키라는 안내가 붙는다.
+- 아니면 `install-skill --codex`가 쓴 `~/.codex/skills/notipet/SKILL.md`.
+- 둘 다 있으면 경고(두 번 보인다 — 따로 깐 폴더를 지우라고 한다), 둘 다 없으면 경고.
+
 ## State-Data Flow
 
 ```
@@ -86,7 +94,8 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 %USERPROFILE%\.codex\plugins\cache\notipet\notipet\<version>\   ← Codex는 원본이 아니라 여기서 읽는다
 %USERPROFILE%\.codex\config.toml
   [marketplaces.notipet] / [plugins."notipet@notipet"]          ← 플러그인
-  # notipet hooks ... + [[hooks.Stop]] [[hooks.PermissionRequest]] [[hooks.UserPromptSubmit]]   ← install-hooks --write
+  # notipet hooks ... + [[hooks.Stop]] [[hooks.PermissionRequest]] [[hooks.UserPromptSubmit]]
+                         [[hooks.PostToolUse]] ×2 [[hooks.PreToolUse]]       ← install-hooks --write (훅 6개)
   [hooks.state."<config.toml 경로>:stop:0:0"] trusted_hash      ← 사용자가 훅을 신뢰하면 Codex가 쓴다
   config.toml.bak-notipet-<시각>                                 ← --write/--remove가 바꿀 때마다
 ```
@@ -115,11 +124,11 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
   - 비동기 창의 답은 `<send_user_message_question_reply>`로 시작하는 사용자 입력으로 온다. `IsTypedPrompt`는 이것만 `<`로 시작해도 답으로 친다.
   - 그 전까지는 에이전트가 스킬대로 `notipet send`를 해야 울렸다. 한 스레드가 비동기 질문 창을 세 번 띄우면서 한 번도 보내지 않은 일이 있었다.
   - 새 훅 두 개는 블록 끝에 붙는다. 기존 훅의 신뢰 키는 바뀌지 않고, 새 두 개만 신뢰하면 된다.
-- **PostToolUse(`^request_user_input$`)**(1.8.0): 동기 질문 도구는 답을 받은 뒤 끝나므로, 그때 그 스레드의 승인 알람과 `--until-reply` 알림을 끄고 "답함"으로 읽음 처리한다. Codex matcher는 정규식이고 고정되지 않아서(`regex.is_match`) `^…$`로 묶는다. `request_user_input_async`는 질문을 메시지로 띄우고 바로 끝나므로 제외한다. 그 답은 새 사용자 입력으로 오고(`UserPromptSubmit`), summit 중계가 아니면 답으로 센다. 블록 끝에 추가했으므로 기존 세 훅의 신뢰 키와 해시는 그대로이고, 사용자는 새 훅 하나만 신뢰하면 된다. `doctor`는 이 훅이 없는 블록을 경고한다.
+- **PostToolUse(`^request_user_input$`)**(1.8.0): 동기 질문 도구는 답을 받은 뒤 끝나므로, 그때 그 스레드의 승인 알람과 `--until-reply` 알림을 끄고 "답함"으로 읽음 처리한다. Codex matcher는 정규식이고 고정되지 않아서(`regex.is_match`) `^…$`로 묶는다. `request_user_input_async`는 질문을 메시지로 띄우고 바로 끝나므로 제외한다. 그 답은 새 사용자 입력으로 오고(`UserPromptSubmit`), summit 중계가 아니면 답으로 센다. 블록 끝에 추가했으므로 기존 세 훅의 신뢰 키와 해시는 그대로이고, 사용자는 새 훅 하나만 신뢰하면 된다. `doctor`는 1.9.0 이전에 쓴 블록(질문 창 훅 `^request_user_input_async$`가 없는 것)을 경고한다 — 그런 블록에서는 질문 창이 울리지 않는다.
 - **사용자의 순간이 아닌 Codex 이벤트는 알리지 않는다**(1.6.5, `PayloadMapper.PlanForHookEvent`).
   - 입력 제안: 데스크톱 앱이 임시 스레드에서 돌리는 보이지 않는 턴이다. Stop의 `last_assistant_message`가 `{"suggestion":...}`이거나 `{"suggestions":[...]}`(1.8.1)이다.
-  - 앱 자체 폴더(`%LOCALAPPDATA%\OpenAI\Codex\...`)를 `cwd`로 하는 이벤트(1.8.1): 앱의 내부 작업이다.
-  - `approvals_reviewer`가 `user`가 아닐 때의 PermissionRequest: Codex는 훅 → 검토자(Guardian) → 사용자 순서로 처리하므로 사용자에게 묻지 않는다. 훅 입력에는 검토자가 나오지 않아 `config.toml`(최상위와 현재 `profile`)을 읽는다.
+  - 앱 자체 폴더를 `cwd`로 하는 이벤트(1.8.1): 앱의 내부 작업이다. 1.11.1부터는 위치를 고정해 본다: 이 사용자의 `%LOCALAPPDATA%\OpenAI\Codex\...`, 또는 경로에 `\AppData\Local\OpenAI\Codex\`나 `\LocalCache\Local\OpenAI\Codex\`(다른 프로필, 패키지 앱의 사본)가 있을 때만. 예전에는 `\OpenAI\Codex\`가 경로 어디에 있어도 걸러서, openai/codex 저장소 클론(`C:\src\openai\codex\codex-rs`)에서 일하는 스레드가 통째로 조용했다.
+  - `approvals_reviewer`가 `user`가 아닐 때의 PermissionRequest: Codex는 훅 → 검토자(Guardian) → 사용자 순서로 처리하므로 사용자에게 묻지 않는다. 훅 입력에는 검토자가 나오지 않아 `config.toml`(최상위와 현재 `profile`)을 읽는다. `[profiles.x] # 주석`처럼 표 머리 뒤에 주석이 있어도 그 프로필을 읽는다(1.11.1). 이 확인은 CLI(훅 명령)만 한다 — 데몬의 `/hooks/codex` 라우트는 config.toml을 읽지 않는다.
 - **exe 경로에 따옴표를 쓰지 않는다**(1.6.4). 샌드박스(`[windows] sandbox = "unelevated"`, 제한 토큰)에서 Codex는 명령줄을 `cmd /C`의 인수 하나로 넘기면서 안의 따옴표를 `\"`로 바꾼다. cmd는 이를 되돌리지 않으므로 `\"C:\...\notipet.exe\"`라는 프로그램을 찾다가 실패하고, 훅은 "hook exited with code 1"로 끝난다. `codex sandbox -- cmd /c "\"<exe>\" ping"`로 재현된다(따옴표 없이는 성공). 그래서 `CodexHooks.CommandLine`은 공백이나 cmd 특수 문자가 없으면 경로를 그대로, 있으면 8.3 짧은 이름으로 쓴다. 짧은 이름도 없을 때만 따옴표로 감싼다. 이 경우 샌드박스 훅은 동작하지 않는다. 1.5.1~1.6.3이 쓴 따옴표 블록은 `doctor`가 경고하고, `--write`가 새 블록으로 바꾼다. 바뀐 명령은 다시 신뢰해야 한다.
 - **훅 환경이 비어 있을 수 있다.** 이 PC의 `codex exec`는 훅을 환경 변수 하나 없이 실행했다(`set` 출력이 비었다). `SystemRoot`가 없으면 Winsock이 소켓을 못 만들어 CLI가 "데몬이 꺼져 있다"고 했다. 그래서 CLI가 시작할 때 `SystemRoot`/`windir`을 Windows 폴더(셸 API)로 되살린다(`RestoreSystemRoot`). 데스크톱 앱의 훅은 환경이 채워져 있었다.
 - Codex는 같은 이벤트의 훅을 출처(사용자 설정, 프로젝트 설정, 플러그인)와 상관없이 **전부, 동시에** 실행하고 중복을 거르지 않는다. notipet 블록이 두 곳에 있으면 두 번 운다. `--write`가 예전 위치를 정리하고 `doctor`가 경고하는 이유다.
@@ -151,6 +160,7 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 - 빈 환경에서 `notipet --source codex`에 Stop 페이로드 → 알림 전달(`RestoreSystemRoot` 전에는 "daemon not running").
 - 데스크톱 앱 새 스레드 → 완료 알림, 권한 필요한 명령 → 승인 대기 알람, 승인 후 턴이 끝나면 알람 정지.
 - `notipet doctor`의 `codex hooks`: config.toml이면 ok, hooks.json에 남아 있으면 경고.
+- `notipet doctor`의 `codex skill`: 플러그인만 또는 따로 깐 스킬만 있으면 ok(플러그인이면 그 버전 폴더의 SKILL.md), 둘 다 있거나 둘 다 없으면 경고. `CodexHooks` 자체 테스트가 `[plugins."notipet@notipet"]` 판정과 프로필 머리 뒤 주석을 고정한다.
 
 ## Rejected Approaches
 
@@ -162,7 +172,5 @@ statusMessage = 'Notipet · 턴 완료 알림 및 권한 알람 정리'
 
 ## TODO
 
-- 스레드별로 훅 알림 켜기/끄기(훅은 그대로, notipet이 스레드 ID로 거른다)
-- `install-hooks --claude --write`
 - 공개 플러그인 목록 제출(조직 인증 필요). 제출하면 ID 이동 안내
 - `Interrupt` 이벤트(사용자가 턴을 끊음)로 그 스레드 알람 정리 — 블록 문구가 바뀌어 재신뢰가 필요하므로 다른 변경과 묶어서

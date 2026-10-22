@@ -47,7 +47,10 @@ internal static class Paths
     // Creates the data directory readable by the current user only: a DACL on
     // Windows, mode 0700 elsewhere. runtime.json holds the API token in
     // plaintext - inherent to same-user loopback IPC - so at minimum keep other
-    // accounts on the box out of it.
+    // accounts on the box out of it. Only when it creates the folder: one that
+    // already exists (the installer's first log line makes it) keeps the ACL
+    // it inherited from %LOCALAPPDATA% - the user, SYSTEM and Administrators.
+    // Neither stops a process of the same user, at any integrity level.
     public static void EnsureDataDir()
     {
         if (Directory.Exists(DataDir)) return;

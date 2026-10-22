@@ -30,9 +30,9 @@
 | DELETE | `/v1/history` | 필수 | 기록 전부 삭제 (`POST /v1/history/clear`도 같음) |
 | POST | `/v1/presence` | 필수 | 자리 착석 설정 `{atDesk: true|false}`, 비우면 토글 |
 | POST | `/v1/shutdown` | 필수 | 데몬 종료 (응답을 보낸 뒤 종료) |
-| POST | `/hooks/claude-code` | 필수 | Claude Code 훅 JSON 원본 |
-| POST | `/hooks/codex` | 필수 | Codex 훅 JSON 원본 |
-| POST | `/hooks/agent` | 필수 | 소스를 추론해서 처리 |
+| POST | `/hooks/claude-code` | 필수 | Claude Code 훅 JSON 원본 (토큰을 읽는 클라이언트용, 아래) |
+| POST | `/hooks/codex` | 필수 | Codex 훅 JSON 원본 (같음) |
+| POST | `/hooks/agent` | 필수 | 소스를 추론해서 처리 (같음) |
 | * | 그 외 | — | `404 {"error":"not_found"}` |
 
 ## `POST /v1/notify`
@@ -70,12 +70,14 @@
   - `settings.links.allowedSchemes`에 등록된 스킴 (예: `codexbridge`). 이 목록은 settings.json에서만 바뀌고 API로는 못 바꾼다
   - 등록해도 항상 거부: `file`, `ms-*`, `search-ms`, `shell`, `javascript`, `vbscript`, `data` 등. 경로(`C:\…`, `\\server\…`)는 `file:`로 해석돼 거부된다
   - 2048자 이하, 제어 문자 없음
+  - 공백, `"`, `<`, `>`, `^`, `|`, `` ` ``가 없을 것, http(s)가 아니면 `&`도 없을 것(1.11.1). 셸은 링크를 핸들러의 명령줄에 쓰인 그대로 넣으므로, 공백이나 따옴표가 있으면 링크가 핸들러에 인수를 더할 수 있고, cmd로 도는 핸들러는 `<>^|&`를 명령으로 읽는다. 진짜 URI는 이스케이프한다(`%20`, `%22`, `%26`). http(s)의 쿼리 문자열은 `&`를 그대로 쓴다
   - 안 맞으면 **알림은 그대로 보내고 `open`만 버린다** — `warnings`에 `open ignored: <이유>`. 4xx가 아니다
   - 클릭할 때 지금 설정으로 한 번 더 확인한다. 목록에서 뺀 스킴은 이미 있는 카드에서도 열리지 않는다
 - `untilReply: true`(1.8.0)면 **사용자가 그 스레드에서 답하는 순간 끝나는 알림**이 된다. 질문용이다. 답으로 치는 것은 두 가지다.
   - 그 스레드에 사용자가 직접 친 프롬프트(`UserPromptSubmit`). summit 중계(`[agent-summit]…`)와 `<task-notification>` 같은 시스템 입력은 빼고 센다.
   - 에이전트 질문 도구의 답: Claude `AskUserQuestion`/`ExitPlanMode`, Codex `request_user_input`의 `PostToolUse`.
   - 답이 오면 훅이 `/v1/resolve`에 `untilReply: true`로 끝내고, 그 알림을 "답함"으로 읽음 처리한다. 스레드(`source.session`)가 없으면 무시하고 `warnings`에 남긴다.
+- `ttlSec`은 받아 두지만 **지금은 아무 효과가 없다.** 만료 기준 시각이 데몬이 요청을 받은 순간이고 규칙이 그 자리에서 바로 돌기 때문에, 만료될 틈이 없다. 그래서 `ttl_expired`도 실제로는 나오지 않는다. 대기열이 생길 때를 위해 필드를 남겨 둔 것이다.
 
 ### `source` — 누가, 어디서
 
@@ -95,6 +97,12 @@
 
 중복 병합 키에는 스레드(`session`)가 들어간다. 태그가 있으면 `태그|스레드`, 없으면 내용 + `project` + `session`. 그래서 두 대화가 같은 태그(`shop:needs-input`)나 같은 문구("테스트 통과")를 보내도 합쳐지지 않는다 — 합쳐지면 두 번째는 소리도 카드도 없고, 남은 카드의 링크는 첫 번째 대화를 연다. 스레드를 모르면 예전처럼 태그만으로 병합한다. 훅 태그에는 이미 세션이 들어 있어 동작이 같다.
 
+병합은 같은 키의 카드가 마지막으로 온 지 `dedupe.windowSec`(30초) 안일 때만 일어난다. 창은 카드가 처음 온 때가 아니라 마지막으로 온 때부터 재므로, 더 새 카드들 뒤에 있는 오래된 카드도 방금 다시 왔으면 병합 대상이다. 다음 카드는 같은 키로 뒤에 오는 알림을 삼키지 않는다(1.11.1).
+
+- **끝난 카드.** `/v1/resolve`나 훅이 지목한 카드는 그 순간 소리가 이미 끝났어도 끝난 것이다. 턴 완료 알림이 다음 프롬프트로 끝나면, 다음 턴의 완료 알림은 30초 안에 와도 울린다.
+- **사용자가 바꿀 수 있는 상태 때문에 막힌 카드.** 음소거, 방해금지, 꺼 둔 스레드·프로젝트 같은 것이다. 그 상태를 풀고 나서 오는 같은 알림은 울려야 한다. 예외는 `rate_limited`와 `deduped`(`dedupe.collapse`를 끈 경우 버려진 반복)다. 둘 다 같은 폭주에 속하므로 계속 한 카드로 접힌다. resolve가 이름 댄 것은 막혔던 기록이어도 끝난 것으로 친다.
+- **더 높은 레벨.** 같은 키로 `error` 뒤에 `critical`이 오면 새 알림으로 울린다. 같거나 낮은 레벨은 접힌다.
+
 ### 응답
 
 성공과 억제 **모두 HTTP 200**이다. 방해금지는 클라이언트 오류가 아니고, 비-2xx를 본 훅이 에이전트 동작을 바꿀 수 있다.
@@ -112,7 +120,7 @@
   "receivedAt": "2026-09-20T16:32:03.5729090+09:00",
   "warnings": [],
   "deliveries": [
-    { "channel": "windows_sound", "status": "delivered", "referenceId": "alm_0002" },
+    { "channel": "windows_sound", "status": "delivered", "referenceId": "alm_3f9c2a_0002" },
     { "channel": "tray_balloon",  "status": "delivered" }
   ]
 }
@@ -120,11 +128,13 @@
 
 `deliveries[].status` ∈ `delivered | skipped | failed | disabled | pending`
 
-`suppressedReason` ∈ `ttl_expired | source_disabled | muted | quiet_hours | focus_assist | deduped | rate_limited | all_channels_disabled`
+`suppressedReason` ∈ `ttl_expired | source_disabled | thread_off | thread_event_off | project_off | not_selected | muted | quiet_hours | focus_assist | deduped | rate_limited | all_channels_disabled` (`ttl_expired`는 지금 나오지 않는다 — 위 `ttlSec`)
 
 `warnings`에는 규칙이 소리를 바꾼 흔적도 들어간다: `shortened: at desk`, `replaced: at desk`, `silenced: at desk`.
 
 `referenceId`는 반복 알람일 때만 나온다. 1회 재생은 확인할 것이 없어서 등록되지 않는다.
+
+알람 id는 `alm_<실행마다 새로 뽑는 16진수 6자리>_<순번>`이다(1.11.1). 예전에는 `alm_0002`처럼 순번뿐이어서 재시작하면 다시 1부터 붙었고, 기록에서 되살린 지난 실행의 카드를 지목한 resolve가 같은 번호를 받은 새 알람을 멈췄다(스레드 A의 `Stop` 훅이 스레드 B의 알람을 끈 일). 지금은 `history.json`에서 되살린 카드에 소리 전달은 남지만 `referenceId`는 없다 — 지난 실행의 알람은 이미 없다.
 
 **429는 쓰지 않는다.** 레이트 리밋도 `suppressed`로 표현한다.
 
@@ -140,7 +150,14 @@
 
 ## `POST /hooks/claude-code`
 
-Claude Code의 네이티브 `http` 훅이 보내는 원본 JSON을 그대로 받는다. 중간에 CLI가 없다.
+에이전트 훅 페이로드 원본 JSON을 그대로 받는다(`/hooks/codex`, `/hooks/agent`도 같다). 훅이 부르는 CLI(`notipet.exe`)와 같은 매핑을 쓴다.
+
+**토큰을 `runtime.json`에서 읽어 보내는 클라이언트만 쓸 수 있다.** 다른 라우트처럼 토큰이 필요한데, 토큰은 데몬이 시작할 때마다 새로 생기고 `runtime.json`에만 있다. 그래서 Claude Code `settings.json`에 적어 두는 `http` 훅은 쓸 수 없다 — 붙여 넣은 http 훅은 매번 401이었고, 1.11.1부터 `install-hooks`는 그런 블록을 출력하지 않는다. 포트를 고정해도 마찬가지다. 훅은 `notipet.exe`(command 훅)로 건다.
+
+CLI를 거칠 때와 다른 점:
+
+- `/hooks/codex`는 Codex `config.toml`의 `approvals_reviewer`를 읽지 않는다. 검토자가 켜져 있어 사용자에게 묻지 않는 `PermissionRequest`도 울린다. CLI 훅은 이를 확인하고 아무것도 하지 않는다.
+- 본문은 엄격하게 읽는다. 필드 타입이 바뀐 페이로드(문자열 자리에 객체·배열)는 `400 invalid_json`이다. CLI는 문자열 필드만 골라 읽고 그대로 처리한다(1.11.1).
 
 ```json
 { "session_id": "8f3a", "hook_event_name": "Notification",
@@ -156,17 +173,19 @@ Claude Code의 네이티브 `http` 훅이 보내는 원본 JSON을 그대로 받
 | 이벤트 | 해제하는 것 | 알림 |
 |---|---|---|
 | `Stop`, `StopFailure` | 이 세션의 권한 요청(`Notification:permission_prompt`, `elicitation_dialog`, `elicitation_url_dialog`, Codex `PermissionRequest`) — 턴이 끝났으면 이미 답했다는 뜻 | 그대로 (`success` / `error`) |
-| `UserPromptSubmit` | 지난 턴의 `Stop` 알림과 `idle_prompt` — 새 턴이 시작됐으니 "기다리는 중"이 아니다 | **없음** |
-| `SessionEnd` | 위 둘 다 | 그대로 (`info`) |
+| `UserPromptSubmit` | 지난 턴의 `Stop` 알림과 `idle_prompt` — 새 턴이 시작됐으니 "기다리는 중"이 아니다. 사용자가 친 프롬프트면 이 세션에 `untilReply`로 보낸 알림도 끝내고 "답함"으로 읽음 처리한다 | **없음** |
+| `PostToolUse` — 질문 도구의 답(Claude `AskUserQuestion`/`ExitPlanMode`, Codex `request_user_input`) | 이 세션의 권한 요청(`Stop`과 같은 태그)과 `untilReply` 알림. 둘 다 "답함"으로 읽음 처리한다 — 턴이 끝날 때까지 기다리지 않는다 | **없음** |
+| `SessionEnd` | 권한 요청과 지난 턴의 `Stop`·`idle_prompt` (답으로 치지 않는다) | 그대로 (`info`) |
+| Codex 질문 창 — `PreToolUse`(`request_user_input`), `PostToolUse`(`request_user_input_async`) (1.9.0) | 없음 | `attention`, 본문은 질문 문장, 태그 `codex:<스레드>:Question`, `untilReply` — 사용자의 답이 끝낸다 |
 
-`UserPromptSubmit`은 사용자가 친 것 말고도(예약 작업, 백그라운드 에이전트 보고, 다른 세션의 메시지) 발생하므로 "사용자가 봤다"의 증거로 쓰지 않는다. 스킬로 보낸 알림은 훅이 해제하지 않는다 — 에이전트가 `notipet resolve`로 직접 한다. 세션 ID가 없는 페이로드는 아무것도 해제하지 않는다. 응답: 알림이 있으면 `/v1/notify`와 같은 모양, 없으면(`UserPromptSubmit`) `/v1/resolve`의 응답.
+그 밖의 도구에 대한 `PreToolUse`·`PostToolUse`는 아무것도 하지 않는다. Codex의 몇 이벤트도 아무것도 하지 않는다: 데스크톱 앱의 입력 제안 턴(`Stop`의 마지막 메시지가 `{"suggestion": ...}`/`{"suggestions": [...]}`), 앱 자체 폴더(`%LOCALAPPDATA%\OpenAI\Codex\...`)를 `cwd`로 하는 이벤트, 그리고 CLI를 거칠 때만 `approvals_reviewer`가 `user`가 아닐 때의 `PermissionRequest`(위).
 
-> `http` 훅을 쓰려면 `settings.server.port`를 고정해야 한다. 기본값 `0`은 매 실행마다 포트가 바뀐다.
+`UserPromptSubmit`은 사용자가 친 것 말고도(예약 작업, 백그라운드 에이전트 보고, 다른 세션의 메시지) 발생하므로 "사용자가 봤다"의 증거로 쓰지 않는다. 답으로 치는 것은 사용자가 친 것으로 보이는 프롬프트뿐이다: `[agent-summit]` 중계와 `<task-notification>`처럼 `<`로 시작하는 시스템 입력은 빼고, Codex 비동기 질문 창의 답(`<send_user_message_question_reply>`)은 넣는다. 스킬로 보낸 알림은 훅이 해제하지 않는다 — 에이전트가 `notipet resolve`로 직접 한다. `--until-reply`(`untilReply`)로 보낸 것만 예외로, 사용자의 답이 끝낸다. 세션 ID가 없는 페이로드는 아무것도 해제하지 않는다. 응답: 알림이 있으면 `/v1/notify`와 같은 모양, 없으면(`UserPromptSubmit`, `PostToolUse`) `/v1/resolve`의 응답.
 
 ## `POST /v1/ack`
 
 ```json
-{ "id": "alm_0002" }   // 또는 { "tag": "..." } 또는 { "all": true }
+{ "id": "alm_3f9c2a_0002" }   // 또는 { "tag": "..." } 또는 { "all": true }
 ```
 
 선택자를 하나도 주지 않으면 전부 정지한다. 급해서 이 엔드포인트를 찾은 사람이 원하는 게 그거다.
@@ -189,8 +208,9 @@ Claude Code의 네이티브 `http` 훅이 보내는 원본 JSON을 그대로 받
 - **선택자가 없으면 400.** `source`만 있어도 400이다("Codex가 보낸 전부"는 끝난 일 하나가 아니다). 전부 끄기는 `/v1/ack`.
 - **이미 끝났으면 조용히 통과.** 사용자가 먼저 알람을 끄고 창을 닫았으면 아무것도 바꾸지 않고 `200`에 0을 돌려준다. 보내는 쪽은 확인 없이 보내면 된다.
 - 억제(차단)된 알림은 울린 적이 없으므로 대상이 아니다.
-- 실제로 무언가 멈추거나 닫힌 알림만 기록에 `resolvedAt`이 붙고, 최근 알림 카드에 **해결됨** 칩이 생긴다.
-- 해제된 알림은 중복 병합 대상에서 빠진다. 같은 태그가 30초 안에 다시 와도 새 알림으로 울린다.
+- 실제로 무언가 멈추거나 닫힌 알림만 기록에 `resolvedAt`이 붙고, 최근 알림 카드에 **해결됨** 칩이 생긴다. 응답의 `resolved`도 그 수다.
+- 지목된 알림은 그 순간 살아 있었든 아니든 **끝난 것**으로 기록되고(1.11.1, `history.json`의 `endedAt`. API에는 나오지 않는다), 중복 병합 대상에서 빠진다. 소리가 이미 끝난 턴 완료 알림도 그렇다 — 같은 태그가 30초 안에 다시 와도 새 알림으로 울린다.
+- 알람은 소리 전달의 `referenceId`로 찾는다. 재시작 전 실행의 카드에는 그것이 없으므로(위 `/v1/notify` 응답), 그 카드를 지목해도 새 알람은 멈추지 않는다.
 - `untilReply: true`(1.8.0)는 다른 선택자처럼 범위를 좁힌다. `untilReply`로 보낸 알림만 대상이다.
 - `seenBy: "reply"`(1.8.0): 사용자가 답했다는 뜻이다. 맞은 알림은 그 순간 살아 있었는지와 상관없이 "답함"으로 읽음 처리한다. 훅이 보낸다.
 
@@ -282,12 +302,12 @@ GET /v1/alerts?agent=codex&thread=019a2b3c-...&event=Stop       // 이 스레드
 미인증:
 
 ```json
-{ "ok": true, "name": "notipet", "version": "1.11.0", "instanceId": "4c1e...", "features": ["alerts.events"] }
+{ "ok": true, "name": "notipet", "version": "1.11.1", "instanceId": "4c1e...", "features": ["alerts.events"] }
 ```
 
 CLI가 stale `runtime.json`을 판별하기에는 충분하고, 사용자가 무엇을 알림받는지는 새지 않는다. `features`는 오래된 데몬이 모르는 필드를 무시하는 기능의 목록이다(`alerts.events`: `/v1/alerts`의 `events`). 없으면 그 기능이 없는 데몬이다.
 
-인증하면 `pid`, `port`, `startedAt`, `uptimeSec`, `muted`, `atDesk`, `language`, `historyCount`, `quietHoursActive`, `presence`, `activeAlarms`, `soundEngine`, `warnings`가 추가된다.
+인증하면 `pid`, `port`, `startedAt`, `uptimeSec`, `muted`, `atDesk`, `language`, `historyCount`, `quietHoursActive`, `presence`, `activeAlarms`, `soundEngine`, `warnings`가 추가된다. `warnings`에는 고정 포트를 못 잡아 다른 포트로 떨어진 일과, settings.json을 쓸 수 없어 기본값으로 돌고 있다는 것(1.11.1, [settings.md](settings.md))이 들어간다.
 
 ## `GET /v1/history?limit=50`
 
@@ -307,6 +327,8 @@ CLI가 stale `runtime.json`을 판별하기에는 충분하고, 사용자가 무
 `open`은 보낸 쪽이 준 링크(받아들여진 경우)다.
 
 `resolvedAt`은 보낸 쪽이 `/v1/resolve`로 끝났다고 알렸을 때(그 시점에 알람이나 창이 아직 살아 있었을 때만) 채워진다.
+
+`deliveries[].referenceId`(알람 id)는 이번 실행에서 울린 카드에만 있다. `history.json`에서 되살린 카드는 `windows_sound` 전달이 그대로 보이지만 그 `referenceId`가 없다(위 `/v1/notify` 응답).
 
 `seenAt`·`seenBy`(1.8.0)는 사용자가 그 알림을 처리한 때와 방법이다. 같은 알림이 다시 오면(중복 병합) 다시 안 읽음이 된다. `untilReply`로 보낸 알림이면 `"untilReply": true`가 붙는다.
 
