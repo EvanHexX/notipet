@@ -274,6 +274,9 @@ internal sealed class DedupeRule : IDeliveryRule
 
         var previous = context.History.FindRecent(envelope.DedupeKey, TimeSpan.FromSeconds(dedupe.WindowSec));
         if (previous is null) return RuleDecision.Continue;
+        // Raised to a higher level under the same tag (error, then critical):
+        // that is news, not a repeat.
+        if (envelope.Level > previous.Envelope.Level) return RuleDecision.Continue;
 
         // Collapse folds the repeat into the existing entry and stays quiet;
         // without collapse it is simply dropped. Either way it does not sound
@@ -281,5 +284,64 @@ internal sealed class DedupeRule : IDeliveryRule
         return dedupe.Collapse && envelope.Collapse
             ? RuleDecision.Collapse(previous)
             : RuleDecision.Suppress("deduped");
+    }
+
+    // The repeat folds; what is over, held back by the user's own switch, or
+    // raised a level does not; an older card that came again still counts.
+    public static bool RunSelfTest()
+    {
+        var settings = new AppSettings();
+        settings.Normalize();
+        var history = new HistoryStore(() => 50);
+        var context = new RuleContext { Settings = settings, History = history, Now = DateTimeOffset.Now };
+        var rule = new DedupeRule();
+        const string thread = "019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b";
+        NotificationEnvelope Turn(NotificationLevel level = NotificationLevel.Success, string tag = "codex:019a2b3c-4d5:Stop") =>
+            new() { Title = "t", Tag = tag, Level = level, SourceId = PayloadMapper.SourceCodex, SourceSession = thread };
+        HistoryEntry Record(NotificationEnvelope e, bool accepted = true, string? reason = null)
+        {
+            var entry = new HistoryEntry { Envelope = e, Accepted = accepted, SuppressedReason = reason };
+            history.Add(entry);
+            return entry;
+        }
+        RuleOutcome Outcome(NotificationEnvelope e) => rule.Evaluate(e, context).Outcome;
+
+        // A repeat within the window folds into the card.
+        var first = Record(Turn());
+        if (Outcome(Turn()) != RuleOutcome.Collapse) return false;
+
+        // Over (a resolve named it, sounding or not): the next one rings.
+        history.MarkEnded(new[] { first }, DateTimeOffset.Now);
+        if (Outcome(Turn()) != RuleOutcome.Continue) return false;
+
+        // Held back while muted: after unmuting, the next one rings...
+        var muted = Record(Turn(tag: "codex:019a2b3c-4d5:PermissionRequest"), accepted: false, reason: "muted");
+        if (Outcome(Turn(tag: "codex:019a2b3c-4d5:PermissionRequest")) != RuleOutcome.Continue) return false;
+        // ...but a rate-limited burst keeps folding into one card.
+        Record(Turn(tag: "burst"), accepted: false, reason: "rate_limited");
+        if (Outcome(Turn(tag: "burst")) != RuleOutcome.Collapse) return false;
+
+        // Raised a level under the same tag is news; the same or lower folds.
+        var error = Record(Turn(NotificationLevel.Error, "shop:blocked"));
+        if (Outcome(Turn(NotificationLevel.Critical, "shop:blocked")) != RuleOutcome.Continue) return false;
+        if (Outcome(Turn(NotificationLevel.Info, "shop:blocked")) != RuleOutcome.Collapse) return false;
+
+        // An older card that came again is still found behind newer ones
+        // whose last repeat is outside the window.
+        var old = Record(Turn(tag: "old"));
+        old.LastAt = DateTimeOffset.Now.AddMinutes(-10);
+        var stale = Record(Turn(tag: "stale"));
+        stale.LastAt = DateTimeOffset.Now.AddMinutes(-10);
+        history.NoteCollapse(old);
+        if (Outcome(Turn(tag: "old")) != RuleOutcome.Collapse || Outcome(Turn(tag: "stale")) != RuleOutcome.Continue) return false;
+
+        // With collapse off, a dropped repeat still carries the window: a
+        // steady stream stays quiet instead of ringing every window.
+        settings.Dedupe.Collapse = false;
+        var rang = Record(Turn(tag: "steady"));
+        rang.LastAt = DateTimeOffset.Now.AddMinutes(-10);
+        Record(Turn(tag: "steady"), accepted: false, reason: "deduped");
+        if (rule.Evaluate(Turn(tag: "steady"), context) is not { Outcome: RuleOutcome.Suppress, Reason: "deduped" }) return false;
+        return muted.Count == 1 && error.Count == 1;
     }
 }

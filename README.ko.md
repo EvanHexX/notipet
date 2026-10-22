@@ -9,7 +9,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#설치)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![WinUI 3](https://img.shields.io/badge/UI-WinUI%203-0063B1)](https://learn.microsoft.com/windows/apps/winui/winui3/)
-[![Version](https://img.shields.io/badge/version-1.5.0-blue)](#)
+[![Version](https://img.shields.io/badge/version-1.11.1-blue)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 <br>
 [![Claude Code](https://img.shields.io/badge/works%20with-Claude%20Code-D97757)](#에이전트-연결)
@@ -38,7 +38,7 @@ Claude Code나 Codex에 긴 작업을 맡기고 다른 일을 하다 보면, 에
 - **울릴 대상 고르기** — 끈 프로젝트·스레드만 빼고 전부, 또는 켠 것만 (카드 메뉴, 설정, `notipet alerts`).
 - **방해금지, 음소거, 레이트 리밋, 중복 병합** — 툴 호출마다 훅이 터져도 트레이가 기관총이 되지 않습니다.
 - **English / 한국어** UI, Fluent 디자인, 라이트·다크.
-- **로컬 전용** — 베어러 토큰이 걸린 루프백 HTTP API. 텔레메트리 없음. 외부 통신은 업데이트 확인뿐이고, 그것도 누를 때만.
+- **로컬 전용** — 베어러 토큰이 걸린 루프백 HTTP API. 텔레메트리 없음. 외부 통신은 업데이트 확인뿐이고, 그것도 누를 때만(켜 두면 하루 한 번).
 
 ## 동작 방식
 
@@ -81,7 +81,7 @@ codex plugin add notipet@notipet                  # 스킬
 notipet install-hooks --codex --write             # 훅. ~/.codex/config.toml에 (먼저 백업)
 ```
 
-Codex에게 "notipet 설정해 줘"라고만 해도 됩니다. 스킬이 동의를 받은 뒤 마지막 명령을 실행합니다. 새 스레드부터 적용되며, Codex가 새 훅 검토(`/hooks`)를 물으면 신뢰합니다. 자세한 내용: [docs/modules/codex_plugin.md](docs/modules/codex_plugin.md).
+Codex에게 "notipet 설정해 줘"라고만 해도 됩니다. 스킬이 동의를 받은 뒤 마지막 명령을 실행합니다. 새 스레드부터 적용되며, Codex가 새 훅 검토(`/hooks`)를 물으면 신뢰합니다. `AGENTS.md`에서 스킬을 가리킬 때는 파일 경로가 아니라 이름(`notipet`)으로 씁니다. 플러그인은 스킬을 버전 이름의 폴더에 두기 때문에 경로는 다음 업데이트에서 틀어집니다(지금 위치는 `notipet doctor`가 보여 줍니다). 자세한 내용: [docs/modules/codex_plugin.md](docs/modules/codex_plugin.md).
 
 **Claude Code** — notipet을 먼저 설치하고, 플러그인 하나로 훅과 스킬을 넣습니다:
 
@@ -118,7 +118,7 @@ notipet send --title "api: 결정 필요" --body "키를 지금 바꿀까요, �
 | `error` | 3회 반복 | 실패, 진행 불가 |
 | `critical` | 확인할 때까지 | 놓치면 안 되는 것 |
 
-울리는 알람은 트레이 아이콘이나 알림 클릭, `notipet ack`로 멈춥니다. 보낸 쪽도 끌 수 있습니다 — 턴이 끝나면 그 권한 요청 알람이, `notipet resolve`를 부르면 에이전트가 알린 알람이 꺼집니다. 반복 방식은 설정 → 사운드에서 레벨마다 바꿀 수 있고, "확인할 때까지"는 최대 지속 시간을 **무제한**으로 두지 않는 한 그 시간에 멈춥니다.
+울리는 알람은 트레이 아이콘이나 알림 클릭, `notipet ack`로 멈춥니다. 보낸 쪽도 끌 수 있습니다 — 턴이 끝나면 그 권한 요청 알람이, 에이전트의 질문에 답하면 그 질문의 알람이, `notipet resolve`를 부르면 에이전트가 알린 알람이 꺼집니다. 반복 방식은 설정 → 사운드에서 레벨마다 바꿀 수 있고, "확인할 때까지"는 최대 지속 시간을 **무제한**으로 두지 않는 한 그 시간에 멈춥니다.
 
 ## CLI
 
@@ -127,6 +127,7 @@ notipet send --title T --body B [--level L] [--tag T] [--project P] [--thread-ti
 notipet status | ping | version | doctor
 notipet history [--limit N] | history clear
 notipet ack | resolve [--tag T] | mute [30m|off] | desk [on|off]
+notipet alerts [on|off|reset] [--project] | alerts mode all|selected
 notipet open [recent|settings]
 notipet start | stop | restart
 notipet install-hooks | install-skill

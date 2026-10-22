@@ -19,6 +19,10 @@ internal sealed class SoundService : IDisposable
     private readonly MediaPlayerSoundEngine _mediaPlayer = new();
     private readonly PlaySoundEngine _playSound = new();
     private int _sequence;
+    // Alarm ids are unique across runs too: Recent keeps cards from earlier
+    // runs, and a resolve naming one must never reach a new alarm that happens
+    // to have the same number.
+    private readonly string _run = Guid.NewGuid().ToString("N")[..6];
 
     public AlarmRegistry Alarms { get; } = new();
 
@@ -109,7 +113,7 @@ internal sealed class SoundService : IDisposable
     {
         if (!sound.HasSource) return new SoundPlayOutcome(false, null, "no sound source resolved");
 
-        var id = "alm_" + Interlocked.Increment(ref _sequence).ToString("D4");
+        var id = $"alm_{_run}_{Interlocked.Increment(ref _sequence):D4}";
         var session = new AlarmSession(id, tag, level, sound, EngineChain());
 
         if (sound.Repeat != RepeatMode.Once)

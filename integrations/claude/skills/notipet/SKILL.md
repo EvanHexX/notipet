@@ -52,7 +52,7 @@ Examples:
 ```
 {{NOTIPET}} send --title "notipet: tests passed" --body "17/17 checks passed; ready to publish when you are." --level success --tag "notipet:done" --project notipet --thread-title "project grouping"
 
-{{NOTIPET}} send --title "quota-scope: need a decision" --body "Two ways to fix the tray crash - which do you prefer? Details in the terminal." --level attention --tag "quota-scope:needs-input" --project quota-scope --thread-title "tray crash fix" --until-reply
+{{NOTIPET}} send --title "api: need a decision" --body "Two ways to fix the tray crash - which do you prefer? Details in the terminal." --level attention --tag "api:needs-input" --project api --thread-title "tray crash fix" --until-reply
 
 {{NOTIPET}} send --title "api: migration failed" --body "Step 3 of 5 failed on a unique constraint; nothing was committed. Stopped and waiting." --level error --tag "api:blocked" --project api --thread-title "orders migration"
 ```

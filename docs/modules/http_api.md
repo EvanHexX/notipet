@@ -47,14 +47,18 @@ Task<T> HttpJson.ReadAsync<T>(ctx, maxBytes, JsonTypeInfo<T>)
                                                                  │
                                                           NotifyResponse (항상 200)
 
-/v1/resolve, 훅의 PlanForHookEvent.Resolve
+/v1/resolve, 훅의 PlanForHookEvent.Resolve / .Replied
     ──> AlarmResolver ──> HistoryStore.Where (수락된 것, 아직 해제 안 된 것, 선택자 전부 일치)
-                      ├─> AlarmRegistry.Stop(id: 소리 전달의 referenceId)
+                      ├─> HistoryStore.MarkEnded(맞은 것 전부 — 살아 있지 않아도. 중복 병합에서 빠진다)
+                      ├─> HistoryStore.MarkSeen(seenBy = reply일 때)
+                      ├─> AlarmRegistry.Stop(id: 소리 전달의 referenceId — 이번 실행의 카드에만 있다)
                       ├─> ApiContext.ClosePopups(알림 id들)   ── UI 스레드, 2초 상한
                       └─> HistoryStore.MarkResolved(실제로 멈췄거나 닫힌 것만)
 ```
 
 훅 라우트는 **해제 먼저, 알림 나중**이다. 그래야 `Stop`이 자기 "완료" 알림을 해제하는 일이 없다.
+
+알람 id는 `alm_<실행마다 새로 뽑는 16진수 6자리>_<순번>`이다(1.11.1, `SoundService`). `history.json`에서 되살린 카드는 소리 전달의 `referenceId`를 잃는다(`HistoryFile`). 예전에는 순번뿐이라 재시작 뒤 지난 실행의 카드를 지목한 resolve가 같은 번호의 새 알람 — 다른 스레드의 것 — 을 멈췄다.
 
 ## Important Constraints
 
@@ -64,6 +68,8 @@ Task<T> HttpJson.ReadAsync<T>(ctx, maxBytes, JsonTypeInfo<T>)
 - **모르는 최상위 필드는 무시한다.** 신버전 CLI가 구버전 데몬을 깨뜨리면 안 된다.
 - **`/v1/resolve`는 지목한 것만 끈다.** 선택자가 없거나 `source`뿐이면 400이다 — `/v1/ack`처럼 "전부"로 해석하지 않는다. 보낸 쪽이 실수로 남의 알람까지 끄면, 그건 "알람이 울리지 않았다"와 같은 실패다.
 - **`/v1/resolve`는 이미 끝난 것에 200 + 0이다.** 사용자가 먼저 끈 것은 오류가 아니다. 실제로 살아 있던 것만 `resolvedAt`을 받는다.
+- **`/hooks/*`도 토큰이 필요하다.** 토큰은 시작마다 새로 생기고 `runtime.json`에만 있으므로, 그것을 읽어 보내는 클라이언트용이다. settings.json에 적은 Claude Code `http` 훅은 매번 401이라 쓸 수 없다(1.11.1부터 `install-hooks`가 출력하지 않는다). 토큰을 끄는 설정은 없다.
+- 훅 라우트와 CLI는 같은 `PayloadMapper.PlanForHookEvent`를 쓰지만 둘이 다르다: 라우트는 Codex `config.toml`의 `approvals_reviewer`를 읽지 않는다(검토자가 받는 `PermissionRequest`도 울린다 — CLI는 `CodexHooks.ApprovalsAutoReviewed`로 거른다). 또 본문을 엄격하게 읽어, 필드 타입이 바뀐 페이로드는 400이다(CLI는 문자열 필드만 골라 읽는다).
 - `ContentLength64`를 믿되 그것만 믿지 않는다. 읽는 루프도 독립적으로 상한을 건다.
 - 응답에 `Cache-Control: no-store`와 `X-Content-Type-Options: nosniff`를 붙인다.
 
@@ -77,6 +83,7 @@ Task<T> HttpJson.ReadAsync<T>(ctx, maxBytes, JsonTypeInfo<T>)
 
 - `HttpSelfTest`가 401(토큰 없음/틀림/Origin/Host), 400(JSON/검증/Content-Type), 413, 404, 200(정상/억제), 채널 예외 격리를 전부 고정한다. 라우팅이나 인증을 건드리면 이 검사가 먼저 깨져야 한다.
 - 고정 포트가 점유된 상태에서 기동해도 **시작에 실패하지 않고** 경고를 남기는지 확인한다.
+- 되살린 카드에 알람 id가 없어야 한다 — `HistoryPersistence` 검사가 고정한다. 끝난 카드(`EndedAt`)가 다음 알림을 삼키지 않는 것은 `AlarmResolver`·`DedupeRule` 검사가 고정한다.
 
 ## Rejected Approaches
 

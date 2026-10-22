@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Claude Code에 notipet을 붙이는 플러그인. **훅 4개와 Claude용 스킬을 한 번에** 설치한다. 사용자가 `~/.claude/settings.json`에 훅을 넣고 스킬을 따로 까는 일을 대신한다.
+Claude Code에 notipet을 붙이는 플러그인. **훅 5개와 Claude용 스킬을 한 번에** 설치한다. 사용자가 `~/.claude/settings.json`에 훅을 넣고 스킬을 따로 까는 일을 대신한다.
 
 Codex 플러그인([codex_plugin.md](codex_plugin.md))과 달리 **훅을 플러그인에 넣는다.** Claude Code 플러그인 훅은 CLI·데스크톱 모두에서 돌고, Codex처럼 정의 해시로 신뢰를 다시 받는 절차가 없으며, 공개 디렉터리 제약도 이유가 되지 않는다(아래 Important Constraints).
 
@@ -43,12 +43,14 @@ claude --plugin-dir C:\src\notipet\integrations\claude\plugin   # 설치 없이 
 
 ## Internal Flow
 
-1. 이벤트(Notification: `agent_needs_input|agent_completed|permission_prompt|idle_prompt`, Stop, SubagentStop, UserPromptSubmit)가 나면 Claude Code가 플러그인 `hooks/hooks.json`의 핸들러를 실행한다.
+1. 이벤트(Notification: `agent_needs_input|agent_completed|permission_prompt|idle_prompt|elicitation_dialog|elicitation_url_dialog`, Stop, SubagentStop, UserPromptSubmit, PostToolUse: `AskUserQuestion|ExitPlanMode`)가 나면 Claude Code가 플러그인 `hooks/hooks.json`의 핸들러를 실행한다.
 2. 핸들러는 **exec form**: `"command": "notipet.exe", "args": ["--source", "claude-code"]`. `args`가 있으면 Claude Code는 셸 없이 `command`를 PATH에서 찾아 직접 실행한다 — Windows에서 Git Bash가 있든 없든 같다. 페이로드 JSON은 stdin.
 3. `async: true`라 턴이 기다리지 않는다(타임아웃도 적용되지 않음).
 4. `notipet.exe --source claude-code`가 알리거나 끝난 알람을 정리한다([cli_shim.md](cli_shim.md)).
 
 **PostToolUse(`AskUserQuestion|ExitPlanMode`)**(1.8.0): 질문 창이 뜨고 약 6초 동안 답이 없으면 Claude Code가 Notification `permission_prompt`("Claude needs your permission to use AskUserQuestion")를 보낸다. 그 알람은 원래 턴이 끝날 때(Stop)만 꺼져서, 답한 뒤에도 Claude가 일하는 동안 계속 울렸다. 질문 도구가 답을 받고 끝나면 PostToolUse가 오므로, 그때 그 스레드의 프롬프트 알람을 끄고 "답함"으로 읽음 처리한다. `--until-reply`로 보낸 알림도 같이 끝낸다. 문서상 도구 성공 뒤에 오는 이벤트이고, 질문 답이 "성공"인지는 문서에 없어서 실제로 확인했다(regression.md). 모든 도구에 걸면 도구 호출마다 notipet이 실행되므로, 질문 도구에만 건다. 일반 권한 승인 알람은 여전히 턴이 끝날 때 꺼진다.
+
+**Notification의 `elicitation_dialog|elicitation_url_dialog`**(1.11.1): MCP 서버가 사용자에게 입력 양식(elicitation)을 띄운 순간이다. 에이전트는 그 답을 기다리며 멈춰 있다. `PayloadMapper`는 이미 이것을 `attention`으로 알리고 `Stop`·질문 답에서 끝냈지만, matcher에 없어서 훅이 실행되지 않았다. settings.json 훅(`--write`)을 쓰는 사람은 `install-hooks --claude --write`를 다시 실행해야 matcher가 바뀐다.
 
 **SubagentStop의 matcher는 `.`이다(1.7.1, 예전에는 `.*`).** Claude Code는 입력 제안(입력란의 회색 다음 프롬프트)과 `/btw` 같은 자체 기능을 내부 에이전트로 돌리고, 그것이 끝날 때도 SubagentStop을 울린다. 이때 `agent_type`은 빈 문자열이다. 세션이 `--agent`로 돌 때만 그 이름이 붙는다([hooks reference, SubagentStop](https://code.claude.com/docs/en/hooks.md)). 입력 제안은 Stop 1~2초 뒤 매 턴 오고, 본문이 "진행해" 같은 제안 문구여서 info 알림으로 쌓였다. 빈 문자열과 맞지 않는 matcher(`.`)를 쓰면 Claude Code가 그 훅을 아예 실행하지 않는다. `PayloadMapper`도 Claude의 SubagentStop에 `agent_type`이 없거나 비어 있으면 아무것도 하지 않는다. 예전 matcher를 쓰는 settings.json 훅을 위해서다. `--agent`로 도는 세션의 내부 에이전트는 구별할 수 없어 그대로 알린다.
 
@@ -67,7 +69,7 @@ claude --plugin-dir C:\src\notipet\integrations\claude\plugin   # 설치 없이 
 %USERPROFILE%\.claude\plugins\cache\notipet\notipet\<version>\   ← ${CLAUDE_PLUGIN_ROOT}
 %USERPROFILE%\.claude\settings.json
   enabledPlugins["notipet@notipet"], extraKnownMarketplaces.notipet   ← 플러그인
-  hooks.{Notification,Stop,SubagentStop,UserPromptSubmit}             ← --write (플러그인과 함께 두지 않는다)
+  hooks.{Notification,Stop,SubagentStop,UserPromptSubmit,PostToolUse} ← --write (플러그인과 함께 두지 않는다)
   settings.json.bak-notipet-<시각>                                     ← --write/--remove가 바꿀 때마다
 ```
 
@@ -102,6 +104,7 @@ claude --plugin-dir C:\src\notipet\integrations\claude\plugin   # 설치 없이 
 - **플러그인에 `.cmd` 런처를 두고 exec form으로 실행**: exec form은 `.cmd`를 실행하지 못한다(문서).
 - **settings.json만 (`--write`)**: 동작은 하지만 업데이트가 플러그인처럼 따라오지 않는다. 플러그인을 못 쓰는 경우의 대안으로 남겼다.
 - **플러그인과 settings.json 훅을 함께**: 두 번 운다.
+- **`http` 훅(CLI 없이 데몬에 바로)**: 데몬의 모든 요청에 토큰이 필요한데, 토큰은 데몬이 시작할 때마다 새로 생기고 `runtime.json`에만 있다. 훅 설정에 적어 둘 수 없으므로 붙여 넣은 http 훅은 매번 401이었다. 포트를 고정해도 같다. 1.11.1에서 `install-hooks`가 http 훅 블록을 출력하지 않게 했고, `integrations/claude/settings.hooks.http.example.json`과 `cli/HookSnippets.cs`를 지웠다.
 
 ## TODO
 

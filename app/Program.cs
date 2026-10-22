@@ -22,6 +22,10 @@ internal static class Program
     // adapters changed (GraphicsAdapters).
     public static bool RestartedForGraphics { get; private set; }
 
+    // Set when the previous instance could not apply an update and restarted
+    // on the current version (TrayController.RestartAfterFailedUpdate).
+    public static bool RestartedAfterFailedUpdate { get; private set; }
+
     private static Mutex? _instanceMutex;
 
     // Lets the next instance start as the only one before this one has quite
@@ -70,7 +74,9 @@ internal static class Program
                 try { using var previous = System.Diagnostics.Process.GetProcessById(previousPid); previous.WaitForExit(15000); }
                 catch { /* already gone */ }
             }
-            if (args.Length > 2 && args[2] == "graphics") RestartedForGraphics = true;
+            var reason = args.Length > 2 ? args[2] : "";
+            if (reason == "graphics") RestartedForGraphics = true;
+            else if (reason == "update-failed") RestartedAfterFailedUpdate = true;
             else RecoveredFromHang = true;
             background = true;
             verb = "";
@@ -107,7 +113,7 @@ internal static class Program
             Console.WriteLine("  (no arguments)        run in the system tray");
             Console.WriteLine("  --self-test           run headless checks and exit");
             Console.WriteLine("  --test-sound [level]  play one level's sound and exit");
-            Console.WriteLine("  --settings            open Settings on the running instance");
+            Console.WriteLine("  --settings            open Settings (starts notipet if it is not running)");
             Console.WriteLine("  --background          start quietly; if one is running, do nothing");
             return 0;
         }
@@ -125,6 +131,11 @@ internal static class Program
             else showSignal.Set();
             return 0;
         }
+
+        // Started with --settings and nothing running: the person asked for
+        // Settings, so open it once the tray is up (the watcher takes the
+        // signal as soon as it starts).
+        if (verb == "--settings") settingsSignal.Set();
 
         WinRT.ComWrappersSupport.InitializeComWrappers();
         Microsoft.UI.Xaml.Application.Start(callbackParams =>

@@ -51,6 +51,70 @@ internal static class CodexHooks
     private const int TimeoutSeconds = 10;
     private const string Marker = "# notipet hooks - written by `notipet install-hooks --codex --write`, which --remove undoes. Leave `notify` alone.";
 
+    // This repository's marketplace is named notipet; a directory listing
+    // would bring the same plugin under another marketplace name.
+    public const string PluginId = "notipet@notipet";
+
+    // The notipet plugin's skill as Codex has it: enabled in config.toml and
+    // copied under plugins/cache/<marketplace>/notipet/<version>/. The newest
+    // version's SKILL.md, or null when the plugin is off or not there.
+    public static string? PluginSkillPath(string toml)
+    {
+        try
+        {
+            return EnabledPluginMarketplaces(toml)
+                .Select(market => Path.Combine(CodexHome(), "plugins", "cache", market, "notipet"))
+                .Where(Directory.Exists)
+                .SelectMany(Directory.GetDirectories)
+                .OrderByDescending(dir => VersionOf(Path.GetFileName(dir)))
+                .Select(dir => Path.Combine(dir, "skills", "notipet", "SKILL.md"))
+                .FirstOrDefault(File.Exists);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    // "1.12.0-rc.1" sorts as 1.12.0; a folder that is not a version, last.
+    private static Version VersionOf(string folder)
+    {
+        var cut = folder.IndexOfAny(new[] { '-', '+' });
+        return Version.TryParse(cut > 0 ? folder[..cut] : folder, out var v) ? v : new Version(0, 0);
+    }
+
+    public static bool PluginEnabled(string toml) => EnabledPluginMarketplaces(toml).Count > 0;
+
+    // The marketplaces whose notipet plugin is on: each [plugins."notipet@<m>"]
+    // table without enabled = false (enabled is the default when absent).
+    public static List<string> EnabledPluginMarketplaces(string toml)
+    {
+        const string prefix = "[plugins.\"notipet@";
+        var on = new List<string>();
+        string? current = null;
+        foreach (var raw in toml.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.StartsWith('['))
+            {
+                current = null;
+                if (!line.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                var close = line.IndexOf("\"]", prefix.Length, StringComparison.Ordinal);
+                if (close <= prefix.Length) continue;
+                current = line[prefix.Length..close];
+                if (current.IndexOfAny(new[] { '"', '.', '\\', '/' }) >= 0) { current = null; continue; }
+                if (!on.Contains(current)) on.Add(current);
+                continue;
+            }
+            if (current is not null && line.Replace(" ", "", StringComparison.Ordinal).StartsWith("enabled=false", StringComparison.OrdinalIgnoreCase))
+            {
+                on.Remove(current);
+                current = null;
+            }
+        }
+        return on;
+    }
+
     public static string CodexHome() =>
         Environment.GetEnvironmentVariable("CODEX_HOME") is { Length: > 0 } home
             ? home
@@ -98,7 +162,13 @@ internal static class CodexHooks
         foreach (var raw in toml.Split('\n'))
         {
             var line = raw.Trim();
-            if (line.StartsWith('[')) { table = line.Trim('[', ']', ' '); continue; }
+            if (line.StartsWith('['))
+            {
+                // `[profiles.careful] # strict`: the comment is not the name.
+                var close = line.IndexOf(']');
+                table = (close > 0 ? line[..close] : line).Trim('[', ']', ' ');
+                continue;
+            }
             var eq = line.IndexOf('=');
             if (eq <= 0 || line.StartsWith('#')) continue;
             var key = line[..eq].Trim();
@@ -115,8 +185,8 @@ internal static class CodexHooks
         return !string.IsNullOrEmpty(effective) && !effective.Equals("user", StringComparison.OrdinalIgnoreCase);
     }
 
-    // A block written before the PostToolUse hook (1.8.0): its question alarms
-    // end only with the turn.
+    // A block written before 1.9.0: no question-box hooks, so a question box
+    // does not ring, and (before 1.8.0) its alarm ends only with the turn.
     public static bool LacksAnswerHook(string toml) =>
         MentionsNotipetHook(toml) && !toml.Contains("^request_user_input_async$", StringComparison.Ordinal);
 
@@ -476,6 +546,16 @@ internal static class CodexHooks
         if (!ApprovalsAutoReviewed("model = \"x\"\napprovals_reviewer = \"guardian_subagent\"\n[tui]\nx = 1\n")) return false;
         if (ApprovalsAutoReviewed("approvals_reviewer = \"user\"\n") || ApprovalsAutoReviewed("[tui]\napprovals_reviewer = \"guardian_subagent\"\n") || ApprovalsAutoReviewed("")) return false;
         if (ApprovalsAutoReviewed("approvals_reviewer = \"guardian_subagent\"\nprofile = \"careful\"\n[profiles.careful]\napprovals_reviewer = \"user\"\n")) return false;
+        // The plugin is on when its table is there, unless it says otherwise.
+        if (!PluginEnabled("[plugins.\"notipet@notipet\"]\nenabled = true\n") || PluginEnabled("[plugins.\"notipet@notipet\"]\nenabled = false\n")
+            || PluginEnabled("[plugins.\"other@notipet\"]\nenabled = true\n") || !PluginEnabled("[plugins.\"notipet@notipet\"]\n[desktop]\nenabled = false\n")) return false;
+        // From another marketplace too, and only the tables that are on.
+        if (EnabledPluginMarketplaces("[plugins.\"notipet@openai-curated\"]\n[plugins.\"notipet@notipet\"]\nenabled = false\n") is not ["openai-curated"]) return false;
+        if (VersionOf("1.12.0-rc.1") != new Version(1, 12, 0) || VersionOf("latest") != new Version(0, 0)) return false;
+        // A comment after the table header does not hide the profile.
+        if (ApprovalsAutoReviewed("approvals_reviewer = \"guardian_subagent\"\nprofile = \"careful\"\n[profiles.careful] # strict\napprovals_reviewer = \"user\"\n")) return false;
+        // A block from before 1.9.0 lacks the question-box hooks; this one has them.
+        if (LacksAnswerHook(once) || !LacksAnswerHook(once.Replace("^request_user_input_async$", "^x$", StringComparison.Ordinal))) return false;
         if (HasQuotedCommand(once) || !HasQuotedCommand("command = '\"C:\\x\\notipet.exe\" --source codex'")) return false;
         foreach (var hook in Hooks)
         {

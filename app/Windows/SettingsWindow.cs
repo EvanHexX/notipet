@@ -56,7 +56,20 @@ internal sealed class SettingsWindow
         {
             if (_page == "alerts") _window.DispatcherQueue.TryEnqueue(ShowPage);
         };
+        // The shortcut box pauses the Recent hotkey while it has focus. A window
+        // that is hidden (X only hides it) or left for another app keeps that
+        // focus without a LostFocus, and the hotkey stayed off; coming back
+        // with the box still focused pauses it again.
+        _window.Activated += (_, e) =>
+        {
+            var inBox = _hotkeyBox is { } box && e.WindowActivationState != WindowActivationState.Deactivated
+                        && _window.Content?.XamlRoot is { } root
+                        && ReferenceEquals(Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(root), box);
+            _host.SuspendHotkey(inBox);
+        };
     }
+
+    private HotkeyCaptureBox? _hotkeyBox;
 
     public void Activate(string? page = null)
     {
@@ -729,6 +742,7 @@ internal sealed class SettingsWindow
         }
 
         var box = new HotkeyCaptureBox();
+        _hotkeyBox = box;
         box.SetBinding(Settings.History.Hotkey);
         void Set(string value)
         {

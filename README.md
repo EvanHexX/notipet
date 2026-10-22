@@ -9,7 +9,7 @@ English | [한국어](README.ko.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#install)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![WinUI 3](https://img.shields.io/badge/UI-WinUI%203-0063B1)](https://learn.microsoft.com/windows/apps/winui/winui3/)
-[![Version](https://img.shields.io/badge/version-1.5.0-blue)](#)
+[![Version](https://img.shields.io/badge/version-1.11.1-blue)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 <br>
 [![Claude Code](https://img.shields.io/badge/works%20with-Claude%20Code-D97757)](#connect-your-agents)
@@ -38,7 +38,7 @@ You start a long task in Claude Code or Codex and switch to something else. Fort
 - **Pick what rings** - everything except the projects or threads you turned off, or only the ones you turned on (a card's menu, Settings, or `notipet alerts`).
 - **Quiet hours, mute, rate limit, dedupe** - a hook firing on every tool call does not turn the tray into a machine gun.
 - **English / 한국어** UI, Fluent design, light and dark.
-- **Local only** - a loopback HTTP API with a bearer token. No telemetry; the only outbound request is the update check, and only when you ask for it.
+- **Local only** - a loopback HTTP API with a bearer token. No telemetry; the only outbound request is the update check, and only when you ask for it (or once a day, if you turn that on).
 
 ## How it works
 
@@ -81,7 +81,7 @@ codex plugin add notipet@notipet                  # the skill
 notipet install-hooks --codex --write             # the hooks, in ~/.codex/config.toml (backup first)
 ```
 
-Or just ask Codex to set notipet up: the skill runs that last command once you say yes. New threads pick everything up; if Codex asks you to review the new hooks (`/hooks`), trust them. Details: [docs/modules/codex_plugin.md](docs/modules/codex_plugin.md).
+Or just ask Codex to set notipet up: the skill runs that last command once you say yes. New threads pick everything up; if Codex asks you to review the new hooks (`/hooks`), trust them. If your `AGENTS.md` mentions the skill, refer to it by name (`notipet`), not by a file path: the plugin keeps it in a folder named after its version, so a path breaks with the next update (`notipet doctor` shows where it is). Details: [docs/modules/codex_plugin.md](docs/modules/codex_plugin.md).
 
 **Claude Code** - install notipet first, then one plugin brings the hooks and the skill:
 
@@ -118,7 +118,7 @@ notipet send --title "api: need a decision" --body "Rotate keys now or keep both
 | `error` | repeats 3x | failed, cannot continue |
 | `critical` | until acknowledged | must not be missed |
 
-Stop a ringing alarm with a click on the tray icon or the notification, or `notipet ack`. The sender can end it too: the turn finishing ends its permission prompt, and `notipet resolve` ends what an agent alerted about. Every repeat mode can be changed per level in Settings → Sound; "until acknowledged" is capped by a maximum duration unless you choose **No limit**.
+Stop a ringing alarm with a click on the tray icon or the notification, or `notipet ack`. The sender can end it too: the turn finishing ends its permission prompt, answering the agent's question ends that question's alarm, and `notipet resolve` ends what an agent alerted about. Every repeat mode can be changed per level in Settings → Sound; "until acknowledged" is capped by a maximum duration unless you choose **No limit**.
 
 ## CLI
 
@@ -127,6 +127,7 @@ notipet send --title T --body B [--level L] [--tag T] [--project P] [--thread-ti
 notipet status | ping | version | doctor
 notipet history [--limit N] | history clear
 notipet ack | resolve [--tag T] | mute [30m|off] | desk [on|off]
+notipet alerts [on|off|reset] [--project] | alerts mode all|selected
 notipet open [recent|settings]
 notipet start | stop | restart
 notipet install-hooks | install-skill

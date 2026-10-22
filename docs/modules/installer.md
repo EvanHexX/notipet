@@ -36,7 +36,10 @@ NOTIPET_UPDATE_FEED=<폴더>              → GitHub 대신 그 폴더(vpk pack 
 **업데이트** (사용자가 누를 때만):
 1. 트레이 "업데이트 확인" 또는 설정 → 정보 → "지금 확인" → `CheckAsync` — GitHub Releases의 `releases.win.json`을 읽는다. 받지 않는다.
 2. 새 버전이 있으면 트레이 메뉴가 "X(으)로 업데이트"로, 정보 페이지 버튼이 "X 설치"로 바뀐다.
-3. 누르면 `DownloadAndRestartAsync`: 받고(델타가 있으면 델타) → `PrepareForUpdate`(daemon.log, 감시 장치·runtime 복구 중지, 알람 정지, runtime.json 삭제, 트레이 아이콘 제거) → `ApplyUpdatesAndRestart`로 Velopack이 이 프로세스를 끝내고 `current\`를 바꾼 뒤 새 버전을 띄운다. 업데이트 훅이 PATH·자동 시작을 다시 맞춘다.
+3. 누르면 `DownloadAndRestartAsync`: 받고(델타가 있으면 델타) → `PrepareForUpdate`(daemon.log, history.json 저장, 감시 장치·runtime 복구 중지, 알람 정지, runtime.json 삭제, 트레이 아이콘 제거) → `ApplyUpdatesAndRestart`로 Velopack이 이 프로세스를 끝내고 `current\`를 바꾼 뒤 새 버전을 띄운다. 업데이트 훅이 PATH·자동 시작을 다시 맞춘다.
+4. 실패하면(`UpdatePhase.Failed`, `crash.log`에 `Updater.Apply`) `TrayController.InstallUpdate`가 어디서 실패했는지 본다(1.11.1):
+   - 받기 중(`PrepareForUpdate` 전): 아무것도 치우지 않았으니 "업데이트를 설치하지 못했습니다: …" 경고 풍선만 띄우고 그대로 돈다.
+   - `PrepareForUpdate` 뒤(적용 실패): 트레이 아이콘·`runtime.json`·감시 장치가 이미 없는데 단일 인스턴스 뮤텍스는 쥐고 있다. 그대로 두면 보이지 않는 프로세스가 모든 알림을 삼킨다. 그래서 `daemon.log`에 `update failed after shutting down (…); restarting`을 남기고 `--restart-after <pid>`로 같은 exe를 새로 띄운 뒤 끝낸다(`RestartAfterFailedUpdate`). 새 인스턴스는 옛 프로세스가 끝나길 기다렸다 뜨고, 최근 알림은 history.json으로 넘어간다. 하나씩 되돌리는 것보다 새로 시작하는 쪽이 단순하다.
 
 **자동 확인** (`updates.autoCheck`를 켰을 때만): 시작 3분 뒤부터 3시간마다 깨어나, 마지막 자동 확인에서 24시간이 지났으면 확인만 한다. 같은 새 버전은 한 번만 알린다(`notifiedVersion`).
 
@@ -65,13 +68,14 @@ NOTIPET_UPDATE_FEED=<폴더>              → GitHub 대신 그 폴더(vpk pack 
 
 - **서명하지 않았다.** 처음 실행하면 SmartScreen이 "Windows의 PC 보호" 창을 띄운다("추가 정보 → 실행"). 코드 서명 인증서가 생기면 `vpk pack --signParams`로.
 - 델타 업데이트는 `pack.ps1 -Delta`로 직전 GitHub 릴리스를 받아 와야 만들어진다. 없으면 전체 패키지(~95MB)를 받는다.
-- 업데이트·재시작 때 최근 알림 기록(메모리)은 사라진다.
+- 최근 알림은 업데이트·재시작을 넘어 남는다(1.6.2부터, `history.persist` 기본 켬, history.json). 끄면 메모리에만 있어서 업데이트할 때 사라진다.
 - 업데이트 확인은 GitHub 비인증 API 한도(IP당 시간당 60회)를 쓴다. 사람이 누르는 빈도로는 문제없다.
 
 ## Regression Notes
 
 - 설치 → PATH에 `current\`, 시작 메뉴 바로 가기, "앱 및 기능" 항목, daemon.log `installed`.
-- 업데이트: rc.1 설치 → `NOTIPET_UPDATE_FEED`로 rc.2 피드 → 정보 → 지금 확인 → "rc.2 설치" → 재시작 후 `notipet ping`이 rc.2. daemon.log에 `quit: updating to` → `updated to` → `started`.
+- 업데이트: rc.1 설치 → `NOTIPET_UPDATE_FEED`로 rc.2 피드 → 정보 → 지금 확인 → "rc.2 설치" → 재시작 후 `notipet ping`이 rc.2. daemon.log에 `quit: updating to` → `updated to` → `started`. 최근 알림이 그대로다.
+- 적용이 실패하면 daemon.log에 `quit: updating to` → `update failed after shutting down (…); restarting` → 새 인스턴스의 시작 줄이 남고, 트레이 아이콘이 돌아오며 `notipet ping`이 옛 버전으로 답한다. 보이지 않는 프로세스가 남아 있으면 안 된다.
 - 제거 → 앱 폴더·PATH·바로 가기·등록 항목이 없고, 설치 폴더의 데몬이 멈췄고, `%LOCALAPPDATA%\notipet\settings.json`은 남아 있다.
 
 ## Rejected Approaches

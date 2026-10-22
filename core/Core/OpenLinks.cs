@@ -56,10 +56,20 @@ internal static class OpenLinks
     public static bool IsAllowed(string? text, IEnumerable<string>? allowedSchemes) =>
         !string.IsNullOrWhiteSpace(text) && Check(text.Trim(), allowedSchemes) is null;
 
+    private static readonly char[] ShellBreaking = { ' ', '"', '<', '>', '^', '|', '`' };
+
     internal static string? Check(string text, IEnumerable<string>? allowedSchemes)
     {
         if (text.Length > MaxLength) return $"longer than {MaxLength} characters";
         if (text.Any(c => c < 0x20 || c == 0x7f)) return "control characters";
+        // The shell puts the link into the handler's command line ("%1") as
+        // written: a space or a quote would let it add arguments of its own,
+        // and a handler run through cmd reads < > ^ | & as commands. A real
+        // URI escapes them (%20, %22, %26...). http(s) keeps & for its query
+        // strings - the browser is no cmd script.
+        if (text.IndexOfAny(ShellBreaking) >= 0) return "characters the shell would read (space, \" < > ^ | `) - escape them";
+        if (text.Contains('&') && !text.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            return "& outside an http(s) link - escape it as %26";
         if (!Uri.TryCreate(text, UriKind.Absolute, out var uri)) return "not an absolute URI";
 
         var scheme = uri.Scheme.ToLowerInvariant();
@@ -80,6 +90,7 @@ internal static class OpenLinks
         // A listed custom scheme and a page on this PC open; the text is kept as sent.
         if (Accept(" codexbridge://approve/d-42 ", listed, warnings) != "codexbridge://approve/d-42") return false;
         if (Accept("http://127.0.0.1:5123/x", null, warnings) is null) return false;
+        if (Accept("http://127.0.0.1:5123/x?a=1&b=2", null, warnings) is null) return false;
         if (Accept("https://localhost/x", null, warnings) is null) return false;
         if (warnings.Count != 0) return false;
 
@@ -97,6 +108,9 @@ internal static class OpenLinks
             "javascript:alert(1)",
             "calc.exe",                        // not a URI at all
             "codexbridge://a\nb",
+            "codexbridge://approve/x\" --config \"C:\\evil.json",   // arguments for the handler
+            "codexbridge://approve/x y",
+            "codexbridge://x/&calc.exe",
             "codexbridge://" + new string('a', MaxLength)
         };
         foreach (var link in refused)

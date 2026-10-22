@@ -25,7 +25,8 @@ internal static class ClaudeHooks
     private static readonly Hook[] Hooks =
     {
         // The moments Claude needs the user, and the turn's own "finished".
-        new("Notification", "agent_needs_input|agent_completed|permission_prompt|idle_prompt"),
+        // elicitation_*: an MCP server's input form - the agent waits on the user.
+        new("Notification", "agent_needs_input|agent_completed|permission_prompt|idle_prompt|elicitation_dialog|elicitation_url_dialog"),
         new("Stop", null),
         // "." and not ".*": Claude Code's own internal agents (prompt
         // suggestions, /btw) finish with an empty agent_type, and a matcher
@@ -160,6 +161,27 @@ internal static class ClaudeHooks
         }
     }
 
+    // settings.json has notipet's hooks, but not every one this build writes,
+    // or with an older matcher (before 1.11.1 the Notification matcher had no
+    // elicitation_*, so an MCP input form did not ring). Nothing upgrades a
+    // settings.json block by itself; doctor says to run --write again.
+    public static bool IsStale(string? settingsJson)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(settingsJson)) return false;
+            var root = JsonNode.Parse(settingsJson, documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            if (root?["hooks"] is not JsonObject events || !HasOurs(settingsJson)) return false;
+            return Hooks.Any(hook => events[hook.Event] is not JsonArray groups
+                || !groups.Any(g => g?["hooks"] is JsonArray handlers && handlers.Any(IsOurs)
+                                    && Str(g["matcher"]) == hook.Matcher));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     // Whether settings.json enables the notipet plugin (from any marketplace).
     public static bool PluginEnabled(string? settingsJson)
     {
@@ -245,7 +267,7 @@ internal static class ClaudeHooks
     {
         const string exe = @"C:\x\notipet.exe";
 
-        // From nothing: four events, exec form, async.
+        // From nothing: every event, exec form, async.
         var fresh = Apply(null, exe, remove: false);
         foreach (var hook in Hooks)
         {
@@ -254,6 +276,12 @@ internal static class ClaudeHooks
             var handler = groups[0]?["hooks"]?[0];
             if (Str(handler?["command"]) != exe || handler?["args"] is not JsonArray { Count: 2 } || handler["async"]?.GetValue<bool>() != true) return false;
         }
+
+        // What this build writes is current; an older matcher, or a missing
+        // event, is stale (doctor asks for --write again).
+        var current = Serialize(fresh);
+        if (IsStale(current) || IsStale(null) || IsStale("{}")) return false;
+        if (!IsStale(current.Replace("|elicitation_dialog|elicitation_url_dialog", "", StringComparison.Ordinal))) return false;
 
         // Someone's settings: other keys, other hooks and their order stay;
         // an old notipet entry (shell form, bin path) is replaced where it was.

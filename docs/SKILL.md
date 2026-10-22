@@ -8,7 +8,7 @@
 | 언제 | 턴 종료, 권한 대기, 서브에이전트 종료 등 정해진 이벤트 | "이건 사용자가 알아야 한다"고 판단한 순간 |
 | 내용 | 이벤트 이름 수준 ("Turn complete", "Waiting for your input") | 구체적 ("마이그레이션 3/5단계에서 unique 제약 위반, 아무것도 커밋 안 됨") |
 | 놓칠 수 있나 | 없다 — 이벤트가 나면 무조건 | 있다 — LLM이 잊거나 판단을 잘못하면 |
-| 설정 | `notipet install-hooks` → 설정 파일에 붙여넣기 | `notipet install-skill` 한 줄 |
+| 설정 | Claude Code 플러그인, 또는 `notipet install-hooks --claude --write` / `--codex --write` | Claude Code·Codex 플러그인, 또는 `notipet install-skill` 한 줄 |
 
 **권장:** 훅으로 바닥을 깔고(놓치지 않음), 스킬로 내용을 채운다(무엇이 필요한지 알 수 있음).
 
@@ -33,7 +33,7 @@ notipet doctor      # [ok  ] claude skill  ...SKILL.md
 
 에이전트에게 "끝나면 알려줘"라고 말하거나 긴 작업을 시키면 스킬이 쓰인다.
 
-> **Codex는 [플러그인](modules/codex_plugin.md)으로 이 스킬을 넣는다**(스킬만 든 플러그인). 플러그인 스킬은 PC마다 다른 절대 경로 대신 `notipet`(PATH)을 부른다(`install-skill --codex --command notipet`으로 만든 생성물). 플러그인을 쓰면 `~/.codex/skills/notipet`은 지운다 — 같은 스킬이 두 번 보인다. Codex 스킬에는 훅 안내 절이 있다: 사용자가 턴 완료·승인 대기 알림을 원하면 `notipet doctor`로 확인하고, **동의를 받아** `notipet install-hooks --codex --write`를 실행한다. 설정 파일을 직접 고치지 않는다.
+> **Codex는 [플러그인](modules/codex_plugin.md)으로 이 스킬을 넣는다**(스킬만 든 플러그인). 플러그인 스킬은 PC마다 다른 절대 경로 대신 `notipet`(PATH)을 부른다(`install-skill --codex --command notipet`으로 만든 생성물). 플러그인을 쓰면 `~/.codex/skills/notipet`은 지운다 — 같은 스킬이 두 번 보인다. 플러그인 스킬은 `~/.codex/plugins/cache/notipet/notipet/<버전>/` 아래에 있어 업데이트마다 경로가 바뀐다. 그래서 `AGENTS.md`에서 이 스킬을 가리킬 때는 경로가 아니라 **이름(`notipet`)으로** 쓴다. 지금 위치는 `notipet doctor`의 `codex skill` 줄에 나온다. Codex 스킬에는 훅 안내 절이 있다: 사용자가 턴 완료·승인 대기 알림을 원하면 `notipet doctor`로 확인하고, **동의를 받아** `notipet install-hooks --codex --write`를 실행한다. 설정 파일을 직접 고치지 않는다.
 >
 > Codex의 skills 폴더(`~/.codex/skills`)는 Codex 버전에 따라 지원 여부가 다르다. 최신 Codex 문서는 사용자 스킬 위치로 `~/.agents/skills`를 안내하므로, 그쪽을 쓰는 버전이면 `install-skill --codex --path %USERPROFILE%\.agents\skills`. 스킬을 지원하지 않는 버전이면 아래 [4절](#4-스킬을-지원하지-않는-에이전트)의 AGENTS.md 방식을 쓴다.
 
@@ -50,7 +50,7 @@ notipet doctor      # [ok  ] claude skill  ...SKILL.md
 Codex에서 매번 승인 창이 뜨는 게 싫으면 `~/.codex/rules/default.rules`에 한 줄을 넣는다(그 exe를 샌드박스 밖에서 묻지 않고 실행한다는 뜻이니, 경로를 정확히):
 
 ```python
-prefix_rule(pattern=["C:\\src\\notipet\\bin\\notipet.exe", ["send", "resolve", "ping", "history"]], decision="allow")
+prefix_rule(pattern=["C:\\src\\notipet\\bin\\notipet.exe", ["send", "resolve", "alerts", "ping", "history"]], decision="allow")
 ```
 
 ---
@@ -93,7 +93,7 @@ notipet send --title "<프로젝트>: <무슨 일>" --body "<한두 줄>" --leve
 
 ### 규칙
 
-- 제목은 프로젝트 이름으로 시작 (`quota-scope: 결정 필요`) — 팝업에는 제목과 본문만 보이기 때문
+- 제목은 프로젝트 이름으로 시작 (`api: 결정 필요`) — 팝업에는 제목과 본문만 보이기 때문
 - `--thread-title`은 한 대화에서 같은 말로. 매번 다르게 쓰면 카드가 같은 스레드로 안 읽힌다
 - Claude용과 Codex용 스킬은 1.3부터 **다른 파일**이다(위 표). 그래도 둘 다 `--agent`를 박아 두지 않는다 — 박아 두면 다른 에이전트 안에서 불렸을 때 잘못 기록된다
 - 태그는 `<프로젝트>:<순간>`이면 충분하다. 같은 태그라도 **다른 대화(스레드)면 따로** 울리고, 같은 대화에서 30초 안에 반복되면 한 번으로 합쳐진다
@@ -116,7 +116,8 @@ notipet resolve --tag "api:needs-input" # 그 알림만
 - 그 알람과 그 알림 창만 꺼진다. 다른 대화의 알람은 그대로 울린다.
 - 사용자가 이미 껐으면 아무 일도 없고 0으로 끝난다. 그래서 스킬은 "확인하지 말고 부르라"고 가르친다.
 - 아직 답을 기다리는 중이면 부르지 않는다.
-- 훅이 끄는 것(턴이 끝난 뒤의 권한 요청 등)과는 별개다. 훅은 사용자가 스킬 알림을 봤는지 모르므로 대신 끄지 않는다 — [USAGE.md](USAGE.md#알람이-저절로-꺼질-때--resolve).
+- 질문은 `send --until-reply`로 보낸다. 사용자가 그 대화에서 답하면(직접 입력, 또는 질문 창의 답) 저절로 끝나고 "답함"으로 표시되므로 resolve가 필요 없다. 답이 아닌 다른 이유로 끝났을 때만 부른다.
+- 훅이 끄는 것(턴이 끝난 뒤의 권한 요청 등)과는 별개다. 훅은 사용자가 스킬 알림을 봤는지 모르므로 대신 끄지 않는다 — `--until-reply` 알림을 답이 왔을 때 끝내는 것만 예외다. [USAGE.md](USAGE.md#알람이-저절로-꺼질-때--resolve).
 
 ### 이 스레드만 울리게, 또는 조용히 — `alerts`
 
@@ -134,19 +135,13 @@ notipet resolve --tag "api:needs-input" # 그 알림만
 
 **A. 그대로 둔다** — 훅의 알림은 "Turn complete", 스킬의 알림은 구체적인 내용. 제목이 달라서 둘 다 뜨지만, 하나는 내용이 있으니 오히려 유용할 수 있다.
 
-**B. 훅의 `Stop`을 뺀다** — 턴 종료 알림은 스킬에 맡기고, 훅은 `Notification`(권한·입력 대기)만 남긴다. 권한 대기는 LLM이 판단할 틈이 없는 순간이라 훅이 맡아야 한다.
+**B. 턴 완료 알림만 줄인다** — 훅은 그대로 두고 알림 쪽을 조정한다. 전체적으로는 `success` 레벨을 조용한 소리로 바꾼다(설정 → 사운드, `sound.byLevel.success`). 한 대화만이라면 그 대화 안에서 `notipet alerts off --events Stop`(밖에서는 `--thread <ID> --agent ...`를 붙인다) — **그 스레드에만** 적용되고, 다른 대화의 턴 완료는 그대로 울린다([USAGE.md](USAGE.md#알림이-너무-자주-온다)).
 
-```json
-{ "hooks": {
-    "Notification": [ { "matcher": "agent_needs_input|permission_prompt|idle_prompt",
-      "hooks": [ { "type": "command", "command": "C:\\src\\notipet\\bin\\notipet.exe",
-                   "args": ["--source", "claude-code"], "timeout": 10, "async": true } ] } ]
-} }
-```
+> **훅에서 `Stop`을 빼지 않는다.** 예전 문서는 `Stop`을 빼고 `Notification`만 남기는 구성을 권했지만, 지금 `Stop`은 알림만 보내는 훅이 아니다. 턴이 끝나면 그 턴의 권한 요청 알람과 알림 창을 끝낸다(턴이 끝났으면 이미 답한 것). 빼면 휴대폰에서 승인했어도 그 알람과 창이 남는다. 다른 훅도 각자 정리를 맡는다: `UserPromptSubmit`은 지난 턴의 "완료"·idle 알림과 `--until-reply` 질문을, `PostToolUse`는 질문 창에 답한 순간의 알람을 끝낸다. Claude Code 플러그인으로 넣은 훅은 하나만 뺄 수도 없다. `alerts off --events Stop`은 그 스레드의 `Stop` **알림만** 막고 이 정리는 그대로 한다.
 
 **C. 자리 착석을 활용한다** — 자리에 있을 때는 `notipet desk on`. 두 알림이 모두 짧은 소리 한 번으로 줄어든다. 설정에서 "다른 소리로 대체 → 소리 없음"을 켜면 알림만 조용히 뜬다.
 
-개인적으로는 **B**를 권한다.
+보통은 **A**로 두고, 자리에 있을 때 **C**를 켠다. 특정 대화가 시끄러울 때만 **B**의 `--events Stop`을 쓴다.
 
 ---
 
@@ -159,6 +154,8 @@ notipet resolve --tag "api:needs-input" # 그 알림만
 - **그 외**: 시스템 프롬프트 / 규칙 파일
 
 붙여넣을 요약본: [../integrations/codex/AGENTS.notipet.md](../integrations/codex/AGENTS.notipet.md)
+
+스킬이 설치된 에이전트(플러그인, `install-skill`)라면 이 요약본은 필요 없다. 지침 파일에서 스킬을 언급하려면 경로가 아니라 이름(`notipet`)으로 쓴다 — 플러그인 스킬의 경로는 버전마다 바뀌고, 없는 경로를 "정해진 스킬 위치"로 적어 두면 에이전트가 스킬을 못 찾았다며 알림을 아예 보내지 않을 수 있다.
 
 전체본이 필요하면:
 

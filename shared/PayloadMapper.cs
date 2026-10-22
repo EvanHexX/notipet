@@ -268,10 +268,19 @@ public static class PayloadMapper
     }
 
     // The Codex desktop app's own folder (%LOCALAPPDATA%\OpenAI\Codex\...):
-    // no user's project lives there.
-    public static bool IsCodexAppFolder(string? cwd) =>
-        !string.IsNullOrWhiteSpace(cwd)
-        && cwd.Replace('/', '\\').Contains(@"\OpenAI\Codex\", StringComparison.OrdinalIgnoreCase);
+    // no user's project lives there. Anchored to the local app-data folder: a
+    // clone of the openai/codex repository (C:\src\openai\codex\...) is a
+    // project, and matching "\OpenAI\Codex\" anywhere silenced it entirely.
+    public static bool IsCodexAppFolder(string? cwd)
+    {
+        if (string.IsNullOrWhiteSpace(cwd)) return false;
+        var path = cwd.Replace('/', '\\');
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return (local.Length > 0 && path.StartsWith(local.TrimEnd('\\') + @"\OpenAI\Codex\", StringComparison.OrdinalIgnoreCase))
+            // Another profile's, or a packaged app's redirected copy.
+            || path.Contains(@"\AppData\Local\OpenAI\Codex\", StringComparison.OrdinalIgnoreCase)
+            || path.Contains(@"\LocalCache\Local\OpenAI\Codex\", StringComparison.OrdinalIgnoreCase);
+    }
 
     // Prompts the agent stops on in the middle of a turn: a permission dialog
     // (Claude's Notification, Codex's PermissionRequest) or an MCP form.
@@ -612,6 +621,8 @@ public static class PayloadMapper
         if (PlanForHookEvent(new AgentHookEvent { SessionId = "c3", HookEventName = "Stop", LastAssistantMessage = "done",
                 Cwd = @"C:\Users\u\AppData\Local\OpenAI\Codex\bin\2e5e00daee91c61d" }, SourceCodex) is not { Notify: null, Resolve: null }) return false;
         if (PlanForHookEvent(new AgentHookEvent { SessionId = "c3", HookEventName = "Stop", Cwd = @"C:\src\OpenAI-tools" }, SourceCodex).Notify is null) return false;
+        // A clone of the openai/codex repository is the user's project, not the app.
+        if (PlanForHookEvent(new AgentHookEvent { SessionId = "c3", HookEventName = "PermissionRequest", Cwd = @"C:\src\openai\codex\codex-rs" }, SourceCodex).Notify is null) return false;
         // The answer to the agent's question ends its prompt right away and
         // marks it read, ends what was sent --until-reply, and notifies nothing.
         var answer = PlanForHookEvent(new AgentHookEvent { SessionId = session, HookEventName = "PostToolUse", ToolName = "AskUserQuestion" }, SourceClaude);

@@ -18,7 +18,7 @@ API 계약 전체는 [api.md](api.md), 설정 스키마 전체는 [settings.md](
 - 코드 서명을 하지 않아 SmartScreen이 막을 수 있다: "추가 정보" → "실행".
 - 제거: 설정 → 앱 → Notipet. `%LOCALAPPDATA%\notipet`의 설정·로그는 남는다.
 
-**업데이트**: 트레이 메뉴 → "업데이트 확인", 또는 설정 → 정보 → 업데이트 → "지금 확인". 새 버전이 있으면 같은 자리에서 "설치"를 누른다 — 받고, 닫고, 바꾸고, 다시 띄운다(최근 알림 기록은 그때 사라진다). 누르기 전에는 아무것도 보내지 않는다. 설정 → 정보 → "자동으로 업데이트 확인"을 켜면 하루 한 번 새 버전이 있는지만 묻고 알려 준다. 설치는 그래도 누를 때만.
+**업데이트**: 트레이 메뉴 → "업데이트 확인", 또는 설정 → 정보 → 업데이트 → "지금 확인". 새 버전이 있으면 같은 자리에서 "설치"를 누른다 — 받고, 닫고, 바꾸고, 다시 띄운다(최근 알림 기록은 남는다 — [최근 알림 보관](#최근-알림-보관)). 설치가 실패하면 풍선으로 알리고, 이미 트레이 아이콘을 내린 뒤에 실패했으면 스스로 다시 시작한다(보이지 않는 채로 남아 알림을 삼키지 않게). 누르기 전에는 아무것도 보내지 않는다. 설정 → 정보 → "자동으로 업데이트 확인"을 켜면 하루 한 번 새 버전이 있는지만 묻고 알려 준다. 설치는 그래도 누를 때만.
 
 ### 소스에서 빌드
 
@@ -66,7 +66,7 @@ cd C:\src\notipet
 
 CLI가 그 파일을 읽어서 알아서 찾아간다. **그래서 훅 설정에 포트를 적을 필요가 없다.**
 
-포트를 고정해야 하는 경우는 하나뿐이다 — Claude Code의 `http` 훅([경로 B](#경로-b--claude-code-cli-없이-직접-http))을 쓸 때. 그때는 `settings.json`에서 `server.port`를 고정한다.
+포트를 고정할 일은 거의 없다. 직접 HTTP로 부르는 도구가 고정 URL을 원할 때만 `settings.json`의 `server.port`를 정한다(그래도 토큰은 `runtime.json`에서 읽어야 한다).
 
 데몬이 꺼져 있으면 CLI가 **알아서 띄운다.** 재부팅 후 첫 알림을 놓치는 것보다 낫다는 판단이고, 싫으면 `--no-launch`를 붙인다.
 
@@ -98,7 +98,7 @@ claude plugin marketplace add EvanHexX/notipet
 claude plugin install notipet@notipet
 ```
 
-Claude Code 안에서는 `/plugin marketplace add EvanHexX/notipet` → `/plugin install notipet@notipet`. 훅 4개(아래와 같은 내용)와 스킬이 함께 들어가고, **새 세션부터** 적용된다. 업데이트는 `claude plugin marketplace update notipet`.
+Claude Code 안에서는 `/plugin marketplace add EvanHexX/notipet` → `/plugin install notipet@notipet`. 훅 5개(아래와 같은 내용)와 스킬이 함께 들어가고, **새 세션부터** 적용된다. 업데이트는 `claude plugin marketplace update notipet`.
 
 - 아래 settings.json 블록이나 `~/.claude/skills/notipet`이 이미 있으면 **뺀다**: `notipet install-hooks --claude --remove`, 그리고 그 스킬 폴더 삭제. Claude Code는 플러그인 훅과 settings.json 훅을 둘 다 실행하므로 두 번 울린다. `notipet doctor`가 둘 다 있으면 경고한다.
 - 플러그인 훅은 `notipet.exe`를 PATH에서 찾는다. 설치 직후 이미 떠 있던 Claude 앱이 새 PATH를 모르면 앱을 다시 시작한다.
@@ -112,7 +112,7 @@ Claude Code 안에서는 `/plugin marketplace add EvanHexX/notipet` → `/plugin
 {
   "hooks": {
     "Notification": [
-      { "matcher": "agent_needs_input|agent_completed|permission_prompt|idle_prompt",
+      { "matcher": "agent_needs_input|agent_completed|permission_prompt|idle_prompt|elicitation_dialog|elicitation_url_dialog",
         "hooks": [ { "type": "command",
                      "command": "C:\\src\\notipet\\bin\\notipet.exe",
                      "args": ["--source", "claude-code"],
@@ -136,6 +136,13 @@ Claude Code 안에서는 `/plugin marketplace add EvanHexX/notipet` → `/plugin
                      "command": "C:\\src\\notipet\\bin\\notipet.exe",
                      "args": ["--source", "claude-code"],
                      "timeout": 10, "async": true } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "AskUserQuestion|ExitPlanMode",
+        "hooks": [ { "type": "command",
+                     "command": "C:\\src\\notipet\\bin\\notipet.exe",
+                     "args": ["--source", "claude-code"],
+                     "timeout": 10, "async": true } ] }
     ]
   }
 }
@@ -146,41 +153,15 @@ Claude Code 안에서는 `/plugin marketplace add EvanHexX/notipet` → `/plugin
 - JSON이라 윈도우 경로에 `\\`를 쓴다.
 - `args`가 있으면 Claude Code는 셸 없이 그 exe를 바로 실행한다(exec form). Git Bash가 있든 없든 같다. (Codex에는 `args` 필드가 없다 — 경로 C.)
 - **`async: true`가 중요하다.** 타임아웃이 적용되지 않고 훅이 에이전트의 턴을 붙잡지 않는다.
-- `Notification` / `Stop` / `SubagentStop`은 설계상 에이전트를 블로킹할 수 없다. notipet이 Claude Code의 동작을 바꿀 일은 없다. `UserPromptSubmit`은 막을 수 있는 이벤트지만 notipet은 아무것도 출력하지 않고 0으로 끝나며, `async`라 프롬프트가 기다리지도 않는다.
-- `UserPromptSubmit`은 알림을 보내지 않는다. 지난 턴의 "완료"와 idle 알림을 끄는 데만 쓴다([알람이 저절로 꺼질 때](#알람이-저절로-꺼질-때--resolve)). 빼도 나머지는 그대로 동작한다.
+- `Notification` / `Stop` / `SubagentStop`은 설계상 에이전트를 블로킹할 수 없다. notipet이 Claude Code의 동작을 바꿀 일은 없다. `UserPromptSubmit`과 `PostToolUse`는 에이전트에 무언가 돌려줄 수 있는 이벤트지만 notipet은 아무것도 출력하지 않고 0으로 끝나며, `async`라 기다리게 하지도 않는다.
+- `Notification`의 `elicitation_dialog` / `elicitation_url_dialog`는 MCP 서버가 입력 양식을 띄우고 답을 기다리는 순간이다.
+- `UserPromptSubmit`은 알림을 보내지 않는다. 지난 턴의 "완료"와 idle 알림을 끄고, `--until-reply`로 보낸 질문을 "답함"으로 끝내는 데 쓴다([알람이 저절로 꺼질 때](#알람이-저절로-꺼질-때--resolve)). 빼면 그 정리만 빠진다.
+- `PostToolUse`도 알림을 보내지 않는다. 사용자가 Claude의 질문 창(`AskUserQuestion`, `ExitPlanMode`)에 답하면 그 질문의 알람을 턴이 끝나기 전에 바로 끈다. 이 두 도구에만 건다 — 모든 도구에 걸면 도구를 부를 때마다 notipet이 실행된다.
 - 이미 `hooks` 블록이 있으면 Claude Code가 병합한다. 통째로 덮어쓰지 않아도 된다.
 
-### 경로 B — Claude Code, CLI 없이 직접 HTTP
+### 경로 B — Claude Code의 `http` 훅은 쓸 수 없다
 
-Claude Code는 `http` 훅 타입을 네이티브로 지원한다. 중간 프로세스가 없어서 가장 가볍다.
-
-**먼저 포트를 고정한다.** `%LOCALAPPDATA%\notipet\settings.json`:
-
-```json
-{ "server": { "port": 47811 } }
-```
-
-데몬을 재시작한 뒤:
-
-```json
-{
-  "hooks": {
-    "Notification": [
-      { "matcher": "agent_needs_input|agent_completed|permission_prompt|idle_prompt",
-        "hooks": [ { "type": "http",
-                     "url": "http://127.0.0.1:47811/hooks/claude-code",
-                     "timeout": 5 } ] }
-    ],
-    "Stop": [
-      { "hooks": [ { "type": "http",
-                     "url": "http://127.0.0.1:47811/hooks/claude-code",
-                     "timeout": 5 } ] }
-    ]
-  }
-}
-```
-
-> 데몬은 `/hooks/*`에도 베어러 토큰을 요구한다. Claude Code가 토큰 헤더를 보내도록 설정할 수 없다면 경로 A를 쓴다 — CLI가 `runtime.json`에서 토큰을 읽어 대신 붙여준다.
+Claude Code에는 원본 JSON을 URL로 바로 POST하는 `http` 훅 타입이 있지만 notipet에는 쓸 수 없다. 데몬은 `/hooks/*`를 포함한 모든 요청에 베어러 토큰을 요구하는데, 토큰은 데몬이 시작할 때마다 새로 만들어져 `runtime.json`에만 있다. settings.json에 붙여 넣은 `http` 훅은 그 토큰을 보낼 수 없어서 매번 401을 받고, Claude Code는 이를 막는 오류로 보지 않아 알림만 조용히 사라진다. 경로 A(플러그인이나 `install-hooks --claude --write`)를 쓴다 — CLI가 `runtime.json`에서 토큰을 읽어 붙인다.
 
 ### 경로 C — Codex
 
@@ -195,13 +176,26 @@ codex plugin add notipet@notipet
 
 업데이트는 `codex plugin marketplace upgrade notipet`. 예전에 `install-skill --codex`로 깐 `~/.codex/skills/notipet`이 있으면 지운다(같은 스킬이 두 번 보인다).
 
+프로젝트의 `AGENTS.md`에서 이 스킬을 가리킬 때는 **파일 경로가 아니라 이름(`notipet`)으로** 쓴다. 플러그인은 스킬을 `%USERPROFILE%\.codex\plugins\cache\notipet\notipet\<버전>\` 아래에 두므로 경로를 적어 두면 다음 업데이트에서 틀어지고, 그 경로를 "정해진 스킬 위치"로 믿은 에이전트는 파일이 없다며 알림을 보내지 않을 수 있다. 지금 어디에 있는지는 `notipet doctor`의 `codex skill` 줄이 보여 준다.
+
 **훅 — 명령 한 줄로.** 턴 완료·승인 대기는 에이전트가 멈춰 있는 순간이라 훅만 잡는다.
 
 ```powershell
 notipet install-hooks --codex --write
 ```
 
-`%USERPROFILE%\.codex\config.toml`에 notipet 블록(`[[hooks.Stop]]`, `[[hooks.PermissionRequest]]`, `[[hooks.UserPromptSubmit]]`)을 넣는다. 먼저 `config.toml.bak-notipet-<시각>`으로 백업하고, notipet 블록만 다루며, 다시 실행해도 같다. 예전 버전이 넣은 블록은 새 것으로 바꾼다. 빼려면 `--remove`, 넣을 내용만 보려면 `--write` 없이. Codex에게 "notipet 설정해 줘"라고 하면 스킬이 동의를 받고 이 명령을 실행한다.
+`%USERPROFILE%\.codex\config.toml`에 notipet 블록(훅 6개)을 넣는다:
+
+| 훅 | 하는 일 |
+|---|---|
+| `[[hooks.Stop]]` | 턴 완료 알림. 그 스레드의 승인 대기 알람을 먼저 끈다 |
+| `[[hooks.PermissionRequest]]` | 승인 대기 알림. 단, config.toml의 `approvals_reviewer`가 `user`가 아닌 값이면 울리지 않는다 — 그때는 Codex가 스스로 검토한다 |
+| `[[hooks.UserPromptSubmit]]` | 알림 없음. 지난 턴의 "완료"를 끄고, 입력한 답이면 `--until-reply` 질문과 질문 창 알람을 끝낸다 |
+| `[[hooks.PostToolUse]]` `^request_user_input$` | 알림 없음. 질문 창에 답하면 그 알람을 끈다 |
+| `[[hooks.PostToolUse]]` `^request_user_input_async$` | 질문 창 알림(질문 내용으로, 답할 때까지) |
+| `[[hooks.PreToolUse]]` `^request_user_input$` | 질문 창 알림(위와 같음, 답을 기다리는 쪽 도구) |
+
+`--write`는 먼저 `config.toml.bak-notipet-<시각>`으로 백업하고, notipet 블록만 다루며, 다시 실행해도 같다. 예전 버전이 넣은 블록은 새 것으로 바꾼다. 빼려면 `--remove`, 넣을 내용만 보려면 `--write` 없이. Codex에게 "notipet 설정해 줘"라고 하면 스킬이 동의를 받고 이 명령을 실행한다.
 
 새 스레드부터 적용된다. Codex가 새 훅 검토(`/hooks`)를 물으면 신뢰한다. `notipet doctor`의 `codex hooks` 줄로 확인한다. 자세한 내용과 제약은 [modules/codex_plugin.md](modules/codex_plugin.md).
 
@@ -209,7 +203,7 @@ notipet install-hooks --codex --write
 
 > ### ⚠️ 기존 `notify = [...]` 줄을 건드리지 않는다
 >
-> `notify`는 **슬롯이 하나뿐이다.** 이 머신에서는 이미 Codex 자체의 computer-use 통합이 쓰고 있고, 덮어쓰면 그게 조용히 깨진다.
+> `notify`는 **슬롯이 하나뿐이다.** Codex 자체의 computer-use 통합처럼 다른 것이 이미 쓰고 있을 수 있고, 덮어쓰면 그게 조용히 깨진다.
 >
 > 게다가 hooks 쪽이 모든 면에서 낫다:
 > - `notify`는 이벤트가 `agent-turn-complete` **하나뿐**이다. "사용자 입력 대기" 이벤트 추가 요청은 not-planned로 닫혔다. hooks는 `PermissionRequest`(= 에이전트가 나를 기다리는 중)를 준다 — 정작 듣고 싶은 신호가 그거다.
@@ -245,10 +239,12 @@ Claude Code / Codex  ──훅 발생──>  notipet.exe (CLI)  ──HTTP POST
 
 | 에이전트가 보낸 것 | notipet 레벨 | 기본 소리 |
 |---|---|---|
-| `agent_needs_input`, `permission_prompt`, `idle_prompt` | **attention** | 알람음 2회 반복 |
+| `agent_needs_input`, `permission_prompt`, `idle_prompt`, `elicitation_dialog`, `elicitation_url_dialog`(MCP 서버의 입력 양식) | **attention** | 알람음 2회 반복 |
 | `agent_completed` | success | 1회 |
 | `Stop` (턴 완료) | success | 1회 |
 | `PermissionRequest` (Codex) | **attention** | 알람음 2회 반복 |
+| Codex 질문 창 (`PostToolUse` `request_user_input_async`, `PreToolUse` `request_user_input`) | **attention** | 알람음 2회 반복. 본문은 질문, 답하면 끝난다 |
+| `UserPromptSubmit`, 질문 도구의 `PostToolUse` | 알림 없음 | 끝난 알람만 끈다([resolve](#알람이-저절로-꺼질-때--resolve)) |
 | `SubagentStop`, `SessionEnd` | info | 1회 (Claude Code 내부 에이전트의 SubagentStop은 제외: 입력 제안, `/btw`) |
 | `StopFailure` | error | 3회 반복 |
 | 모르는 이벤트 | info | 1회 + 본문에 원본 이벤트명 |
@@ -262,23 +258,29 @@ Claude Code가 권한 승인을 기다릴 때 stdin으로 보내는 것:
 ```json
 { "session_id": "8f3a1234567890",
   "hook_event_name": "Notification",
-  "notification_type": "agent_needs_input",
-  "cwd": "C:\\src\\notipet",
-  "notification_data": { "tool_name": "Bash" } }
+  "notification_type": "permission_prompt",
+  "message": "Claude needs your permission to use Bash",
+  "cwd": "C:\\src\\notipet" }
 ```
 
 notipet이 만드는 알림:
 
 ```
 제목: Claude Code - notipet
-본문: Waiting for your input (Bash)
+본문: Claude needs your permission to use Bash
 레벨: attention              → 알람음 2회
-태그: claude-code:8f3a12345678:Notification:agent_needs_input
+태그: claude-code:8f3a12345678:Notification:permission_prompt
 ```
+
+본문은 `message`를 그대로 쓰고, 없으면 `notification_type`으로 정한다(`permission_prompt`면 `Permission needed`). 필드는 맨 위 단계에 있는 것만 읽는다. 에이전트가 필드 형식을 바꿔도(문자열이던 자리에 객체) CLI는 페이로드를 버리지 않고, 읽을 수 있는 문자열 필드만으로 알림을 만든다.
 
 **제목에 저장소 이름이 들어간다.** 세션을 세 개 동시에 돌릴 때 어느 쪽이 부르는지 알아야 하기 때문이다.
 
-**태그는 중복 병합 키다.** 같은 권한 프롬프트로 훅이 3번 터져도 소리는 1번만 나고 히스토리의 `count`만 올라간다.
+**태그는 중복 병합 키다.** 같은 권한 프롬프트로 훅이 3번 터져도 소리는 1번만 나고 히스토리의 `count`만 올라간다(같은 대화, 기본 30초 안). 다음 경우에는 합치지 않고 다시 울린다:
+
+- 앞의 알림이 끝났다 — resolve가 지목했다([아래](#알람이-저절로-꺼질-때--resolve)).
+- 앞의 알림이 사용자가 바꿀 수 있는 상태(음소거, 방해금지, 스레드·프로젝트 알림 꺼짐 등) 때문에 막혔다 — 풀고 나서 다시 오면 울린다. 레이트 리밋에 걸린 것만은 계속 한 카드로 합친다.
+- 같은 태그로 레벨이 올라갔다 — `error` 다음의 `critical`.
 
 ### 레벨별 기본 동작
 
@@ -295,7 +297,7 @@ notipet이 만드는 알림:
 
 **PC 앞에 있음**을 체크해 두면 이 반복이 1회로 줄어든다. [트레이 메뉴](#6-트레이-메뉴와-창) 참고.
 
-`critical`의 반복은 트레이 아이콘 클릭 / 알림 풍선 클릭 / `notipet ack` / 최대 지속 시간(기본 120초)에서 멈춘다. 이 상한은 설정과 무관하게 코드에서 강제된다 — 잘못 구성된 훅이 자리 비운 사이 사이렌을 계속 울리면 안 되기 때문이다.
+`critical`의 반복은 트레이 아이콘 클릭 / 알림 풍선 클릭 / `notipet ack` / 최대 지속 시간(기본 120초, 설정 → 사운드에서 30초~10분 또는 **무제한**)에서 멈춘다. 보내는 쪽은 이 시간을 줄일 수만 있고 늘릴 수 없으며, 코드가 10분을 넘지 못하게 막는다 — 잘못 구성된 훅이 자리 비운 사이 사이렌을 끝없이 울리면 안 되기 때문이다. 예외는 사용자가 설정에서 고른 **무제한**(`sound.maxDurationSec = 0`) 하나이고, "확인할 때까지" 알람에만 적용된다(자리를 오래 비운 사이 상한이 사이렌을 꺼 버리던 경우를 위한 것). 그래도 PC 앞에 있음(긴 알람을 짧게)이 켜져 있으면 30초를 넘지 않는다.
 
 레벨별 소리는 `settings.json`의 `sound.byLevel`에서 바꾼다. 자세한 건 [settings.md](settings.md).
 
@@ -305,14 +307,16 @@ notipet이 만드는 알림:
 
 | 누가 | 언제 | 무엇을 끄나 |
 |---|---|---|
-| 훅 `Stop` | 턴이 끝났을 때 | 그 세션의 권한 요청 알람 (턴이 끝났으면 이미 답한 것) |
-| 훅 `UserPromptSubmit` | 새 턴이 시작될 때 | 그 세션의 지난 턴 "완료" 알림, idle 알림 |
+| 훅 `Stop` | 턴이 끝났을 때 | 그 세션의 권한 요청·MCP 입력 양식 알람 (턴이 끝났으면 이미 답한 것) |
+| 훅 `UserPromptSubmit` | 새 턴이 시작될 때 | 그 세션의 지난 턴 "완료" 알림, idle 알림. 사용자가 직접 입력한 답이면 `--until-reply`로 보낸 질문과 Codex 질문 창 알람도("답함") |
+| 훅 `PostToolUse` | 질문 도구가 답을 받았을 때 — Claude `AskUserQuestion`·`ExitPlanMode`, Codex `request_user_input` | 그 세션의 권한 요청 알람(Claude가 질문 창을 띄우고 몇 초 뒤 보내는 것 포함)과 `--until-reply` 질문("답함") |
 | 에이전트 (스킬) | 알린 일이 해결됐을 때 — 사용자가 답했거나 스스로 고쳤을 때 | `notipet resolve`: 이 대화의 알람, `--tag`: 그 알림만 |
 
 - **다른 대화의 알람은 건드리지 않는다.** 같은 태그라도 세션이 다르면 별개다.
 - **이미 꺼졌으면 조용히 통과한다.** 사용자가 먼저 껐어도 오류가 아니고, 카드에 "해결됨"도 붙지 않는다.
-- 스킬로 보낸 알림을 훅이 대신 끄지는 않는다. 훅은 사용자가 그걸 봤는지 알 수 없다.
-- 해제된 알림은 중복 병합에서 빠진다. 같은 일이 다시 생기면 다시 울린다.
+- 스킬로 보낸 알림을 훅이 대신 끄지는 않는다. 훅은 사용자가 그걸 봤는지 알 수 없다. 예외는 `--until-reply`로 보낸 질문이고, 사용자가 그 스레드에서 답하면 끝난다.
+- resolve가 지목한 알림은 소리가 이미 끝났어도 "끝난" 것으로 기록되어 중복 병합에서 빠진다. 같은 일이 다시 생기면(다음 턴의 "완료" 등) 다시 울린다.
+- 알람 번호는 실행마다 다르다(`alm_<실행 토큰>_<순번>`). 재시작 전의 카드를 지목한 resolve는 재시작 뒤의 다른 알람을 끄지 않는다 — 1.11.1 전에는 번호가 겹쳐, 재시작 뒤 한 스레드의 `Stop`이 다른 스레드의 알람을 끌 수 있었다.
 - notipet 자체 알림 창을 쓸 때만 창이 닫힌다. Windows 기본 알림은 닫을 방법이 없다(어차피 몇 초 뒤 사라진다).
 
 ### 일부 프로젝트·스레드만 울리게 — alerts
@@ -351,7 +355,7 @@ notipet open settings   # 설정 창
 notipet restart         # 데몬 재시작
 ```
 
-명령 없이 부르면 **에이전트 훅 페이로드로 해석한다**(stdin JSON 또는 마지막 인자의 JSON). 이때는 stdout에 아무것도 쓰지 않는다.
+명령 없이 부르면 **에이전트 훅 페이로드로 해석한다**(stdin JSON 또는 마지막 인자의 JSON). 이때는 읽을 페이로드가 없어도 stdout에 아무것도 쓰지 않는다. 도움말은 터미널에서 `notipet`만 쳤을 때 나온다.
 
 **종료 코드는 기본적으로 항상 0이다.** Claude Code는 특정 비-0 종료를 블로킹 신호로 해석하는데, 알림 도구가 죽었다고 에이전트 동작이 바뀌면 안 되기 때문이다. 스크립트에서 진짜 종료 코드가 필요하면 `--strict`.
 
@@ -398,7 +402,7 @@ notipet restart         # 데몬 재시작
 - 아래 줄: **에이전트**(색 점 + 이름 — 주황 Claude, 보라 Codex, 회색 그 외), 평소와 다른 일이 있을 때만 붙는 칩(`소리 실패`, `소리 건너뜀`, `차단됨: 음소거`), "3분 전" 같은 상대 시각(마우스를 올리면 정확한 시각), 중복 횟수 `×3`. 정상 전달은 칩을 붙이지 않는다
 - 오른쪽 위: **⋯**(메뉴) · **X**(이 항목 삭제)
 
-**⋯ 메뉴**(카드 우클릭도 같다): Claude/Codex에서 열기(링크가 있을 때) · **복사**(제목+본문) · **폴더 열기**(마우스를 올리면 경로) · 삭제.
+**⋯ 메뉴**(카드 우클릭도 같다): Claude/Codex에서 열기(링크가 있을 때) · 읽음으로 표시/안 읽음으로 표시 · 이 스레드 알림 끄기/켜기, "<프로젝트> 프로젝트 알림 끄기/켜기"(에이전트 알림만. 그 스레드에 [이벤트 규칙](#알림이-너무-자주-온다)이 있으면 "Stop, SubagentStop 다시 울리기"도) · **복사**(제목+본문) · **폴더 열기**(마우스를 올리면 경로) · 삭제.
 
 링크가 있는 카드는 **카드 아무 곳이나 클릭**해도 그 스레드가 열린다(마우스가 손 모양으로 바뀐다). 본문은 글을 선택할 수 있도록 클릭해도 열지 않고, 카드 안의 버튼은 각자의 동작을 한다.
 
@@ -418,7 +422,7 @@ notipet restart         # 데몬 재시작
 - 처리한 카드에는 처리한 방법이 칩으로 붙는다. 마우스를 올리면 시각이 보인다.
   - **알림 창에서 확인**: notipet 알림 창이나 Windows 풍선을 클릭했거나, 알림 창의 닫기를 눌렀다.
   - **열어 봄**: 알림 창이나 카드에서 스레드·링크를 열었다.
-  - **답함**: 그 스레드에서 답했다. `--until-reply`로 보낸 질문이거나 Claude의 질문 창에 답한 경우다.
+  - **답함**: 그 스레드에서 답했다. `--until-reply`로 보낸 질문이거나 에이전트의 질문 창(Claude `AskUserQuestion`, Codex `request_user_input`)에 답한 경우다.
   - **읽음**: 이 창에서 직접 표시했다.
 - 시간이 지나 저절로 닫힌 알림 창, 보낸 쪽이 끝낸 알림(**해결됨**)은 읽음이 아니다. 사용자가 본 것이 아니기 때문이다.
 - ⋯ 메뉴에서 **안 읽음으로 표시**로 되돌릴 수 있다. 같은 알림이 다시 오면 다시 안 읽음이 된다.
@@ -444,10 +448,11 @@ Windows 11 설정 앱처럼 왼쪽에 페이지, 오른쪽에 카드. **바꾸�
 | **사운드** | 소리 재생 on/off, 볼륨, **알람 최대 지속 시간**(30초~10분, 또는 **무제한**), **레벨별 사운드**(레벨마다 소리 · 재생 횟수 1~10회 또는 **확인할 때까지** · 간격 · **듣기** 버튼) |
 | **자리 착석** | 지금 PC 앞에 있음, 긴 알람을 짧게(1~3회), **다른 소리로 대체** + 대체 소리 선택 + 듣기 |
 | **방해금지** | 사용 여부, 시작/종료 시각, 그래도 통과시킬 레벨, Windows 방해 금지 존중, 음소거 중 긴급 허용 |
-| **최근 알림** | **보관할 알림 수**(20~1000), **에이전트 앱의 스레드 이름 표시**, 최근 알림 열기, 비우기 |
-| **정보** | 버전, 데이터 폴더, 로컬 API 주소, CLI 경로, 문서 폴더 |
+| **프로젝트·스레드** | 모드(전부 / 켠 것만), 프로젝트·스레드 규칙 목록(켜기/끄기, 삭제), 최근 알림에 나온 프로젝트 추가 — [alerts](#일부-프로젝트스레드만-울리게--alerts) |
+| **최근 알림** | **보관할 알림 수**(20~1000), **재시작해도 유지**, **에이전트 앱의 스레드 이름 표시**, **최근 알림 단축키**, 최근 알림 열기, 비우기 |
+| **정보** | 버전, **업데이트**(지금 확인 / 설치, 자동으로 업데이트 확인), 데이터 폴더, 로컬 API 주소, CLI 경로, 문서 폴더 |
 
-여는 법: 메뉴의 "설정..." · 최근 알림 창의 톱니 버튼 · `notipet open settings` · `NotipetTray.exe --settings`(바로가기로 만들어 둘 수 있다).
+여는 법: 메뉴의 "설정..." · 최근 알림 창의 톱니 버튼 · `notipet open settings` · `NotipetTray.exe --settings`(꺼져 있으면 notipet을 띄우고 설정을 연다. 바로가기로 만들어 둘 수 있다).
 
 ### 알림 창 — 클릭할 때까지 유지 / 전체화면 위에 표시
 
@@ -461,10 +466,10 @@ Windows 11 설정 앱처럼 왼쪽에 페이지, 오른쪽에 카드. **바꾸�
 
 알림 창은:
 
-- 화면 오른쪽 아래(작업 표시줄 위)에 쌓인다. 새 것이 아래, 최대 4개.
+- **알림 위치**에 쌓인다(위 표). 어느 쪽이든 새 것이 아래, 최대 4개.
 - 넘치면 가장 오래된 것부터 화면에서 빠진다. 단, **유지하는 레벨의 알림 창은 그냥 사라지지 않고 맨 위 "외 N개 알림이 더 있습니다" 카드에 모인다.** 그 카드를 누르면 최근 알림 창이 열린다(전부 거기 있다). 스스로 닫히는 레벨의 창은 세지 않는다. 화면에서 빠진 창은 알람을 멈추지 않는다.
 - **포커스를 가져가지 않는다.** 입력하던 창에 커서가 그대로 있다.
-- **카드를 클릭하면 알람이 멈추고 닫힌다.** X는 닫기만 한다. 스레드 링크가 있으면 X 옆에 **열기** 아이콘(Claude/Codex에서 열기)이 붙는다.
+- **카드를 클릭하면 알람이 멈추고 닫힌다.** X는 닫고 읽음으로 표시할 뿐 알람은 멈추지 않는다. 스레드 링크가 있으면 X 옆에 **열기** 아이콘(Claude/Codex에서 열기)이 붙는다.
 - 레벨 배지, 제목, 본문 두 줄, `● 에이전트 · 프로젝트 · 스레드`(점은 에이전트 색)를 보여 준다.
 
 "전체화면 위에 표시"를 끈 상태에서 전체화면 앱이 앞에 있으면, 알림 창은 그 앱 **바로 뒤**에 뜨고 전체화면을 빠져나오면 보인다.
@@ -494,7 +499,7 @@ Windows 11 설정 앱처럼 왼쪽에 페이지, 오른쪽에 카드. **바꾸�
 
 **에이전트 앱의 스레드 이름 표시**(기본 켬)는 카드의 스레드 이름을 앱이 붙인 이름으로 바꿔 보여 준다. Codex는 `~/.codex/session_index.jsonl`, Claude는 `~/.claude/sessions/*.json`을 **읽기만** 한다(문서화되지 않은 형식이라 바뀌면 조용히 보낸 쪽 이름으로 돌아간다). 알림이 소리를 낸 **뒤에** 따로 돌기 때문에 알림을 늦추지 않는다.
 
-기록은 `%LOCALAPPDATA%\notipet\history.json`에 저장돼 **재시작·업데이트·재부팅 뒤에도 남는다**(설정 → 최근 알림 → "재시작해도 유지", 기본 켬). 이 폴더는 본인 계정만 접근할 수 있게 잠겨 있다. Codex·Claude도 대화 전체를 사용자 폴더에 저장하므로, 제목과 짧은 본문을 디스크에 두는 것이 새 위험을 만들지 않는다고 판단했다(1.6.2 전에는 메모리에만 두어서 업데이트할 때마다 비었다). "비우기"를 누르면 파일도 지워지고, 옵션을 끄면 메모리에만 두고 파일을 지운다.
+기록은 `%LOCALAPPDATA%\notipet\history.json`에 저장돼 **재시작·업데이트·재부팅 뒤에도 남는다**(설정 → 최근 알림 → "재시작해도 유지", 기본 켬). 이 폴더는 `%LOCALAPPDATA%` 아래라 다른 일반 사용자 계정은 읽을 수 없다(본인, SYSTEM, 관리자만). Codex·Claude도 대화 전체를 사용자 폴더에 저장하므로, 제목과 짧은 본문을 디스크에 두는 것이 새 위험을 만들지 않는다고 판단했다(1.6.2 전에는 메모리에만 두어서 업데이트할 때마다 비었다). "비우기"를 누르면 파일도 지워지고, 옵션을 끄면 메모리에만 두고 파일을 지운다.
 
 ### 아이콘 색이 상태다
 
@@ -546,6 +551,7 @@ curl.exe -s -H "Authorization: Bearer $($rt.token)" "$($rt.baseUrl)/v1/history?l
 | `rate_limited` | 너무 많이 왔다 |
 | `source_disabled` | 해당 소스가 `settings.json`에서 꺼져 있다 |
 | `all_channels_disabled` | 사운드/트레이 채널이 둘 다 꺼져 있다 |
+| `thread_off`, `thread_event_off`, `project_off`, `not_selected` | 그 스레드·스레드의 이벤트·프로젝트를 꺼 두었거나, "켠 것만" 모드에서 켜지 않았다 — [alerts](#일부-프로젝트스레드만-울리게--alerts) |
 
 ### `focus_assist`로 차단됐다
 
@@ -579,7 +585,7 @@ curl.exe -s -H "Authorization: Bearer $($rt.token)" "$($rt.baseUrl)/v1/history?l
   "dedupe": { "windowSec": 60 } }
 ```
 
-또는 훅 설정에서 `Notification`만 남기고 `Stop` / `SubagentStop`을 뺀다.
+턴이 끝날 때마다 울리는 것이 성가셔도 훅에서 `Stop`을 빼지는 않는다. `Stop`은 그 턴의 권한 요청 알람과 알림 창을 정리하는 일도 하고(빼면 승인한 뒤에도 남는다), 플러그인으로 넣은 훅은 하나만 뺄 수도 없다. 대신 `success`를 조용한 소리로 바꾸거나(`sound.byLevel.success`, 설정 → 사운드), 자리에 있을 때 [PC 앞에 있음](#pc-앞에-있음)을 켠다. 한 대화만이라면 아래처럼 그 스레드의 이벤트만 끈다.
 
 **특정 대화의 턴 알림만 끄기.** 다른 도구(예: 여러 대화를 묶어 일을 맡기는 허브)가 턴마다 돌리는 대화라면, 그 대화의 `Stop`/`SubagentStop`만 끈다. 권한 요청·질문 창·실패 알림은 그대로 울리고, 다른 대화는 영향이 없다:
 
@@ -607,9 +613,15 @@ notipet alerts reset --thread <스레드 ID> --agent codex --events Stop,Subagen
 .\bin\notipet.exe ack --all
 ```
 
-트레이 아이콘 클릭이나 풍선 클릭도 같은 일을 한다. 어느 쪽도 안 되면 최대 지속 시간(기본 120초)에 자동으로 멈춘다.
+트레이 아이콘 클릭이나 풍선 클릭도 같은 일을 한다. 어느 쪽도 안 되면 최대 지속 시간(기본 120초)에 자동으로 멈춘다 — 설정에서 **무제한**을 골랐다면 "확인할 때까지" 알람은 저절로 멈추지 않는다.
 
-**원격에서 답했는데 계속 울렸다면**: 권한 요청 알람은 그 턴이 끝나야(`Stop`) 꺼진다 — 승인한 뒤 긴 작업이 이어지면 그동안은 울린다. `Stop` 훅이 설치돼 있는지 `notipet doctor`로 확인한다. 스킬로 보낸 알림은 에이전트가 `notipet resolve`를 불러야 꺼진다.
+**원격에서 답했는데 계속 울렸다면**: 권한 요청 알람은 그 턴이 끝나야(`Stop`) 꺼진다 — 승인한 뒤 긴 작업이 이어지면 그동안은 울린다. 질문 창(Claude `AskUserQuestion`·`ExitPlanMode`, Codex `request_user_input`)은 답하는 즉시 꺼진다(`PostToolUse` 훅). 훅이 설치돼 있는지 `notipet doctor`로 확인한다 — Codex는 `codex hooks` 줄이 1.9.0 전의 블록이라고 하면 `install-hooks --codex --write`를 다시 실행한다. 스킬로 보낸 알림은 에이전트가 `notipet resolve`를 불러야 꺼진다(`--until-reply`로 보낸 질문은 답하면 꺼진다).
+
+### 설정이 기본값으로 돌아갔다
+
+`settings.json`을 직접 고치다 JSON이 깨지면 notipet은 소리를 멈추지 않고 **기본 설정으로** 뜬다. 원래 파일은 `settings.json.bad`로 옆에 복사해 두고, `daemon.log`에 한 줄, 트레이 풍선, `notipet status`의 `warning` 줄로 알린다. 그 뒤 설정을 하나라도 바꾸면 새 `settings.json`이 기본값으로 저장되므로, `.bad`에서 필요한 값을 옮기고 고친 파일로 바꾼 뒤 데몬을 재시작한다. `//` 주석과 끝에 남은 쉼표는 오류가 아니다([settings.md](settings.md)의 예시처럼 써도 된다).
+
+파일이 잠겨 세 번 읽어도 열리지 않았으면 그 실행은 기본값으로 돌고, 원래 파일을 덮어쓰지 않도록 아무것도 저장하지 않는다. 재시작하면 다시 읽는다.
 
 ### 탐색기가 죽은 뒤 트레이 아이콘이 사라졌다
 
@@ -622,7 +634,7 @@ notipet alerts reset --thread <스레드 ID> --agent codex --events Stop,Subagen
 %LOCALAPPDATA%\notipet\daemon.log    시작·종료와 그 이유 (언제, 왜 꺼졌나)
 ```
 
-`daemon.log`는 한 줄씩이다: `started`, `quit: tray menu` / `quit: notipet stop`, `watchdog: ... restarting`, `process exit`, 그리고 다음 시작 때 `previous instance pid N ... ended without cleaning up`(강제 종료·크래시·로그오프로 정리 없이 끝난 앞 인스턴스). `runtime.json`이 다른 인스턴스를 가리키거나 사라져 데몬이 고쳐 쓴 경우도 남는다. 256KB를 넘으면 `daemon.log.1`로 넘어간다. 알림 내용은 쓰지 않는다.
+`daemon.log`는 한 줄씩이다: `started`, `quit: tray menu` / `quit: notipet stop`, `watchdog: ... restarting`, `process exit`, 그리고 다음 시작 때 `previous instance pid N ... ended without cleaning up`(강제 종료·크래시·로그오프로 정리 없이 끝난 앞 인스턴스). `runtime.json`이 다른 인스턴스를 가리키거나 사라져 데몬이 고쳐 쓴 경우, `settings.json`을 쓸 수 없어 기본값으로 뜬 경우, 업데이트 설치에 실패해 다시 시작한 경우도 남는다. 256KB를 넘으면 `daemon.log.1`로 넘어간다. 알림 내용은 쓰지 않는다.
 
 > 1.4.1부터 `--self-test`는 실제 `crash.log`에 쓰지 않는다(예전엔 `Channel:stub` 항목이 남았다).
 

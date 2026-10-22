@@ -38,7 +38,7 @@ record TrayMenuItem(string? Text, Action? Invoke, bool IsChecked = false,
 
 메뉴는 매번 `BuildMenu()`로 다시 만든다. 체크 표시와 "알람 정지" 항목의 존재 여부가 상태에 따라 달라지므로, 캐시하면 틀린 메뉴를 보여주게 된다.
 
-`Dispose()`는 역순: `runtime.json` 삭제 → 서버 → 사운드 → 트레이 아이콘.
+`Dispose()`는 대체로 역순: 감시 장치·업데이트 타이머 정지 → history.json 저장 → runtime 복구 중지 후 `runtime.json` 삭제 → 단축키·창·알림 창 닫기 → 서버 → 사운드 → 트레이 아이콘.
 
 ## State-Data Flow
 
@@ -57,6 +57,8 @@ HTTP 워커 스레드 ──> 채널 ──> OnUiThread(...) ──> DispatcherQ
 - **그래픽 어댑터가 바뀌면 재시작한다**(app/GraphicsAdapters.cs): 그래픽 드라이버를 업데이트하는 등 디스플레이 어댑터가 새로 추가되면, 실행 중인 WinUI 3 앱은 글자·이미지·배경이 보이지 않게 되고, 같은 프로세스에서 새로 만든 창도 일부만 그려진다. WinUI의 미해결 버그다([microsoft/microsoft-ui-xaml#10844](https://github.com/microsoft/microsoft-ui-xaml/issues/10844)). notipet과 quota-scope에서 NVIDIA 드라이버 업데이트로 재현됐고, 그래픽 드라이버 재설정(Win+Ctrl+Shift+B)으로는 재현되지 않았다. 시작할 때 만든 DXGI 팩터리가 `IsCurrent() == false`를 돌려주면(30초마다 runtime 파일 점검과 함께 확인) 울리는 알람이 없을 때 `--restart-after <pid> graphics`로 새 인스턴스를 띄우고 끝낸다. 최근 알림은 history.json으로 넘어간다. 시험: `NOTIPET_SIMULATE_ADAPTER_CHANGE=1`로 띄운 데몬은 30초 안에 한 번 재시작한다(새 인스턴스는 이 변수를 무시).
 - **두 번째 실행이 최근 알림을 여는 것은 사람이 실행했을 때만이다.** 프로그램이 띄우는 실행은 `--background`를 붙이고, 이미 떠 있으면 `daemon.log`에 한 줄만 남기고 끝난다. 해당하는 것은 CLI 자동 기동(`RuntimeDiscovery.FindOrLaunchAsync`), 자동 시작(Run 키, 1.6.3부터 업데이트 때 다시 써짐), `--restart-after`(재시작 경합에서 진 쪽)다. 1.6.2까지는 훅의 CLI가 데몬을 못 찾을 때마다(낡은 `runtime.json`, 재시작 중, 샌드박스 셸) 데몬을 다시 띄웠고, 그 두 번째 실행이 알림이 올 때마다 최근 알림 창을 사용자 앞에 열었다. 시험: 데몬이 떠 있을 때 `NotipetTray.exe --background` → 창 없이 0으로 끝나고 `daemon.log`에 `background start` 한 줄.
 
+- **풍선 클릭은 마지막 에이전트 풍선에 대한 것이다.** 셸은 풍선을 한 번에 하나만 보이므로, 시각 채널이 풍선을 띄울 때 그 알림 id를 `_lastBalloonId`에 두고, 클릭(`OnBalloonClicked`)하면 그 카드를 읽음(`popup`)으로 하고 알람을 멈춘다. notipet 자체 풍선(업데이트 알림·확인 결과, 레이트 리밋 안내, 서버·설정 경고, "다시 시작했다")은 모두 `ShowSystemBalloon`으로 띄우고 그때 `_lastBalloonId`를 지운다. 1.11.0까지는 그 풍선을 눌러도 바로 앞에 떴던 에이전트 카드가 읽음이 됐다.
+- **업데이트 적용이 실패해도 보이지 않는 프로세스로 남지 않는다.** `PrepareForUpdate`가 트레이 아이콘·`runtime.json`·감시 장치를 이미 치운 뒤에 Velopack 적용이 실패하면, 그 프로세스는 단일 인스턴스 뮤텍스를 쥔 채 아무 데도 보이지 않고 모든 알림을 삼킨다. 그래서 `daemon.log`에 남기고 `--restart-after <pid>`로 새 인스턴스를 띄운 뒤 끝낸다(`RestartAfterFailedUpdate`, 1.11.1). 치우기 전(받기)에 실패하면 경고 풍선만 띄운다. 자세한 흐름은 [installer.md](installer.md).
 - **`_wndProc`는 인스턴스 필드다.** 네이티브 콜백의 GC 루트이고, 없으면 `FailFast`로 프로세스가 죽는다. quota-scope가 `H.NotifyIcon.WinUI`를 걷어낸 이유가 정확히 이 버그였다.
 - **풍선에 `NIIF_NOSOUND`(0x10)를 세팅한다.** 없으면 셸이 자체 알림음을 얹어 모든 알림이 이중으로 울린다.
 - **메시지 전용 창이 아니라 실제(숨김) 최상위 창이다.** `TaskbarCreated` 브로드캐스트와 `WM_WTSSESSION_CHANGE`는 메시지 전용 창에 오지 않는다. 탐색기 재시작 복구와 잠금 감지가 둘 다 여기에 달려 있다.
@@ -76,7 +78,7 @@ HTTP 워커 스레드 ──> 채널 ──> OnUiThread(...) ──> DispatcherQ
 - 탐색기를 재시작하면 아이콘이 돌아와야 한다 (`TaskbarCreated` 경로).
 - 트레이 좌클릭 순서(확정): ① 알람이 울리는 중이면 **정지만** — 창은 다음 클릭에서. ② 최근 알림 창이 올라와 있으면 닫기. ③ 닫혀 있거나 최소화되거나 **다른 창에 가려져 있으면** 맨 앞으로. 테스트 알림은 울리지 않는다. 판단과 함정은 [windows.md의 트레이 토글](windows.md#트레이-토글).
 - 손으로 확인할 것(스크립트로는 안 되는 실제 클릭 경로): 닫힌 창 → 클릭 → 열림 → 클릭 → 닫힘 / 메모장 등으로 가린 뒤 클릭 → 닫히지 않고 올라옴 / 최소화 → 클릭 → 복원 / 숨긴 아이콘(오버플로)에서도 같음 / 알람 중 클릭 → 알람만 정지 / 더블클릭해도 창이 깜빡이지 않음.
-- 풍선 클릭 → 알람 정지.
+- 풍선 클릭 → 알람 정지, 그 에이전트 카드가 읽음. 업데이트·레이트 리밋 같은 notipet 자체 풍선을 누르면 알람은 멈추지만 어떤 카드도 읽음이 되지 않는다.
 - 음소거/방해금지/자동 시작의 체크 표시가 실제 상태와 일치해야 한다.
 - 오디오 장치를 전부 끄면 아이콘이 주황으로 바뀌고 툴팁이 이유를 설명해야 한다.
 
@@ -89,5 +91,5 @@ HTTP 워커 스레드 ──> 채널 ──> OnUiThread(...) ──> DispatcherQ
 
 ## TODO
 
-- "알람 정지" 전역 단축키 — quota-scope의 `HotkeyWindow.cs` 복사
+- "알람 정지" 전역 단축키 — `HotkeyWindow`(app/Hotkeys/HotkeyWindow.cs)는 1.7.0의 최근 알림 단축키로 이미 들어와 있고 `TryRegister`가 id를 받으므로, id 하나를 더 등록하면 된다. 기본값은 **비워 둔다**(설정에서 고를 때만) — 다른 프로그램의 키를 빼앗지 않게. 지금은 알람을 끄려면 트레이·풍선·알림 창을 누르거나 `notipet ack`을 쳐야 하는데, 이것이 있으면 쓰던 앱에서 손을 떼지 않고 끈다([TODO.md](../TODO.md))
 - ~~히스토리 항목 클릭 시 해당 cwd 열기~~ — 1.1에서 폴더 열기, 1.2에서 Claude/Codex 스레드 열기로 대체

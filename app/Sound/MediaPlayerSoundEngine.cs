@@ -136,6 +136,19 @@ internal sealed class MediaPlayerSoundEngine : ISoundEngine
             _completion.TrySetResult();
 
             if (player is null) return;
+            // Never torn down on the UI thread: a tray click, mute or a pop-up
+            // click stops alarms from there, and Dispose waits pumping
+            // messages - the re-entrancy that once hung the UI thread for good.
+            if (OnSta)
+            {
+                System.Threading.Tasks.Task.Run(() => TearDown(player));
+                return;
+            }
+            TearDown(player);
+        }
+
+        private static void TearDown(MediaPlayer player)
+        {
             try { player.Pause(); } catch { }
             try { player.Dispose(); } catch { }
         }

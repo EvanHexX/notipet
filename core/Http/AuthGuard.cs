@@ -13,7 +13,14 @@ namespace Notipet.Http;
 //
 //   1. Browser-origin CSRF and DNS rebinding. A page you visit can POST to
 //      http://127.0.0.1:<port>/ from JavaScript. Without a token that works.
-//   2. Other user accounts and low-integrity processes on the same machine.
+//   2. Other user accounts on the same machine. They can reach the loopback
+//      port, but the token is only in runtime.json, which %LOCALAPPDATA%'s
+//      inherited ACL already keeps from them (Paths.EnsureDataDir adds a
+//      user-only DACL only when it creates the folder itself).
+//
+// It does not stop a lower-integrity process running as this same user:
+// integrity levels by default block writing up, not reading, so it reads the
+// token like anything else this user runs.
 //
 // The Origin / Sec-Fetch-Site check below is what actually kills (1), and it
 // keeps working even if the token leaks into a log somewhere.

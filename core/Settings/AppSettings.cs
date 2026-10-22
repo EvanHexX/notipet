@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Notipet.Shared;
@@ -10,10 +11,11 @@ namespace Notipet.Settings;
 internal sealed class ServerSettings
 {
     // 0 means "pick an ephemeral port", which makes a port conflict essentially
-    // impossible. Pin it only when using Claude Code's `http` hook type, which
-    // needs a stable URL.
+    // impossible. Pin it only for a tool that wants a stable URL - it still
+    // reads the token from runtime.json, so Claude Code's `http` hook type,
+    // which cannot, does not work either way. (There is no switch to turn the
+    // token off.)
     public int Port { get; set; }
-    public bool RequireAuth { get; set; } = true;
     public int MaxBodyBytes { get; set; } = 65536;
     public int RemoteTimeoutMs { get; set; } = 2000;
 }
@@ -290,6 +292,10 @@ internal sealed class AppSettings
     {
         WriteIndented = true,
         PropertyNameCaseInsensitive = true,
+        // docs/settings.md shows the file with // comments; someone copying it
+        // in, or leaving a trailing comma, must not lose every setting.
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
@@ -303,23 +309,61 @@ internal sealed class AppSettings
 
     public static AppSettings Load() => Load(Paths.SettingsPath);
 
+    // Set when the file was there but could not be used: what happened and
+    // where the original went. Shown as a warning (health, tray).
+    [JsonIgnore]
+    public string? LoadProblem { get; private set; }
+
     public static AppSettings Load(string path)
     {
-        AppSettings settings;
-        try
+        // A file that cannot be used must not stop the daemon from making
+        // noise - but it must not be lost either. It used to be replaced by
+        // defaults silently, and the next save (a mute, an `alerts` call)
+        // wrote the defaults over the user's real file.
+        var home = path;
+        string? problem = null;
+        AppSettings? settings = null;
+        string? text = null;
+        for (var attempt = 0; attempt < 3 && text is null && File.Exists(path); attempt++)
         {
-            settings = File.Exists(path)
-                ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Options) ?? new AppSettings()
-                : new AppSettings();
-        }
-        catch
-        {
-            // A corrupt settings file must not stop the daemon from making noise.
-            settings = new AppSettings();
+            try { text = File.ReadAllText(path); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Locked for a moment (an editor saving, a scanner); try again.
+                if (attempt == 2)
+                {
+                    // Could not read it at all: run on defaults and never write
+                    // over a file this run has not seen.
+                    home = null;
+                    problem = $"settings.json could not be read ({ex.Message}); running on defaults, and changes are not saved until notipet restarts";
+                }
+                else Thread.Sleep(150);
+            }
         }
 
+        if (text is not null)
+        {
+            try
+            {
+                settings = JsonSerializer.Deserialize<AppSettings>(text, Options);
+            }
+            catch (Exception ex) when (ex is JsonException or NotSupportedException or InvalidOperationException)
+            {
+                // Kept beside it; the next save writes a fresh file.
+                var kept = path + ".bad";
+                try { File.Copy(path, kept, overwrite: true); }
+                catch (Exception copy) when (copy is IOException or UnauthorizedAccessException) { home = null; }
+                problem = home is null
+                    ? $"settings.json is not valid JSON ({ex.Message}); running on defaults, and changes are not saved until it is fixed"
+                    : $"settings.json is not valid JSON ({ex.Message}); running on defaults - the file is kept as settings.json.bad";
+            }
+        }
+
+        settings ??= new AppSettings();
         settings.Normalize();
-        settings.SourcePath = path;
+        settings.SourcePath = home;
+        settings.LoadProblem = problem;
+        if (problem is not null) DaemonLog.Write(problem);
         return settings;
     }
 
@@ -327,13 +371,25 @@ internal sealed class AppSettings
     // with `new` (never loaded) has no home and refuses to guess one.
     public bool Save() => SourcePath is { Length: > 0 } path && Save(path);
 
+    // The tray, the settings window and the HTTP routes all save; one at a time.
+    private static readonly object SaveGate = new();
+
     public bool Save(string path)
     {
         try
         {
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(path, JsonSerializer.Serialize(this, Options));
+            lock (SaveGate)
+            {
+                var json = JsonSerializer.Serialize(this, Options);
+                // Whole or not at all: a process killed mid-write (the
+                // watchdog, a logoff) left half a file, which then loaded as
+                // defaults.
+                var temp = path + ".tmp";
+                File.WriteAllText(temp, json);
+                File.Move(temp, path, overwrite: true);
+            }
             return true;
         }
         catch (Exception ex)
@@ -534,9 +590,18 @@ internal sealed class AppSettings
             // Missing sections must have been materialised, not left null.
             if (withExtra.Sound.ByLevel.Count < 6) return false;
 
-            // Corrupt input degrades to defaults rather than throwing.
+            // Comments and trailing commas, as in docs/settings.md, are fine.
+            File.WriteAllText(path, "{\n  // mine\n  \"sound\": { \"volume\": 0.3, },\n}");
+            var commented = Load(path);
+            if (Math.Abs(commented.Sound.Volume - 0.3) > 0.0001 || commented.LoadProblem is not null) return false;
+
+            // Corrupt input degrades to defaults rather than throwing - and the
+            // file is kept, so the next save cannot destroy it.
             File.WriteAllText(path, "{ this is not json");
-            if (Load(path).Sound.Volume != 0.7) return false;
+            var corrupt = Load(path);
+            if (corrupt.Sound.Volume != 0.7 || corrupt.LoadProblem is null) return false;
+            if (File.ReadAllText(path + ".bad") != "{ this is not json" || corrupt.SourcePath != path) return false;
+            if (!corrupt.Save() || Load(path).Sound.ByLevel.Count == 0 || File.Exists(path + ".tmp")) return false;
 
             // Clamps.
             var wild = new AppSettings();

@@ -1,15 +1,16 @@
 {
-  "//": "Merge this hooks block into %USERPROFILE%\\.claude\\settings.json. Claude Code merges hook config across user, project and local settings, so an existing hooks block is extended rather than replaced. Fix the command paths to match where notipet.exe actually lives.",
+  "//": "Merge this hooks block into %USERPROFILE%\\.claude\\settings.json - or let `notipet install-hooks --claude --write` do it. Not with the notipet Claude Code plugin: it brings these same hooks, Claude Code runs both, and every hook would ring twice. Claude Code merges hook config across user, project and local settings, so an existing hooks block is extended rather than replaced. Fix the command paths to match where notipet.exe actually lives. This is the plugin's hooks/hooks.json with a full path.",
 
-  "//1": "notification_type is what the Notification matcher tests. agent_needs_input and agent_completed are the two that matter; permission_prompt and idle_prompt cover the same ground on older builds.",
+  "//1": "notification_type is what the Notification matcher tests. permission_prompt (a permission dialog) and elicitation_dialog / elicitation_url_dialog (an MCP server's input form) are moments Claude waits on you; idle_prompt is the reminder after it has sat idle; agent_needs_input rings as attention and agent_completed as success.",
   "//2": "async:true keeps notipet off the agent's critical path entirely - the timeout is not enforced and the turn does not wait for the hook.",
-  "//3": "Notification, Stop and SubagentStop cannot block the agent by design, so notipet can never change how Claude Code behaves. UserPromptSubmit could, but notipet prints nothing and exits 0, and async:true means the prompt does not wait for it.",
-  "//4": "Stop and UserPromptSubmit also end alarms that are over: Stop ends this session's permission prompt (the turn finished, so it was answered), UserPromptSubmit ends the last turn's 'finished' and the idle reminder. Without UserPromptSubmit only the second part is lost.",
+  "//3": "Notification, Stop and SubagentStop cannot block the agent by design, so notipet can never change how Claude Code behaves. UserPromptSubmit and PostToolUse could, but notipet prints nothing and exits 0, and async:true means nothing waits for it.",
+  "//4": "Three hooks also end alarms that are over (UserPromptSubmit and PostToolUse notify nothing): Stop ends this session's permission prompt and MCP form (the turn finished, so they were answered); UserPromptSubmit ends the last turn's 'finished' and the idle reminder, and a typed answer ends what the agent sent --until-reply; PostToolUse ends the question's alarm the moment AskUserQuestion or ExitPlanMode gets its answer. Only those two tools - a PostToolUse on every tool would start notipet on every tool call.",
+  "//5": "SubagentStop's matcher is \".\", not \".*\": Claude Code's own internal agents (prompt suggestions, /btw) finish with an empty agent_type, and \".\" cannot match an empty string.",
 
   "hooks": {
     "Notification": [
       {
-        "matcher": "agent_needs_input|agent_completed|permission_prompt|idle_prompt",
+        "matcher": "agent_needs_input|agent_completed|permission_prompt|idle_prompt|elicitation_dialog|elicitation_url_dialog",
         "hooks": [
           {
             "type": "command",
@@ -50,6 +51,20 @@
     ],
     "UserPromptSubmit": [
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\src\\notipet\\bin\\notipet.exe",
+            "args": ["--source", "claude-code"],
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "AskUserQuestion|ExitPlanMode",
         "hooks": [
           {
             "type": "command",

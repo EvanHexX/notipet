@@ -1,20 +1,32 @@
 # notipet <-> Codex CLI
 #
-# Easiest: `notipet install-hooks --codex --write` puts exactly this block (with
-# the real path) into %USERPROFILE%\.codex\config.toml - backup first, only
-# notipet's block, safe to repeat - and `--remove` takes it out. See
-# docs/modules/codex_plugin.md. To do it by hand, append this and fix the paths;
-# keep only one copy, or Codex runs every hook twice.
+# Easiest: `notipet install-hooks --codex --write` puts this block (with the
+# real path) into %USERPROFILE%\.codex\config.toml - backup first, only
+# notipet's block, safe to repeat - and `--remove` takes it out. Run
+# `notipet install-hooks --codex` (no --write) to print the exact block for this
+# machine instead. See docs/modules/codex_plugin.md. To do it by hand, append
+# the block below and fix the paths; keep only one copy, or Codex runs every
+# hook twice.
 #
 # `command` is a whole command line (cmd.exe /C on Windows). Codex has no
 # `args` field and silently ignores one, so arguments go in `command`.
 #
+# Do not quote the exe path. A sandboxed Codex escapes the quotes, cmd cannot
+# find the program, and every hook ends with "exited with code 1". If the path
+# has a space, use its 8.3 short name (install-hooks does this for you).
+#
+# Codex trusts each hook by its event, its position and a hash of its text, and
+# asks again when any of that changes. The block below is exactly what
+# install-hooks writes (statusMessage is in Korean when the Windows display
+# language is Korean), so a later `--write` by that notipet.exe leaves a pasted
+# copy as it is.
+#
 # ---------------------------------------------------------------------------
 # Do NOT touch an existing `notify = [...]` line.
 # ---------------------------------------------------------------------------
-# `notify` is a single slot. On this machine it is already held by Codex's own
-# computer-use integration, and overwriting it would silently break that. Use
-# the hooks below instead, which are additive.
+# `notify` is a single slot, and something else may already own it (Codex's
+# own computer-use integration does on some machines); overwriting it would
+# silently break that. Use the hooks below instead, which are additive.
 #
 # Hooks are better here on every axis anyway:
 #
@@ -26,32 +38,70 @@
 #     `notify` appends it as the final argv element, and openai/codex#25141
 #     (still open) lets that payload grow with the whole prompt history until it
 #     exceeds the Windows command-line limit.
-#   - Hooks give PermissionRequest.
+#   - Hooks give PermissionRequest, and the question box (request_user_input).
 #
 # notipet still understands the legacy `notify` payload shape, so if you would
 # rather use that slot it works - it just tells you less.
+#
+# What each hook does:
+#   Stop                                  turn finished; first ends this thread's approval alarm
+#   PermissionRequest                     waiting for approval (silent while approvals_reviewer
+#                                         is set to something other than "user": Codex reviews)
+#   UserPromptSubmit                      notifies nothing; ends the last turn's "finished", and a
+#                                         typed answer ends --until-reply alerts and question boxes
+#   PostToolUse ^request_user_input$      notifies nothing; the question was answered
+#   PostToolUse ^request_user_input_async$  the question box is up: rings with the question
+#   PreToolUse  ^request_user_input$      the same, for the tool that waits for the answer
 
+# notipet hooks - written by `notipet install-hooks --codex --write`, which --remove undoes. Leave `notify` alone.
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = '"C:\src\notipet\bin\notipet.exe" --source codex'
+command = 'C:\src\notipet\bin\notipet.exe --source codex'
 timeout = 10
+statusMessage = 'Notipet · turn finished; ending its approval alarm'
 
 [[hooks.PermissionRequest]]
 [[hooks.PermissionRequest.hooks]]
 type = "command"
-command = '"C:\src\notipet\bin\notipet.exe" --source codex'
+command = 'C:\src\notipet\bin\notipet.exe --source codex'
 timeout = 10
+statusMessage = 'Notipet · waiting for approval'
 
-# Ends alarms that are over: the last turn's "finished" once a new prompt
-# starts. (Stop above already ends this thread's PermissionRequest alarm.)
-# async: the prompt never waits for notipet.
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = '"C:\src\notipet\bin\notipet.exe" --source codex'
+command = 'C:\src\notipet\bin\notipet.exe --source codex'
 timeout = 10
 async = true
+statusMessage = "Notipet · new prompt; ending the last turn's alerts"
+
+[[hooks.PostToolUse]]
+matcher = '^request_user_input$'
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'C:\src\notipet\bin\notipet.exe --source codex'
+timeout = 10
+async = true
+statusMessage = 'Notipet · question answered; ending its alarm'
+
+[[hooks.PostToolUse]]
+matcher = '^request_user_input_async$'
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'C:\src\notipet\bin\notipet.exe --source codex'
+timeout = 10
+async = true
+statusMessage = 'Notipet · question box; alerting you'
+
+[[hooks.PreToolUse]]
+matcher = '^request_user_input$'
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = 'C:\src\notipet\bin\notipet.exe --source codex'
+timeout = 10
+async = true
+statusMessage = 'Notipet · question box; alerting you'
 
 # Optional: the terminal's own bell, independent of notipet. No program runs,
 # so notipet cannot hook it - listed only so the two are not confused.
