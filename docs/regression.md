@@ -43,11 +43,18 @@
 
 ## 기록된 문제
 
+### 1.11.2 이후에도 자동 검토 스레드에서 "Permission needed"가 울렸다 (1.11.3)
+
+- **증상**: 1.11.2를 설치한 뒤에도 한 자동 검토 스레드가 같은 턴 안에서 "Permission needed"를 세 번 울렸다.
+- **원인**: 검토자는 턴마다 한 번 기록되는데, 그 턴의 출력이 1MB를 넘었다. 마지막 `"approvals_reviewer":"auto_review"`가 rollout 끝에서 약 1MB 앞에 있어 512KB만 읽는 꼬리 읽기가 놓쳤고, config.toml의 `user`로 넘어갔다.
+- **해결**: `CodexHooks.ThreadReviewer`가 파일 끝에서부터 1MB씩, 경계에 걸린 키도 찾도록 겹쳐 가며 거꾸로 읽고, 처음 찾은 값에서 멈춘다. 긴 턴 하나가 고정된 꼬리보다 클 수 있다.
+- **확인**: 자체 테스트가 수 MB 앞에 기록된 값과 1MB 경계에 걸린 키를 찾는 것을 고정한다. 그 스레드의 실제 rollout(약 15MB)에서 `auto_review`를 읽는다.
+
 ### 자동 검토 중인 Codex 스레드에서 "Permission needed"가 울렸다 (1.11.2)
 
 - **증상**: Codex 스레드가 권한 요청을 사용자에게 묻지 않고 몇 초 만에 스스로 승인했는데, notipet은 "Permission needed" 알림을 울렸다(병렬 명령 둘이면 카드 둘).
 - **원인**: 데스크톱 앱에서 그 스레드의 검토자를 자동 검토(`approvals_reviewer = "auto_review"`)로 켜 두었다. 앱은 이 값을 스레드 설정에만 두고 `config.toml`(최상위 `approvals_reviewer = "user"`)은 건드리지 않는다. CLI는 config.toml만 읽어서 사용자에게 묻는 것으로 판단했다.
-- **해결**: PermissionRequest가 오면 먼저 훅 입력의 `transcript_path`(그 스레드의 rollout) 끝 512KB에서 마지막으로 기록된 `approvals_reviewer`를 읽는다(`CodexHooks.ThreadReviewer`). 턴마다 다시 기록되므로 끝부분이면 충분하다. 없을 때만 config.toml을 본다.
+- **해결**: PermissionRequest가 오면 먼저 훅 입력의 `transcript_path`(그 스레드의 rollout) 끝 512KB에서 마지막으로 기록된 `approvals_reviewer`를 읽는다(`CodexHooks.ThreadReviewer`). 턴마다 다시 기록되므로 끝부분이면 충분하다고 봤다(1.11.3에서 고침, 위 항목). 없을 때만 config.toml을 본다.
 - **확인**: 자체 테스트가 큰 rollout의 끝에서 값을 찾는 것, 스레드 값이 config.toml보다 우선하는 것을 고정한다. 실제 자동 검토 스레드의 rollout으로 훅 입력을 넣으면 아무것도 보내지 않는다.
 
 ### 1.11.1 리뷰에서 잡은 것들
