@@ -161,21 +161,29 @@ internal static class CodexHooks
         }
     }
 
-    // The last "approvals_reviewer" the rollout recorded, read from its tail
-    // only: a long thread's file runs to tens of megabytes, and the setting is
-    // written again with every turn. Null when there is no file or no mention.
+    // The last "approvals_reviewer" the rollout recorded, read backwards a
+    // megabyte at a time: a long thread's file runs to tens of megabytes, and
+    // the setting is written once per turn - but one turn's output can be
+    // larger than any fixed tail (a 512 KB tail missed it a megabyte back and
+    // the thread rang again). Chunks overlap so a key cut at a boundary is
+    // still found. Null when there is no file or no mention.
     public static string? ThreadReviewer(string? transcriptPath)
     {
-        const int Tail = 512 * 1024;
+        const int Chunk = 1024 * 1024, Overlap = 256;
         try
         {
             if (string.IsNullOrWhiteSpace(transcriptPath) || !File.Exists(transcriptPath)) return null;
             using var stream = new FileStream(transcriptPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            var start = Math.Max(0, stream.Length - Tail);
-            stream.Seek(start, SeekOrigin.Begin);
-            var buffer = new byte[stream.Length - start];
-            stream.ReadExactly(buffer);
-            return LastReviewer(Encoding.UTF8.GetString(buffer));
+            var buffer = new byte[Chunk + Overlap];
+            for (var end = stream.Length; end > 0; end -= Chunk)
+            {
+                var start = Math.Max(0, end - Chunk);
+                var count = (int)(Math.Min(stream.Length, end + Overlap) - start);
+                stream.Seek(start, SeekOrigin.Begin);
+                stream.ReadExactly(buffer, 0, count);
+                if (LastReviewer(Encoding.UTF8.GetString(buffer, 0, count)) is { } reviewer) return reviewer;
+            }
+            return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -598,6 +606,12 @@ internal static class CodexHooks
         {
             File.WriteAllText(rollout, new string('x', 600 * 1024) + "\n{\"approval_policy\":\"on-request\",\"approvals_reviewer\":\"auto_review\"}\n");
             if (ThreadReviewer(rollout) != "auto_review" || !ApprovalsAutoReviewedIn(rollout)) return false;
+            // Recorded a few megabytes back, behind one long turn's output.
+            File.WriteAllText(rollout, "{\"approvals_reviewer\":\"user\"}\n{\"approvals_reviewer\":\"auto_review\"}\n" + new string('x', 2500 * 1024) + "\n");
+            if (ThreadReviewer(rollout) != "auto_review") return false;
+            // Cut by a chunk boundary: the key starts just before the last megabyte.
+            File.WriteAllText(rollout, new string('x', 100) + "\n{\"approvals_reviewer\":\"auto_review\"}" + new string('x', 1024 * 1024 - 20) + "\n");
+            if (ThreadReviewer(rollout) != "auto_review") return false;
             File.WriteAllText(rollout, "{\"approvals_reviewer\":\"user\"}\n");
             if (ApprovalsAutoReviewedIn(rollout) || ThreadReviewer(rollout + ".missing") is not null) return false;
         }
